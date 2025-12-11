@@ -66,8 +66,16 @@ serve(async (req) => {
     // Mapear status da Evolution para nosso enum
     let status: 'conectado' | 'desconectado' | 'aguardando' = 'desconectado';
     let numero = conexao.numero;
+    let instanceExists = true;
 
-    if (statusResult.instance?.state === 'open') {
+    // Verificar se a instância existe (404 ou mensagem de erro)
+    if (!statusResponse.ok || statusResult.error || 
+        (statusResult.response?.message && Array.isArray(statusResult.response.message) && 
+         statusResult.response.message.some((m: string) => m.includes('does not exist')))) {
+      console.log('Instância não existe na Evolution API');
+      status = 'desconectado';
+      instanceExists = false;
+    } else if (statusResult.instance?.state === 'open') {
       status = 'conectado';
       // Tentar extrair o número do status
       if (statusResult.instance?.owner) {
@@ -90,7 +98,8 @@ serve(async (req) => {
       success: true, 
       status,
       numero,
-      evolution_state: statusResult.instance?.state,
+      evolution_state: statusResult.instance?.state || 'not_found',
+      instance_exists: instanceExists,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
