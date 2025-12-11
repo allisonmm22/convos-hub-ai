@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Plug, PlugZap, RefreshCw, Check, X, Loader2, Copy, ExternalLink } from 'lucide-react';
+import { Plug, PlugZap, RefreshCw, Check, Loader2, QrCode, Power, Plus, Smartphone } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -20,128 +20,167 @@ export default function Conexao() {
   const { usuario } = useAuth();
   const [conexao, setConexao] = useState<Conexao | null>(null);
   const [loading, setLoading] = useState(true);
-  const [testing, setTesting] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [instanceName, setInstanceName] = useState('');
+  const [qrCode, setQrCode] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState({
-    nome: 'Principal',
-    instance_name: '',
-    token: '',
-    webhook_url: '',
-  });
-
-  useEffect(() => {
-    if (usuario?.conta_id) {
-      fetchConexao();
-    }
-  }, [usuario]);
-
-  const fetchConexao = async () => {
+  const fetchConexao = useCallback(async () => {
+    if (!usuario?.conta_id) return;
+    
     try {
       const { data, error } = await supabase
         .from('conexoes_whatsapp')
         .select('*')
-        .eq('conta_id', usuario!.conta_id)
+        .eq('conta_id', usuario.conta_id)
         .maybeSingle();
 
       if (error) throw error;
 
       if (data) {
         setConexao(data);
-        setFormData({
-          nome: data.nome,
-          instance_name: data.instance_name,
-          token: data.token,
-          webhook_url: data.webhook_url || '',
-        });
+        if (data.qrcode) {
+          setQrCode(data.qrcode);
+        }
       }
     } catch (error) {
       console.error('Erro ao buscar conexão:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [usuario?.conta_id]);
 
-  const handleSave = async () => {
-    if (!formData.instance_name || !formData.token) {
-      toast.error('Preencha o nome da instância e o token');
+  useEffect(() => {
+    fetchConexao();
+  }, [fetchConexao]);
+
+  // Auto-refresh status when aguardando
+  useEffect(() => {
+    if (conexao?.status === 'aguardando') {
+      const interval = setInterval(() => {
+        handleCheckStatus(true);
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [conexao?.status]);
+
+  const handleCreateInstance = async () => {
+    if (!instanceName.trim()) {
+      toast.error('Digite o nome da instância');
       return;
     }
 
-    setSaving(true);
+    setCreating(true);
     try {
-      const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`;
-
-      if (conexao) {
-        const { error } = await supabase
-          .from('conexoes_whatsapp')
-          .update({
-            ...formData,
-            webhook_url: webhookUrl,
-          })
-          .eq('id', conexao.id);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('conexoes_whatsapp').insert({
-          conta_id: usuario!.conta_id,
-          ...formData,
-          webhook_url: webhookUrl,
-        });
-
-        if (error) throw error;
-      }
-
-      toast.success('Conexão salva com sucesso!');
-      fetchConexao();
-    } catch (error) {
-      console.error('Erro ao salvar:', error);
-      toast.error('Erro ao salvar conexão');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleTestConnection = async () => {
-    if (!conexao) {
-      toast.error('Salve a conexão primeiro');
-      return;
-    }
-
-    setTesting(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('test-evolution-connection', {
+      const { data, error } = await supabase.functions.invoke('evolution-create-instance', {
         body: {
-          instance_name: conexao.instance_name,
-          token: conexao.token,
+          instance_name: instanceName.trim().toLowerCase().replace(/\s+/g, '-'),
+          conta_id: usuario!.conta_id,
         },
       });
 
       if (error) throw error;
 
-      if (data.connected) {
-        await supabase
-          .from('conexoes_whatsapp')
-          .update({ status: 'conectado', numero: data.numero })
-          .eq('id', conexao.id);
-
-        toast.success('Conexão estabelecida com sucesso!');
-        fetchConexao();
-      } else {
-        toast.error(data.message || 'Falha na conexão');
+      if (data.error) {
+        toast.error(data.error);
+        return;
       }
+
+      toast.success('Instância criada com sucesso!');
+      setInstanceName('');
+      await fetchConexao();
     } catch (error) {
-      console.error('Erro ao testar:', error);
-      toast.error('Erro ao testar conexão');
+      console.error('Erro ao criar instância:', error);
+      toast.error('Erro ao criar instância');
     } finally {
-      setTesting(false);
+      setCreating(false);
     }
   };
 
-  const copyWebhookUrl = () => {
-    const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`;
-    navigator.clipboard.writeText(webhookUrl);
-    toast.success('URL copiada!');
+  const handleConnect = async () => {
+    if (!conexao) return;
+
+    setConnecting(true);
+    setQrCode(null);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('evolution-connect', {
+        body: { conexao_id: conexao.id },
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      if (data.qrcode) {
+        setQrCode(data.qrcode);
+        toast.success('QR Code gerado! Escaneie com seu WhatsApp');
+      }
+
+      await fetchConexao();
+    } catch (error) {
+      console.error('Erro ao conectar:', error);
+      toast.error('Erro ao gerar QR Code');
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!conexao) return;
+
+    setDisconnecting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('evolution-disconnect', {
+        body: { conexao_id: conexao.id },
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      toast.success('Desconectado com sucesso');
+      setQrCode(null);
+      await fetchConexao();
+    } catch (error) {
+      console.error('Erro ao desconectar:', error);
+      toast.error('Erro ao desconectar');
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
+  const handleCheckStatus = async (silent = false) => {
+    if (!conexao) return;
+
+    setCheckingStatus(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('evolution-connection-status', {
+        body: { conexao_id: conexao.id },
+      });
+
+      if (error) throw error;
+
+      if (data.status === 'conectado') {
+        setQrCode(null);
+        if (!silent) toast.success('WhatsApp conectado!');
+      }
+
+      await fetchConexao();
+    } catch (error) {
+      console.error('Erro ao verificar status:', error);
+      if (!silent) toast.error('Erro ao verificar status');
+    } finally {
+      setCheckingStatus(false);
+    }
   };
 
   const getStatusIcon = () => {
@@ -151,20 +190,20 @@ export default function Conexao() {
       case 'conectado':
         return <PlugZap className="h-8 w-8 text-success" />;
       case 'aguardando':
-        return <RefreshCw className="h-8 w-8 text-warning animate-spin" />;
+        return <QrCode className="h-8 w-8 text-warning" />;
       default:
         return <Plug className="h-8 w-8 text-muted-foreground" />;
     }
   };
 
   const getStatusText = () => {
-    if (!conexao) return 'Não configurado';
+    if (!conexao) return 'Nenhuma instância configurada';
 
     switch (conexao.status) {
       case 'conectado':
         return 'Conectado';
       case 'aguardando':
-        return 'Aguardando QR Code';
+        return 'Aguardando leitura do QR Code';
       default:
         return 'Desconectado';
     }
@@ -199,7 +238,7 @@ export default function Conexao() {
         <div>
           <h1 className="text-3xl font-bold text-foreground">Conexão WhatsApp</h1>
           <p className="text-muted-foreground mt-1">
-            Configure sua integração com a Evolution API para receber e enviar mensagens.
+            Conecte seu WhatsApp para receber e enviar mensagens automaticamente.
           </p>
         </div>
 
@@ -208,151 +247,193 @@ export default function Conexao() {
           <div className="flex items-center gap-4">
             <div
               className={`flex h-16 w-16 items-center justify-center rounded-xl ${
-                conexao?.status === 'conectado' ? 'bg-success/20' : 'bg-muted'
+                conexao?.status === 'conectado'
+                  ? 'bg-success/20'
+                  : conexao?.status === 'aguardando'
+                  ? 'bg-warning/20'
+                  : 'bg-muted'
               }`}
             >
               {getStatusIcon()}
             </div>
-            <div>
+            <div className="flex-1">
               <p className="text-sm text-muted-foreground">Status da Conexão</p>
               <p className={`text-xl font-semibold ${getStatusColor()}`}>{getStatusText()}</p>
+              {conexao?.instance_name && (
+                <p className="text-sm text-muted-foreground">Instância: {conexao.instance_name}</p>
+              )}
               {conexao?.numero && (
-                <p className="text-sm text-muted-foreground">Número: {conexao.numero}</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  <Smartphone className="h-3 w-3" />
+                  {conexao.numero}
+                </p>
               )}
             </div>
             {conexao?.status === 'conectado' && (
-              <Check className="ml-auto h-8 w-8 text-success" />
+              <Check className="h-8 w-8 text-success" />
             )}
           </div>
         </div>
 
-        {/* Formulário */}
-        <div className="p-6 rounded-xl bg-card border border-border space-y-6">
-          <h2 className="text-lg font-semibold text-foreground">Configurações da Evolution API</h2>
+        {/* Criar Instância - Se não existe */}
+        {!conexao && (
+          <div className="p-6 rounded-xl bg-card border border-border space-y-4">
+            <h2 className="text-lg font-semibold text-foreground">Criar Nova Instância</h2>
+            <p className="text-sm text-muted-foreground">
+              Crie uma instância do WhatsApp para começar a receber e enviar mensagens.
+            </p>
 
-          <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
                 Nome da Instância
               </label>
               <input
                 type="text"
-                value={formData.instance_name}
-                onChange={(e) => setFormData({ ...formData, instance_name: e.target.value })}
-                placeholder="minha-instancia"
+                value={instanceName}
+                onChange={(e) => setInstanceName(e.target.value)}
+                placeholder="minha-empresa"
                 className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                O nome da instância configurada na Evolution API
+                Use apenas letras, números e hífens. Exemplo: minha-empresa
               </p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Token da API
-              </label>
-              <input
-                type="password"
-                value={formData.token}
-                onChange={(e) => setFormData({ ...formData, token: e.target.value })}
-                placeholder="••••••••••••••••"
-                className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                O token de autenticação da sua Evolution API
-              </p>
-            </div>
+            <button
+              onClick={handleCreateInstance}
+              disabled={creating || !instanceName.trim()}
+              className="w-full h-11 rounded-lg bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {creating ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <>
+                  <Plus className="h-5 w-5" />
+                  Criar Instância
+                </>
+              )}
+            </button>
+          </div>
+        )}
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Webhook URL
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`}
-                  readOnly
-                  className="flex-1 h-11 px-4 rounded-lg bg-muted border border-border text-muted-foreground"
+        {/* QR Code - Se aguardando */}
+        {conexao && (conexao.status === 'aguardando' || qrCode) && qrCode && (
+          <div className="p-6 rounded-xl bg-card border border-border space-y-4">
+            <h2 className="text-lg font-semibold text-foreground text-center">
+              Escaneie o QR Code
+            </h2>
+            <p className="text-sm text-muted-foreground text-center">
+              Abra o WhatsApp no seu celular, vá em Configurações &gt; Dispositivos Conectados &gt; Conectar Dispositivo
+            </p>
+            
+            <div className="flex justify-center">
+              <div className="p-4 bg-background rounded-xl border border-border">
+                <img
+                  src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
+                  alt="QR Code"
+                  className="w-64 h-64"
                 />
-                <button
-                  onClick={copyWebhookUrl}
-                  className="h-11 px-4 rounded-lg bg-muted hover:bg-muted/80 transition-colors flex items-center gap-2"
-                >
-                  <Copy className="h-4 w-4" />
-                </button>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Configure esta URL como webhook na sua Evolution API
-              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <RefreshCw className={`h-4 w-4 ${checkingStatus ? 'animate-spin' : ''}`} />
+              <span>Verificando conexão automaticamente...</span>
             </div>
           </div>
+        )}
 
-          <div className="flex gap-3 pt-4">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex-1 h-11 rounded-lg bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              {saving ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <>
-                  <Check className="h-5 w-5" />
-                  Salvar Configurações
-                </>
-              )}
-            </button>
+        {/* Ações - Se instância existe */}
+        {conexao && (
+          <div className="p-6 rounded-xl bg-card border border-border space-y-4">
+            <h2 className="text-lg font-semibold text-foreground">Ações</h2>
 
-            <button
-              onClick={handleTestConnection}
-              disabled={testing || !conexao}
-              className="h-11 px-6 rounded-lg bg-secondary text-secondary-foreground font-medium flex items-center gap-2 hover:bg-secondary/80 transition-colors disabled:opacity-50"
-            >
-              {testing ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <>
-                  <RefreshCw className="h-5 w-5" />
-                  Testar Conexão
-                </>
+            <div className="flex gap-3 flex-wrap">
+              {conexao.status !== 'conectado' && (
+                <button
+                  onClick={handleConnect}
+                  disabled={connecting}
+                  className="flex-1 min-w-[200px] h-11 rounded-lg bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {connecting ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <>
+                      <QrCode className="h-5 w-5" />
+                      {conexao.status === 'aguardando' ? 'Gerar Novo QR Code' : 'Conectar WhatsApp'}
+                    </>
+                  )}
+                </button>
               )}
-            </button>
+
+              <button
+                onClick={() => handleCheckStatus(false)}
+                disabled={checkingStatus}
+                className="h-11 px-6 rounded-lg bg-secondary text-secondary-foreground font-medium flex items-center gap-2 hover:bg-secondary/80 transition-colors disabled:opacity-50"
+              >
+                {checkingStatus ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <RefreshCw className="h-5 w-5" />
+                    Verificar Status
+                  </>
+                )}
+              </button>
+
+              {conexao.status === 'conectado' && (
+                <button
+                  onClick={handleDisconnect}
+                  disabled={disconnecting}
+                  className="h-11 px-6 rounded-lg bg-destructive text-destructive-foreground font-medium flex items-center gap-2 hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                >
+                  {disconnecting ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Power className="h-5 w-5" />
+                      Desconectar
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Instruções */}
         <div className="p-6 rounded-xl bg-card border border-border">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Como configurar</h2>
+          <h2 className="text-lg font-semibold text-foreground mb-4">Como conectar</h2>
           <ol className="space-y-3 text-sm text-muted-foreground">
             <li className="flex gap-3">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
                 1
               </span>
-              <span>Acesse seu painel da Evolution API e crie uma nova instância</span>
+              <span>Digite um nome único para sua instância e clique em "Criar Instância"</span>
             </li>
             <li className="flex gap-3">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
                 2
               </span>
-              <span>Copie o nome da instância e o token de API</span>
+              <span>Clique em "Conectar WhatsApp" para gerar o QR Code</span>
             </li>
             <li className="flex gap-3">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
                 3
               </span>
-              <span>Cole as informações acima e clique em "Salvar Configurações"</span>
+              <span>No seu celular, abra o WhatsApp e vá em Configurações &gt; Dispositivos Conectados</span>
             </li>
             <li className="flex gap-3">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
                 4
               </span>
-              <span>Configure o Webhook URL acima no painel da Evolution API</span>
+              <span>Toque em "Conectar Dispositivo" e escaneie o QR Code exibido acima</span>
             </li>
             <li className="flex gap-3">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
                 5
               </span>
-              <span>Clique em "Testar Conexão" para verificar se tudo está funcionando</span>
+              <span>Aguarde a conexão ser estabelecida. O status será atualizado automaticamente</span>
             </li>
           </ol>
         </div>
