@@ -20,21 +20,3 @@ verify_jwt = false
 
 [functions.whatsapp-webhook]
 verify_jwt = false
-
-[functions.whatsapp-webhook]
-verify_jwt = false
-
-[functions.evolution-create-instance]
-verify_jwt = false
-
-[functions.evolution-connect]
-verify_jwt = false
-
-[functions.evolution-connection-status]
-verify_jwt = false
-
-[functions.evolution-disconnect]
-verify_jwt = false
-
-[functions.enviar-mensagem]
-verify_jwt = false
