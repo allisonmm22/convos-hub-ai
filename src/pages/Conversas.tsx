@@ -390,6 +390,3 @@ export default function Conversas() {
     </MainLayout>
   );
 }
-
-// Required import for component
-import { MessageSquare as MessageSquareIcon } from 'lucide-react';

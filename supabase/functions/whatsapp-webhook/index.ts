@@ -73,7 +73,7 @@ serve(async (req) => {
       // Buscar ou criar conversa
       let { data: conversa } = await supabase
         .from('conversas')
-        .select('id, agente_ia_ativo')
+        .select('id, agente_ia_ativo, nao_lidas')
         .eq('conta_id', conexao.conta_id)
         .eq('contato_id', contato!.id)
         .single();
@@ -87,7 +87,7 @@ serve(async (req) => {
             conexao_id: conexao.id,
             agente_ia_ativo: true,
           })
-          .select()
+          .select('id, agente_ia_ativo, nao_lidas')
           .single();
         conversa = novaConversa;
       }
@@ -117,9 +117,10 @@ serve(async (req) => {
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-  } catch (error) {
-    console.error('Erro no webhook:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+    console.error('Erro no webhook:', errorMessage);
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
