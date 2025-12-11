@@ -1,0 +1,757 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "13.0.5"
+  }
+  public: {
+    Tables: {
+      agendamentos: {
+        Row: {
+          concluido: boolean | null
+          conta_id: string
+          contato_id: string | null
+          created_at: string
+          data_fim: string | null
+          data_inicio: string
+          descricao: string | null
+          id: string
+          titulo: string
+          updated_at: string
+          usuario_id: string | null
+        }
+        Insert: {
+          concluido?: boolean | null
+          conta_id: string
+          contato_id?: string | null
+          created_at?: string
+          data_fim?: string | null
+          data_inicio: string
+          descricao?: string | null
+          id?: string
+          titulo: string
+          updated_at?: string
+          usuario_id?: string | null
+        }
+        Update: {
+          concluido?: boolean | null
+          conta_id?: string
+          contato_id?: string | null
+          created_at?: string
+          data_fim?: string | null
+          data_inicio?: string
+          descricao?: string | null
+          id?: string
+          titulo?: string
+          updated_at?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agendamentos_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agendamentos_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agendamentos_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_ia: {
+        Row: {
+          ativo: boolean | null
+          conta_id: string
+          created_at: string
+          dias_ativos: number[] | null
+          horario_fim: string | null
+          horario_inicio: string | null
+          id: string
+          max_tokens: number | null
+          mensagem_fora_horario: string | null
+          modelo: string | null
+          nome: string | null
+          prompt_sistema: string | null
+          temperatura: number | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          conta_id: string
+          created_at?: string
+          dias_ativos?: number[] | null
+          horario_fim?: string | null
+          horario_inicio?: string | null
+          id?: string
+          max_tokens?: number | null
+          mensagem_fora_horario?: string | null
+          modelo?: string | null
+          nome?: string | null
+          prompt_sistema?: string | null
+          temperatura?: number | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean | null
+          conta_id?: string
+          created_at?: string
+          dias_ativos?: number[] | null
+          horario_fim?: string | null
+          horario_inicio?: string | null
+          id?: string
+          max_tokens?: number | null
+          mensagem_fora_horario?: string | null
+          modelo?: string | null
+          nome?: string | null
+          prompt_sistema?: string | null
+          temperatura?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_ia_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: true
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conexoes_whatsapp: {
+        Row: {
+          conta_id: string
+          created_at: string
+          id: string
+          instance_name: string
+          nome: string
+          numero: string | null
+          qrcode: string | null
+          status: Database["public"]["Enums"]["status_conexao"] | null
+          token: string
+          updated_at: string
+          webhook_url: string | null
+        }
+        Insert: {
+          conta_id: string
+          created_at?: string
+          id?: string
+          instance_name: string
+          nome?: string
+          numero?: string | null
+          qrcode?: string | null
+          status?: Database["public"]["Enums"]["status_conexao"] | null
+          token: string
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Update: {
+          conta_id?: string
+          created_at?: string
+          id?: string
+          instance_name?: string
+          nome?: string
+          numero?: string | null
+          qrcode?: string | null
+          status?: Database["public"]["Enums"]["status_conexao"] | null
+          token?: string
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conexoes_whatsapp_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contas: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      contatos: {
+        Row: {
+          avatar_url: string | null
+          conta_id: string
+          created_at: string
+          email: string | null
+          id: string
+          metadata: Json | null
+          nome: string
+          tags: string[] | null
+          telefone: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          conta_id: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          metadata?: Json | null
+          nome: string
+          tags?: string[] | null
+          telefone: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          conta_id?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          metadata?: Json | null
+          nome?: string
+          tags?: string[] | null
+          telefone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contatos_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversas: {
+        Row: {
+          agente_ia_ativo: boolean | null
+          arquivada: boolean | null
+          atendente_id: string | null
+          conexao_id: string | null
+          conta_id: string
+          contato_id: string
+          created_at: string
+          id: string
+          nao_lidas: number | null
+          ultima_mensagem: string | null
+          ultima_mensagem_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          agente_ia_ativo?: boolean | null
+          arquivada?: boolean | null
+          atendente_id?: string | null
+          conexao_id?: string | null
+          conta_id: string
+          contato_id: string
+          created_at?: string
+          id?: string
+          nao_lidas?: number | null
+          ultima_mensagem?: string | null
+          ultima_mensagem_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agente_ia_ativo?: boolean | null
+          arquivada?: boolean | null
+          atendente_id?: string | null
+          conexao_id?: string | null
+          conta_id?: string
+          contato_id?: string
+          created_at?: string
+          id?: string
+          nao_lidas?: number | null
+          ultima_mensagem?: string | null
+          ultima_mensagem_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversas_atendente_id_fkey"
+            columns: ["atendente_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversas_conexao_id_fkey"
+            columns: ["conexao_id"]
+            isOneToOne: false
+            referencedRelation: "conexoes_whatsapp"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversas_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversas_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estagios: {
+        Row: {
+          cor: string | null
+          created_at: string
+          funil_id: string
+          id: string
+          nome: string
+          ordem: number | null
+          updated_at: string
+        }
+        Insert: {
+          cor?: string | null
+          created_at?: string
+          funil_id: string
+          id?: string
+          nome: string
+          ordem?: number | null
+          updated_at?: string
+        }
+        Update: {
+          cor?: string | null
+          created_at?: string
+          funil_id?: string
+          id?: string
+          nome?: string
+          ordem?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estagios_funil_id_fkey"
+            columns: ["funil_id"]
+            isOneToOne: false
+            referencedRelation: "funis"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funis: {
+        Row: {
+          conta_id: string
+          cor: string | null
+          created_at: string
+          descricao: string | null
+          id: string
+          nome: string
+          ordem: number | null
+          updated_at: string
+        }
+        Insert: {
+          conta_id: string
+          cor?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          nome: string
+          ordem?: number | null
+          updated_at?: string
+        }
+        Update: {
+          conta_id?: string
+          cor?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          nome?: string
+          ordem?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funis_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mensagens: {
+        Row: {
+          contato_id: string | null
+          conteudo: string
+          conversa_id: string
+          created_at: string
+          direcao: Database["public"]["Enums"]["direcao_mensagem"]
+          enviada_por_ia: boolean | null
+          id: string
+          lida: boolean | null
+          media_url: string | null
+          metadata: Json | null
+          tipo: Database["public"]["Enums"]["tipo_mensagem"] | null
+          usuario_id: string | null
+        }
+        Insert: {
+          contato_id?: string | null
+          conteudo: string
+          conversa_id: string
+          created_at?: string
+          direcao: Database["public"]["Enums"]["direcao_mensagem"]
+          enviada_por_ia?: boolean | null
+          id?: string
+          lida?: boolean | null
+          media_url?: string | null
+          metadata?: Json | null
+          tipo?: Database["public"]["Enums"]["tipo_mensagem"] | null
+          usuario_id?: string | null
+        }
+        Update: {
+          contato_id?: string | null
+          conteudo?: string
+          conversa_id?: string
+          created_at?: string
+          direcao?: Database["public"]["Enums"]["direcao_mensagem"]
+          enviada_por_ia?: boolean | null
+          id?: string
+          lida?: boolean | null
+          media_url?: string | null
+          metadata?: Json | null
+          tipo?: Database["public"]["Enums"]["tipo_mensagem"] | null
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mensagens_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensagens_conversa_id_fkey"
+            columns: ["conversa_id"]
+            isOneToOne: false
+            referencedRelation: "conversas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensagens_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      negociacoes: {
+        Row: {
+          conta_id: string
+          contato_id: string
+          created_at: string
+          data_fechamento: string | null
+          estagio_id: string | null
+          id: string
+          notas: string | null
+          probabilidade: number | null
+          responsavel_id: string | null
+          status: Database["public"]["Enums"]["status_negociacao"] | null
+          titulo: string
+          updated_at: string
+          valor: number | null
+        }
+        Insert: {
+          conta_id: string
+          contato_id: string
+          created_at?: string
+          data_fechamento?: string | null
+          estagio_id?: string | null
+          id?: string
+          notas?: string | null
+          probabilidade?: number | null
+          responsavel_id?: string | null
+          status?: Database["public"]["Enums"]["status_negociacao"] | null
+          titulo: string
+          updated_at?: string
+          valor?: number | null
+        }
+        Update: {
+          conta_id?: string
+          contato_id?: string
+          created_at?: string
+          data_fechamento?: string | null
+          estagio_id?: string | null
+          id?: string
+          notas?: string | null
+          probabilidade?: number | null
+          responsavel_id?: string | null
+          status?: Database["public"]["Enums"]["status_negociacao"] | null
+          titulo?: string
+          updated_at?: string
+          valor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "negociacoes_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "negociacoes_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "negociacoes_estagio_id_fkey"
+            columns: ["estagio_id"]
+            isOneToOne: false
+            referencedRelation: "estagios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "negociacoes_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usuarios: {
+        Row: {
+          avatar_url: string | null
+          conta_id: string
+          created_at: string
+          email: string
+          id: string
+          is_admin: boolean | null
+          nome: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          conta_id: string
+          created_at?: string
+          email: string
+          id?: string
+          is_admin?: boolean | null
+          nome: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          conta_id?: string
+          created_at?: string
+          email?: string
+          id?: string
+          is_admin?: boolean | null
+          nome?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usuarios_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      get_user_conta_id: { Args: never; Returns: string }
+    }
+    Enums: {
+      direcao_mensagem: "entrada" | "saida"
+      status_conexao: "conectado" | "desconectado" | "aguardando"
+      status_negociacao: "aberto" | "ganho" | "perdido"
+      tipo_mensagem:
+        | "texto"
+        | "imagem"
+        | "audio"
+        | "video"
+        | "documento"
+        | "sticker"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      direcao_mensagem: ["entrada", "saida"],
+      status_conexao: ["conectado", "desconectado", "aguardando"],
+      status_negociacao: ["aberto", "ganho", "perdido"],
+      tipo_mensagem: [
+        "texto",
+        "imagem",
+        "audio",
+        "video",
+        "documento",
+        "sticker",
+      ],
+    },
+  },
+} as const
