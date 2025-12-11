@@ -266,6 +266,7 @@ export type Database = {
           created_at: string
           id: string
           nao_lidas: number | null
+          status: Database["public"]["Enums"]["status_conversa"] | null
           ultima_mensagem: string | null
           ultima_mensagem_at: string | null
           updated_at: string
@@ -280,6 +281,7 @@ export type Database = {
           created_at?: string
           id?: string
           nao_lidas?: number | null
+          status?: Database["public"]["Enums"]["status_conversa"] | null
           ultima_mensagem?: string | null
           ultima_mensagem_at?: string | null
           updated_at?: string
@@ -294,6 +296,7 @@ export type Database = {
           created_at?: string
           id?: string
           nao_lidas?: number | null
+          status?: Database["public"]["Enums"]["status_conversa"] | null
           ultima_mensagem?: string | null
           ultima_mensagem_at?: string | null
           updated_at?: string
@@ -552,6 +555,58 @@ export type Database = {
           },
         ]
       }
+      transferencias_atendimento: {
+        Row: {
+          conversa_id: string
+          created_at: string
+          de_usuario_id: string | null
+          id: string
+          motivo: string | null
+          para_agente_ia: boolean | null
+          para_usuario_id: string | null
+        }
+        Insert: {
+          conversa_id: string
+          created_at?: string
+          de_usuario_id?: string | null
+          id?: string
+          motivo?: string | null
+          para_agente_ia?: boolean | null
+          para_usuario_id?: string | null
+        }
+        Update: {
+          conversa_id?: string
+          created_at?: string
+          de_usuario_id?: string | null
+          id?: string
+          motivo?: string | null
+          para_agente_ia?: boolean | null
+          para_usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transferencias_atendimento_conversa_id_fkey"
+            columns: ["conversa_id"]
+            isOneToOne: false
+            referencedRelation: "conversas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transferencias_atendimento_de_usuario_id_fkey"
+            columns: ["de_usuario_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transferencias_atendimento_para_usuario_id_fkey"
+            columns: ["para_usuario_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       usuarios: {
         Row: {
           avatar_url: string | null
@@ -606,6 +661,7 @@ export type Database = {
     Enums: {
       direcao_mensagem: "entrada" | "saida"
       status_conexao: "conectado" | "desconectado" | "aguardando"
+      status_conversa: "em_atendimento" | "aguardando_cliente" | "encerrado"
       status_negociacao: "aberto" | "ganho" | "perdido"
       tipo_mensagem:
         | "texto"
@@ -743,6 +799,7 @@ export const Constants = {
     Enums: {
       direcao_mensagem: ["entrada", "saida"],
       status_conexao: ["conectado", "desconectado", "aguardando"],
+      status_conversa: ["em_atendimento", "aguardando_cliente", "encerrado"],
       status_negociacao: ["aberto", "ganho", "perdido"],
       tipo_mensagem: [
         "texto",
