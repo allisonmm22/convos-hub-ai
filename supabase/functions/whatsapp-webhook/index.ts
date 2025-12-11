@@ -14,6 +14,8 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const dbUrl = Deno.env.get('SUPABASE_DB_URL')!;
+    
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const payload = await req.json();
@@ -185,7 +187,7 @@ serve(async (req) => {
       if (conexaoError || !conexao) {
         console.log('Conexão não encontrada para instância:', instance);
         return new Response(JSON.stringify({ error: 'Conexão não encontrada' }), { 
-          status: 200, // Retornar 200 para não gerar retentativas
+          status: 200,
           headers: corsHeaders 
         });
       }
@@ -220,35 +222,66 @@ serve(async (req) => {
         console.log('Contato criado:', contato?.id);
       }
 
-      // Buscar ou criar conversa
-      let { data: conversa } = await supabase
-        .from('conversas')
-        .select('id, agente_ia_ativo, nao_lidas')
-        .eq('conta_id', conexao.conta_id)
-        .eq('contato_id', contato!.id)
-        .eq('arquivada', false)
-        .single();
+      // Buscar conversa existente usando SQL direto para evitar cache do PostgREST
+      console.log('Buscando conversa existente...');
+      
+      // Usar fetch direto para a API REST do Supabase com header para ignorar cache
+      const conversaResponse = await fetch(
+        `${supabaseUrl}/rest/v1/conversas?conta_id=eq.${conexao.conta_id}&contato_id=eq.${contato!.id}&arquivada=eq.false&select=id,agente_ia_ativo,nao_lidas`,
+        {
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/vnd.pgrst.object+json',
+            'Prefer': 'return=representation',
+          },
+        }
+      );
+
+      let conversa: { id: string; agente_ia_ativo: boolean; nao_lidas: number } | null = null;
+      
+      if (conversaResponse.ok) {
+        const conversaData = await conversaResponse.json();
+        if (conversaData && !conversaData.code) {
+          conversa = conversaData;
+          console.log('Conversa encontrada:', conversa?.id);
+        }
+      }
 
       if (!conversa) {
-        console.log('Criando nova conversa...');
-        const { data: novaConversa, error: conversaError } = await supabase
-          .from('conversas')
-          .insert({
-            conta_id: conexao.conta_id,
-            contato_id: contato!.id,
-            conexao_id: conexao.id,
-            agente_ia_ativo: true,
-            status: 'em_atendimento',
-          })
-          .select('id, agente_ia_ativo, nao_lidas')
-          .single();
-          
-        if (conversaError) {
-          console.error('Erro ao criar conversa:', conversaError);
-          throw conversaError;
+        console.log('Criando nova conversa com SQL direto...');
+        
+        // Inserir conversa usando SQL direto
+        const insertResponse = await fetch(
+          `${supabaseUrl}/rest/v1/conversas`,
+          {
+            method: 'POST',
+            headers: {
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=representation',
+            },
+            body: JSON.stringify({
+              conta_id: conexao.conta_id,
+              contato_id: contato!.id,
+              conexao_id: conexao.id,
+              agente_ia_ativo: true,
+              status: 'em_atendimento',
+            }),
+          }
+        );
+
+        if (!insertResponse.ok) {
+          const errorText = await insertResponse.text();
+          console.error('Erro ao criar conversa:', errorText);
+          throw new Error(`Erro ao criar conversa: ${errorText}`);
         }
-        conversa = novaConversa;
-        console.log('Conversa criada:', conversa.id);
+
+        const novaConversa = await insertResponse.json();
+        conversa = Array.isArray(novaConversa) ? novaConversa[0] : novaConversa;
+        console.log('Conversa criada:', conversa?.id);
       }
 
       // Inserir mensagem
@@ -268,16 +301,28 @@ serve(async (req) => {
 
       console.log('Mensagem inserida com sucesso');
 
-      // Atualizar conversa
-      await supabase
-        .from('conversas')
-        .update({
-          ultima_mensagem: messageContent,
-          ultima_mensagem_at: new Date().toISOString(),
-          nao_lidas: fromMe ? 0 : (conversa?.nao_lidas || 0) + 1,
-          status: fromMe ? 'aguardando_cliente' : 'em_atendimento',
-        })
-        .eq('id', conversa!.id);
+      // Atualizar conversa usando fetch direto
+      const updateResponse = await fetch(
+        `${supabaseUrl}/rest/v1/conversas?id=eq.${conversa!.id}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ultima_mensagem: messageContent,
+            ultima_mensagem_at: new Date().toISOString(),
+            nao_lidas: fromMe ? 0 : (conversa?.nao_lidas || 0) + 1,
+            status: fromMe ? 'aguardando_cliente' : 'em_atendimento',
+          }),
+        }
+      );
+
+      if (!updateResponse.ok) {
+        console.error('Erro ao atualizar conversa:', await updateResponse.text());
+      }
 
       console.log('Conversa atualizada com sucesso');
       console.log('=== FIM DO PROCESSAMENTO ===');
@@ -290,7 +335,7 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     console.error('Erro no webhook:', errorMessage);
     return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 200, // Retornar 200 para não gerar retentativas infinitas
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
