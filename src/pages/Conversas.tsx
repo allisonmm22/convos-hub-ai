@@ -108,11 +108,12 @@ export default function Conversas() {
 
   const setupRealtimeSubscription = () => {
     const channel = supabase
-      .channel('mensagens-realtime')
+      .channel('conversas-mensagens-realtime')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'mensagens' },
         (payload) => {
+          console.log('Nova mensagem recebida via realtime:', payload);
           const novaMensagem = payload.new as Mensagem;
           if (conversaSelecionada && novaMensagem.conversa_id === conversaSelecionada.id) {
             setMensagens((prev) => [...prev, novaMensagem]);
@@ -122,12 +123,28 @@ export default function Conversas() {
       )
       .on(
         'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'conversas' },
+        (payload) => {
+          console.log('Nova conversa recebida via realtime:', payload);
+          fetchConversas();
+          // Notificação sonora para nova conversa
+          try {
+            const audio = new Audio('/notification.mp3');
+            audio.volume = 0.3;
+            audio.play().catch(() => {});
+          } catch {}
+        }
+      )
+      .on(
+        'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'conversas' },
         () => {
           fetchConversas();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Status da subscription realtime:', status);
+      });
 
     return () => {
       supabase.removeChannel(channel);

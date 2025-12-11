@@ -26,6 +26,7 @@ export default function Conexao() {
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [instanceName, setInstanceName] = useState('');
   const [qrCode, setQrCode] = useState<string | null>(null);
+  const [reconfiguringWebhook, setReconfiguringWebhook] = useState(false);
 
   const fetchConexao = useCallback(async () => {
     if (!usuario?.conta_id) return;
@@ -222,6 +223,31 @@ export default function Conexao() {
     }
   };
 
+  const handleReconfigureWebhook = async () => {
+    if (!conexao) return;
+
+    setReconfiguringWebhook(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('evolution-set-webhook', {
+        body: { conexao_id: conexao.id },
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      toast.success('Webhook reconfigurado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao reconfigurar webhook:', error);
+      toast.error('Erro ao reconfigurar webhook');
+    } finally {
+      setReconfiguringWebhook(false);
+    }
+  };
+
   if (loading) {
     return (
       <MainLayout>
@@ -382,20 +408,36 @@ export default function Conexao() {
               </button>
 
               {conexao.status === 'conectado' && (
-                <button
-                  onClick={handleDisconnect}
-                  disabled={disconnecting}
-                  className="h-11 px-6 rounded-lg bg-destructive text-destructive-foreground font-medium flex items-center gap-2 hover:bg-destructive/90 transition-colors disabled:opacity-50"
-                >
-                  {disconnecting ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <>
-                      <Power className="h-5 w-5" />
-                      Desconectar
-                    </>
-                  )}
-                </button>
+                <>
+                  <button
+                    onClick={handleReconfigureWebhook}
+                    disabled={reconfiguringWebhook}
+                    className="h-11 px-6 rounded-lg bg-accent text-accent-foreground font-medium flex items-center gap-2 hover:bg-accent/80 transition-colors disabled:opacity-50"
+                  >
+                    {reconfiguringWebhook ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <>
+                        <RefreshCw className="h-5 w-5" />
+                        Reconfigurar Webhook
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleDisconnect}
+                    disabled={disconnecting}
+                    className="h-11 px-6 rounded-lg bg-destructive text-destructive-foreground font-medium flex items-center gap-2 hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                  >
+                    {disconnecting ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Power className="h-5 w-5" />
+                        Desconectar
+                      </>
+                    )}
+                  </button>
+                </>
               )}
             </div>
           </div>

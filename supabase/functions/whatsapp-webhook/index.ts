@@ -17,41 +17,56 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const payload = await req.json();
-    console.log('Webhook recebido:', JSON.stringify(payload));
+    console.log('=== WEBHOOK RECEBIDO ===');
+    console.log('Payload completo:', JSON.stringify(payload, null, 2));
 
-    // Evolution API envia diferentes tipos de eventos
-    const event = payload.event;
+    // Evolution API pode enviar eventos em diferentes formatos
+    const event = payload.event?.toLowerCase() || '';
     const instance = payload.instance;
     const data = payload.data;
 
+    console.log('Evento:', event);
+    console.log('Instância:', instance);
+
+    // Normalizar evento (Evolution API v2 usa maiúsculas)
+    const normalizedEvent = event.replace(/_/g, '.').toLowerCase();
+    console.log('Evento normalizado:', normalizedEvent);
+
     // Tratar evento de atualização de conexão
-    if (event === 'connection.update') {
-      console.log('Evento de conexão recebido:', JSON.stringify(data));
+    if (normalizedEvent === 'connection.update' || event === 'connection_update') {
+      console.log('=== EVENTO DE CONEXÃO ===');
+      console.log('Data:', JSON.stringify(data));
       
-      const state = data?.state;
+      const state = data?.state || data?.status;
       let status: 'conectado' | 'desconectado' | 'aguardando' = 'desconectado';
       
-      if (state === 'open') {
+      if (state === 'open' || state === 'connected') {
         status = 'conectado';
-      } else if (state === 'connecting') {
+      } else if (state === 'connecting' || state === 'qr') {
         status = 'aguardando';
-      } else if (state === 'close') {
+      } else if (state === 'close' || state === 'disconnected') {
         status = 'desconectado';
       }
 
-      // Atualizar status da conexão
+      console.log('Status calculado:', status);
+
+      // Extrair número do telefone
+      const numero = data?.instance?.owner?.split('@')[0] || 
+                    data?.ownerJid?.split('@')[0] || 
+                    null;
+
       const { error: updateError } = await supabase
         .from('conexoes_whatsapp')
         .update({ 
           status,
-          numero: data?.instance?.owner?.split('@')[0] || null,
+          numero,
         })
         .eq('instance_name', instance);
 
       if (updateError) {
         console.error('Erro ao atualizar status:', updateError);
       } else {
-        console.log('Status atualizado para:', status);
+        console.log('Status atualizado para:', status, 'Número:', numero);
       }
 
       return new Response(JSON.stringify({ success: true }), {
@@ -60,12 +75,14 @@ serve(async (req) => {
     }
 
     // Tratar evento de atualização do QR Code
-    if (event === 'qrcode.updated') {
-      console.log('QR Code atualizado para instância:', instance);
+    if (normalizedEvent === 'qrcode.updated' || event === 'qrcode_updated' || event === 'qr') {
+      console.log('=== EVENTO DE QRCODE ===');
       
-      const qrcode = data?.qrcode?.base64;
+      const qrcode = data?.qrcode?.base64 || data?.qrcode || data?.base64;
       
       if (qrcode) {
+        console.log('QR Code recebido para instância:', instance);
+        
         await supabase
           .from('conexoes_whatsapp')
           .update({ 
@@ -73,6 +90,8 @@ serve(async (req) => {
             status: 'aguardando',
           })
           .eq('instance_name', instance);
+          
+        console.log('QR Code salvo no banco');
       }
 
       return new Response(JSON.stringify({ success: true }), {
@@ -80,31 +99,98 @@ serve(async (req) => {
       });
     }
 
-    // Tratar mensagens recebidas
-    if (event === 'messages.upsert' && data?.message) {
-      const message = data.message;
-      const remoteJid = data.key?.remoteJid;
-      const fromMe = data.key?.fromMe;
-      const messageContent = message.conversation || message.extendedTextMessage?.text || '';
+    // Tratar mensagens recebidas (vários formatos possíveis)
+    if (normalizedEvent === 'messages.upsert' || event === 'messages_upsert' || event === 'message') {
+      console.log('=== EVENTO DE MENSAGEM ===');
+      console.log('Data:', JSON.stringify(data, null, 2));
 
-      if (!remoteJid || !messageContent) {
+      // Extrair dados da mensagem (múltiplos formatos)
+      const message = data?.message || data?.messages?.[0] || data;
+      const key = data?.key || message?.key || {};
+      const remoteJid = key.remoteJid || data?.remoteJid || data?.from;
+      const fromMe = key.fromMe ?? data?.fromMe ?? false;
+      const pushName = data?.pushName || message?.pushName || '';
+
+      console.log('RemoteJid:', remoteJid);
+      console.log('FromMe:', fromMe);
+      console.log('PushName:', pushName);
+
+      if (!remoteJid) {
+        console.log('RemoteJid não encontrado, ignorando');
+        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+      }
+
+      // Ignorar mensagens de grupo por enquanto
+      if (remoteJid.includes('@g.us')) {
+        console.log('Mensagem de grupo ignorada');
+        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+      }
+
+      // Extrair conteúdo da mensagem
+      let messageContent = '';
+      let messageType: 'texto' | 'imagem' | 'audio' | 'video' | 'documento' | 'sticker' = 'texto';
+      let mediaUrl: string | null = null;
+
+      // Diferentes estruturas de mensagem na Evolution API
+      const msgContent = message?.message || message;
+      
+      if (msgContent?.conversation) {
+        messageContent = msgContent.conversation;
+      } else if (msgContent?.extendedTextMessage?.text) {
+        messageContent = msgContent.extendedTextMessage.text;
+      } else if (msgContent?.imageMessage) {
+        messageType = 'imagem';
+        messageContent = msgContent.imageMessage.caption || '📷 Imagem';
+        mediaUrl = msgContent.imageMessage.url || data?.mediaUrl;
+      } else if (msgContent?.audioMessage) {
+        messageType = 'audio';
+        messageContent = '🎵 Áudio';
+        mediaUrl = msgContent.audioMessage.url || data?.mediaUrl;
+      } else if (msgContent?.videoMessage) {
+        messageType = 'video';
+        messageContent = msgContent.videoMessage.caption || '🎬 Vídeo';
+        mediaUrl = msgContent.videoMessage.url || data?.mediaUrl;
+      } else if (msgContent?.documentMessage) {
+        messageType = 'documento';
+        messageContent = msgContent.documentMessage.fileName || '📄 Documento';
+        mediaUrl = msgContent.documentMessage.url || data?.mediaUrl;
+      } else if (msgContent?.stickerMessage) {
+        messageType = 'sticker';
+        messageContent = '🎨 Sticker';
+      } else if (typeof message === 'string') {
+        messageContent = message;
+      } else if (data?.body) {
+        messageContent = data.body;
+      }
+
+      console.log('Conteúdo da mensagem:', messageContent);
+      console.log('Tipo:', messageType);
+
+      if (!messageContent) {
+        console.log('Sem conteúdo de mensagem, ignorando');
         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
       }
 
       // Extrair número do telefone
-      const telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@g.us', '');
+      const telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
+      console.log('Telefone:', telefone);
 
       // Buscar conexão pela instância
-      const { data: conexao } = await supabase
+      const { data: conexao, error: conexaoError } = await supabase
         .from('conexoes_whatsapp')
         .select('id, conta_id')
         .eq('instance_name', instance)
         .single();
 
-      if (!conexao) {
+      if (conexaoError || !conexao) {
         console.log('Conexão não encontrada para instância:', instance);
-        return new Response(JSON.stringify({ error: 'Conexão não encontrada' }), { headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'Conexão não encontrada' }), { 
+          status: 200, // Retornar 200 para não gerar retentativas
+          headers: corsHeaders 
+        });
       }
+
+      console.log('Conexão encontrada:', conexao.id, 'Conta:', conexao.conta_id);
 
       // Buscar ou criar contato
       let { data: contato } = await supabase
@@ -115,16 +201,23 @@ serve(async (req) => {
         .single();
 
       if (!contato) {
-        const { data: novoContato } = await supabase
+        console.log('Criando novo contato...');
+        const { data: novoContato, error: contatoError } = await supabase
           .from('contatos')
           .insert({
             conta_id: conexao.conta_id,
-            nome: data.pushName || telefone,
+            nome: pushName || telefone,
             telefone,
           })
           .select()
           .single();
+          
+        if (contatoError) {
+          console.error('Erro ao criar contato:', contatoError);
+          throw contatoError;
+        }
         contato = novoContato;
+        console.log('Contato criado:', contato?.id);
       }
 
       // Buscar ou criar conversa
@@ -133,30 +226,47 @@ serve(async (req) => {
         .select('id, agente_ia_ativo, nao_lidas')
         .eq('conta_id', conexao.conta_id)
         .eq('contato_id', contato!.id)
+        .eq('arquivada', false)
         .single();
 
       if (!conversa) {
-        const { data: novaConversa } = await supabase
+        console.log('Criando nova conversa...');
+        const { data: novaConversa, error: conversaError } = await supabase
           .from('conversas')
           .insert({
             conta_id: conexao.conta_id,
             contato_id: contato!.id,
             conexao_id: conexao.id,
             agente_ia_ativo: true,
+            status: 'em_atendimento',
           })
           .select('id, agente_ia_ativo, nao_lidas')
           .single();
+          
+        if (conversaError) {
+          console.error('Erro ao criar conversa:', conversaError);
+          throw conversaError;
+        }
         conversa = novaConversa;
+        console.log('Conversa criada:', conversa.id);
       }
 
       // Inserir mensagem
-      await supabase.from('mensagens').insert({
+      const { error: msgError } = await supabase.from('mensagens').insert({
         conversa_id: conversa!.id,
         contato_id: contato!.id,
         conteudo: messageContent,
         direcao: fromMe ? 'saida' : 'entrada',
-        tipo: 'texto',
+        tipo: messageType,
+        media_url: mediaUrl,
       });
+
+      if (msgError) {
+        console.error('Erro ao inserir mensagem:', msgError);
+        throw msgError;
+      }
+
+      console.log('Mensagem inserida com sucesso');
 
       // Atualizar conversa
       await supabase
@@ -165,10 +275,12 @@ serve(async (req) => {
           ultima_mensagem: messageContent,
           ultima_mensagem_at: new Date().toISOString(),
           nao_lidas: fromMe ? 0 : (conversa?.nao_lidas || 0) + 1,
+          status: fromMe ? 'aguardando_cliente' : 'em_atendimento',
         })
         .eq('id', conversa!.id);
 
-      console.log('Mensagem processada com sucesso');
+      console.log('Conversa atualizada com sucesso');
+      console.log('=== FIM DO PROCESSAMENTO ===');
     }
 
     return new Response(JSON.stringify({ success: true }), {
@@ -178,7 +290,7 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     console.error('Erro no webhook:', errorMessage);
     return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
+      status: 200, // Retornar 200 para não gerar retentativas infinitas
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
