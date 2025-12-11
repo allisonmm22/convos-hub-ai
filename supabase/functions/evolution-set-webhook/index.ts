@@ -54,7 +54,7 @@ serve(async (req) => {
     console.log('Reconfigurando webhook para:', conexao.instance_name);
     console.log('URL do webhook:', webhookUrl);
 
-    // Configurar webhook na Evolution API
+    // Configurar webhook na Evolution API (formato v2)
     const webhookResponse = await fetch(`${EVOLUTION_API_URL}/webhook/set/${conexao.instance_name}`, {
       method: 'POST',
       headers: {
@@ -62,14 +62,17 @@ serve(async (req) => {
         'apikey': evolutionApiKey,
       },
       body: JSON.stringify({
-        url: webhookUrl,
-        webhook_by_events: false,
-        webhook_base64: true,
-        events: [
-          'MESSAGES_UPSERT',
-          'CONNECTION_UPDATE',
-          'QRCODE_UPDATED',
-        ],
+        webhook: {
+          url: webhookUrl,
+          enabled: true,
+          webhookByEvents: false,
+          webhookBase64: true,
+          events: [
+            'MESSAGES_UPSERT',
+            'CONNECTION_UPDATE',
+            'QRCODE_UPDATED',
+          ],
+        },
       }),
     });
 
