@@ -90,9 +90,23 @@ serve(async (req) => {
     }
 
     const messagesData = await messagesResponse.json();
-    console.log('Mensagens encontradas:', messagesData?.length || 0);
-
-    const messages = Array.isArray(messagesData) ? messagesData : messagesData?.messages || [];
+    console.log('Resposta da Evolution API:', JSON.stringify(messagesData).substring(0, 500));
+    
+    // Tratar diferentes formatos de resposta
+    let messages: any[] = [];
+    if (Array.isArray(messagesData)) {
+      messages = messagesData;
+    } else if (messagesData?.messages && Array.isArray(messagesData.messages)) {
+      messages = messagesData.messages;
+    } else if (messagesData?.data && Array.isArray(messagesData.data)) {
+      messages = messagesData.data;
+    } else if (typeof messagesData === 'object' && messagesData !== null) {
+      // Se for um objeto único, tentar converter para array
+      messages = [];
+      console.log('Formato de resposta não reconhecido, ignorando');
+    }
+    
+    console.log('Mensagens a processar:', messages.length);
     let processedCount = 0;
 
     for (const msg of messages) {
