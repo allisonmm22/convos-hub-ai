@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Plug, PlugZap, RefreshCw, Check, Loader2, QrCode, Power, Plus, Smartphone } from 'lucide-react';
+import { Plug, PlugZap, RefreshCw, Check, Loader2, QrCode, Power, Plus, Smartphone, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -27,6 +27,8 @@ export default function Conexao() {
   const [instanceName, setInstanceName] = useState('');
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [reconfiguringWebhook, setReconfiguringWebhook] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const fetchConexao = useCallback(async () => {
     if (!usuario?.conta_id) return;
@@ -248,6 +250,30 @@ export default function Conexao() {
     }
   };
 
+  const handleDeleteConnection = async () => {
+    if (!conexao) return;
+
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('conexoes_whatsapp')
+        .delete()
+        .eq('id', conexao.id);
+
+      if (error) throw error;
+
+      toast.success('Conexão deletada com sucesso');
+      setConexao(null);
+      setQrCode(null);
+      setShowDeleteConfirm(false);
+    } catch (error) {
+      console.error('Erro ao deletar conexão:', error);
+      toast.error('Erro ao deletar conexão');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <MainLayout>
@@ -407,6 +433,17 @@ export default function Conexao() {
                 )}
               </button>
 
+              {conexao.status !== 'conectado' && (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={deleting}
+                  className="h-11 px-6 rounded-lg bg-destructive text-destructive-foreground font-medium flex items-center gap-2 hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                >
+                  <Trash2 className="h-5 w-5" />
+                  Deletar Conexão
+                </button>
+              )}
+
               {conexao.status === 'conectado' && (
                 <>
                   <button
@@ -479,6 +516,40 @@ export default function Conexao() {
             </li>
           </ol>
         </div>
+
+        {/* Modal de Confirmação de Delete */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full mx-4 space-y-4">
+              <h3 className="text-lg font-semibold text-foreground">Confirmar Exclusão</h3>
+              <p className="text-sm text-muted-foreground">
+                Tem certeza que deseja deletar esta conexão? Esta ação não pode ser desfeita.
+                Você precisará criar uma nova instância para conectar o WhatsApp novamente.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={deleting}
+                  className="h-10 px-4 rounded-lg bg-secondary text-secondary-foreground font-medium hover:bg-secondary/80 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteConnection}
+                  disabled={deleting}
+                  className="h-10 px-4 rounded-lg bg-destructive text-destructive-foreground font-medium flex items-center gap-2 hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                >
+                  {deleting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Deletar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </MainLayout>
   );
