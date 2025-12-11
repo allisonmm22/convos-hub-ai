@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import {
   Search,
@@ -19,6 +19,9 @@ import {
   ArrowRightLeft,
   UserCheck,
   Filter,
+  Wifi,
+  WifiOff,
+  RefreshCw,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -62,6 +65,13 @@ interface Mensagem {
   media_url: string | null;
 }
 
+interface Conexao {
+  id: string;
+  instance_name: string;
+  status: 'conectado' | 'desconectado' | 'aguardando' | null;
+  numero: string | null;
+}
+
 type StatusFilter = 'todos' | 'em_atendimento' | 'aguardando_cliente' | 'encerrado';
 
 export default function Conversas() {
@@ -81,15 +91,97 @@ export default function Conversas() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileType, setFileType] = useState<'imagem' | 'documento' | 'audio'>('imagem');
+  
+  // Estado da conexão WhatsApp
+  const [conexao, setConexao] = useState<Conexao | null>(null);
+  const [pollingActive, setPollingActive] = useState(false);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Buscar conexão WhatsApp
+  const fetchConexao = useCallback(async () => {
+    if (!usuario?.conta_id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('conexoes_whatsapp')
+        .select('id, instance_name, status, numero')
+        .eq('conta_id', usuario.conta_id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Erro ao buscar conexão:', error);
+        return;
+      }
+
+      setConexao(data);
+    } catch (error) {
+      console.error('Erro ao buscar conexão:', error);
+    }
+  }, [usuario?.conta_id]);
+
+  // Polling de mensagens
+  const pollMessages = useCallback(async () => {
+    if (!conexao?.id || conexao.status !== 'conectado') return;
+    
+    try {
+      console.log('Polling mensagens...');
+      const { data, error } = await supabase.functions.invoke('evolution-fetch-messages', {
+        body: { conexao_id: conexao.id },
+      });
+
+      if (error) {
+        console.error('Erro no polling:', error);
+        return;
+      }
+
+      if (data?.processed > 0) {
+        console.log('Mensagens processadas via polling:', data.processed);
+        fetchConversas();
+      }
+    } catch (error) {
+      console.error('Erro no polling:', error);
+    }
+  }, [conexao?.id, conexao?.status]);
+
+  // Iniciar/parar polling
+  useEffect(() => {
+    if (conexao?.status === 'conectado' && !pollingActive) {
+      setPollingActive(true);
+      // Polling a cada 10 segundos
+      pollingIntervalRef.current = setInterval(pollMessages, 10000);
+      // Executar imediatamente
+      pollMessages();
+    } else if (conexao?.status !== 'conectado' && pollingActive) {
+      setPollingActive(false);
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, [conexao?.status, pollingActive, pollMessages]);
 
   useEffect(() => {
     if (usuario?.conta_id) {
       fetchConversas();
       fetchUsuarios();
+      fetchConexao();
       const cleanup = setupRealtimeSubscription();
-      return cleanup;
+      
+      // Verificar status da conexão periodicamente
+      const statusInterval = setInterval(fetchConexao, 30000);
+      
+      return () => {
+        cleanup();
+        clearInterval(statusInterval);
+      };
     }
-  }, [usuario]);
+  }, [usuario, fetchConexao]);
 
   useEffect(() => {
     if (conversaSelecionada) {
@@ -524,7 +616,36 @@ export default function Conversas() {
         <div className="w-96 border-r border-border flex flex-col">
           {/* Header */}
           <div className="p-4 border-b border-border">
-            <h2 className="text-xl font-semibold text-foreground mb-4">Conversas</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-foreground">Conversas</h2>
+              
+              {/* Status da Conexão */}
+              <div className={cn(
+                'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium',
+                conexao?.status === 'conectado' 
+                  ? 'bg-green-500/20 text-green-500' 
+                  : conexao?.status === 'aguardando'
+                  ? 'bg-yellow-500/20 text-yellow-500'
+                  : 'bg-destructive/20 text-destructive'
+              )}>
+                {conexao?.status === 'conectado' ? (
+                  <>
+                    <Wifi className="h-3 w-3" />
+                    Online
+                  </>
+                ) : conexao?.status === 'aguardando' ? (
+                  <>
+                    <RefreshCw className="h-3 w-3 animate-spin" />
+                    Conectando
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="h-3 w-3" />
+                    Offline
+                  </>
+                )}
+              </div>
+            </div>
             <div className="relative mb-3">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input

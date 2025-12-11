@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.whatsapp-webhook]
 verify_jwt = false
+
+[functions.evolution-fetch-messages]
+verify_jwt = false

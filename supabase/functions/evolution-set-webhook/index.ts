@@ -54,7 +54,7 @@ serve(async (req) => {
     console.log('Reconfigurando webhook para:', conexao.instance_name);
     console.log('URL do webhook:', webhookUrl);
 
-    // Configurar webhook na Evolution API (formato v2)
+    // Configurar webhook na Evolution API (formato v2) com headers de autorização
     const webhookResponse = await fetch(`${EVOLUTION_API_URL}/webhook/set/${conexao.instance_name}`, {
       method: 'POST',
       headers: {
@@ -72,6 +72,10 @@ serve(async (req) => {
             'CONNECTION_UPDATE',
             'QRCODE_UPDATED',
           ],
+          headers: {
+            'Authorization': `Bearer ${supabaseKey}`,
+            'apikey': Deno.env.get('SUPABASE_ANON_KEY') || supabaseKey,
+          },
         },
       }),
     });
