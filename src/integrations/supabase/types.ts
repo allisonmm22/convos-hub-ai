@@ -418,6 +418,7 @@ export type Database = {
           conversa_id: string
           created_at: string
           direcao: Database["public"]["Enums"]["direcao_mensagem"]
+          enviada_por_dispositivo: boolean | null
           enviada_por_ia: boolean | null
           id: string
           lida: boolean | null
@@ -432,6 +433,7 @@ export type Database = {
           conversa_id: string
           created_at?: string
           direcao: Database["public"]["Enums"]["direcao_mensagem"]
+          enviada_por_dispositivo?: boolean | null
           enviada_por_ia?: boolean | null
           id?: string
           lida?: boolean | null
@@ -446,6 +448,7 @@ export type Database = {
           conversa_id?: string
           created_at?: string
           direcao?: Database["public"]["Enums"]["direcao_mensagem"]
+          enviada_por_dispositivo?: boolean | null
           enviada_por_ia?: boolean | null
           id?: string
           lida?: boolean | null

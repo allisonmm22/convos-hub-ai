@@ -60,6 +60,7 @@ interface Mensagem {
   direcao: 'entrada' | 'saida';
   created_at: string;
   enviada_por_ia: boolean;
+  enviada_por_dispositivo: boolean | null;
   lida: boolean;
   tipo: 'texto' | 'imagem' | 'audio' | 'video' | 'documento' | 'sticker' | null;
   media_url: string | null;
@@ -559,10 +560,19 @@ export default function Conversas() {
               : 'bg-muted text-foreground rounded-bl-sm'
           )}
         >
-          {msg.enviada_por_ia && msg.direcao === 'saida' && (
+          {msg.direcao === 'saida' && (msg.enviada_por_ia || msg.enviada_por_dispositivo) && (
             <div className="flex items-center gap-1 text-xs opacity-70 mb-1">
-              <Bot className="h-3 w-3" />
-              <span>Agente IA</span>
+              {msg.enviada_por_ia ? (
+                <>
+                  <Bot className="h-3 w-3" />
+                  <span>Agente IA</span>
+                </>
+              ) : msg.enviada_por_dispositivo ? (
+                <>
+                  <Phone className="h-3 w-3" />
+                  <span>Enviado pelo dispositivo</span>
+                </>
+              ) : null}
             </div>
           )}
           
