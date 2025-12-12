@@ -132,6 +132,8 @@ serve(async (req) => {
       let messageContent = '';
       let messageType: 'texto' | 'imagem' | 'audio' | 'video' | 'documento' | 'sticker' = 'texto';
       let mediaUrl: string | null = null;
+      let needsMediaDownload = false;
+      const messageId = key.id;
 
       // Diferentes estruturas de mensagem na Evolution API
       const msgContent = message?.message || message;
@@ -143,26 +145,59 @@ serve(async (req) => {
       } else if (msgContent?.imageMessage) {
         messageType = 'imagem';
         messageContent = msgContent.imageMessage.caption || '📷 Imagem';
-        mediaUrl = msgContent.imageMessage.url || data?.mediaUrl;
+        needsMediaDownload = true;
       } else if (msgContent?.audioMessage) {
         messageType = 'audio';
         messageContent = '🎵 Áudio';
-        mediaUrl = msgContent.audioMessage.url || data?.mediaUrl;
+        needsMediaDownload = true;
       } else if (msgContent?.videoMessage) {
         messageType = 'video';
         messageContent = msgContent.videoMessage.caption || '🎬 Vídeo';
-        mediaUrl = msgContent.videoMessage.url || data?.mediaUrl;
+        needsMediaDownload = true;
       } else if (msgContent?.documentMessage) {
         messageType = 'documento';
         messageContent = msgContent.documentMessage.fileName || '📄 Documento';
-        mediaUrl = msgContent.documentMessage.url || data?.mediaUrl;
+        needsMediaDownload = true;
       } else if (msgContent?.stickerMessage) {
         messageType = 'sticker';
         messageContent = '🎨 Sticker';
+        needsMediaDownload = true;
       } else if (typeof message === 'string') {
         messageContent = message;
       } else if (data?.body) {
         messageContent = data.body;
+      }
+
+      // Se é mídia, fazer download e salvar no Storage
+      if (needsMediaDownload && messageId) {
+        console.log('Baixando mídia:', messageType, messageId);
+        try {
+          const downloadResponse = await fetch(
+            `${supabaseUrl}/functions/v1/download-media`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseKey}`,
+              },
+              body: JSON.stringify({
+                instance_name: instance,
+                message_id: messageId,
+                message_type: messageType,
+              }),
+            }
+          );
+
+          if (downloadResponse.ok) {
+            const downloadData = await downloadResponse.json();
+            mediaUrl = downloadData.url;
+            console.log('Mídia baixada com sucesso:', mediaUrl);
+          } else {
+            console.error('Erro ao baixar mídia:', await downloadResponse.text());
+          }
+        } catch (downloadError) {
+          console.error('Erro ao chamar download-media:', downloadError);
+        }
       }
 
       console.log('Conteúdo da mensagem:', messageContent);
