@@ -362,6 +362,104 @@ serve(async (req) => {
       }
 
       console.log('Conversa atualizada com sucesso');
+
+      // Processar com IA se ativo e não for mensagem de saída
+      if (conversa?.agente_ia_ativo && !fromMe) {
+        console.log('=== PROCESSANDO COM IA ===');
+        
+        try {
+          const aiResponse = await fetch(
+            `${supabaseUrl}/functions/v1/ai-responder`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseKey}`,
+              },
+              body: JSON.stringify({
+                conversa_id: conversa.id,
+                mensagem: messageContent,
+                conta_id: conexao.conta_id,
+              }),
+            }
+          );
+
+          if (aiResponse.ok) {
+            const aiData = await aiResponse.json();
+            console.log('Resposta IA:', aiData);
+
+            if (aiData.should_respond && aiData.resposta) {
+              // Buscar token da conexão para enviar mensagem
+              const { data: conexaoCompleta } = await supabase
+                .from('conexoes_whatsapp')
+                .select('token, instance_name')
+                .eq('id', conexao.id)
+                .single();
+
+              if (conexaoCompleta) {
+                const evolutionApiUrl = 'https://evo.notificacrm.com.br';
+                
+                // Enviar mensagem via Evolution API
+                const sendResponse = await fetch(
+                  `${evolutionApiUrl}/message/sendText/${conexaoCompleta.instance_name}`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'apikey': conexaoCompleta.token,
+                    },
+                    body: JSON.stringify({
+                      number: telefone,
+                      text: aiData.resposta,
+                    }),
+                  }
+                );
+
+                if (sendResponse.ok) {
+                  console.log('Mensagem IA enviada com sucesso');
+
+                  // Salvar mensagem da IA no banco
+                  await supabase.from('mensagens').insert({
+                    conversa_id: conversa.id,
+                    contato_id: contato!.id,
+                    conteudo: aiData.resposta,
+                    direcao: 'saida',
+                    tipo: 'texto',
+                    enviada_por_ia: true,
+                  });
+
+                  // Atualizar conversa
+                  await fetch(
+                    `${supabaseUrl}/rest/v1/conversas?id=eq.${conversa.id}`,
+                    {
+                      method: 'PATCH',
+                      headers: {
+                        'apikey': supabaseKey,
+                        'Authorization': `Bearer ${supabaseKey}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        ultima_mensagem: aiData.resposta,
+                        ultima_mensagem_at: new Date().toISOString(),
+                        status: 'aguardando_cliente',
+                      }),
+                    }
+                  );
+
+                  console.log('Mensagem IA salva no banco');
+                } else {
+                  console.error('Erro ao enviar mensagem IA:', await sendResponse.text());
+                }
+              }
+            }
+          } else {
+            console.error('Erro na resposta do ai-responder:', await aiResponse.text());
+          }
+        } catch (aiError) {
+          console.error('Erro ao processar com IA:', aiError);
+        }
+      }
+
       console.log('=== FIM DO PROCESSAMENTO ===');
     }
 

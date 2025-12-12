@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.download-media]
 verify_jwt = false
+
+[functions.ai-responder]
+verify_jwt = false

@@ -3,7 +3,8 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { 
   Bot, Save, Clock, Loader2, Sparkles, ArrowLeft, Pencil, Check, X,
   FileText, MessageCircle, HelpCircle, Layers, Calendar, Zap, Bell, 
-  Volume2, Settings, ChevronDown, ChevronUp, Plus, GripVertical, Trash2
+  Volume2, Settings, ChevronDown, ChevronUp, Plus, GripVertical, Trash2,
+  Key, Eye, EyeOff
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,7 +28,7 @@ interface AgentConfig {
   descricao: string | null;
 }
 
-type Tab = 'regras' | 'etapas' | 'perguntas';
+type Tab = 'regras' | 'etapas' | 'perguntas' | 'configuracao';
 
 const MAX_CARACTERES = 15000;
 
@@ -42,9 +43,13 @@ const diasSemana = [
 ];
 
 const modelos = [
-  { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash (Recomendado)' },
-  { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro (Mais Poderoso)' },
-  { value: 'openai/gpt-5-mini', label: 'GPT-5 Mini' },
+  { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Rápido e Econômico)' },
+  { value: 'gpt-4o', label: 'GPT-4o (Equilibrado)' },
+  { value: 'gpt-4.1-2025-04-14', label: 'GPT-4.1 (Flagship)' },
+  { value: 'gpt-4.1-mini-2025-04-14', label: 'GPT-4.1 Mini' },
+  { value: 'gpt-5-2025-08-07', label: 'GPT-5 (Mais Poderoso)' },
+  { value: 'gpt-5-mini-2025-08-07', label: 'GPT-5 Mini' },
+  { value: 'gpt-5-nano-2025-08-07', label: 'GPT-5 Nano (Ultra Rápido)' },
 ];
 
 export default function AgenteIAEditar() {
@@ -154,6 +159,7 @@ export default function AgenteIAEditar() {
     { id: 'regras' as Tab, label: 'Regras Gerais', icon: FileText },
     { id: 'etapas' as Tab, label: 'Etapas de Atendimento', icon: MessageCircle },
     { id: 'perguntas' as Tab, label: 'Perguntas Frequentes', icon: HelpCircle },
+    { id: 'configuracao' as Tab, label: 'Configuração API', icon: Key },
   ];
 
   const sidebarItems = [
@@ -304,12 +310,21 @@ export default function AgenteIAEditar() {
               />
             )}
 
-            {activeTab === 'etapas' && (
-              <EtapasAtendimentoTab />
+            {activeTab === 'etapas' && config && (
+              <EtapasAtendimentoTab agentId={config.id} />
             )}
 
-            {activeTab === 'perguntas' && (
-              <PerguntasFrequentesTab />
+            {activeTab === 'perguntas' && config && (
+              <PerguntasFrequentesTab agentId={config.id} />
+            )}
+
+            {activeTab === 'configuracao' && config && (
+              <ConfiguracaoAPITab 
+                config={config}
+                setConfig={setConfig}
+                onSave={handleSave}
+                saving={saving}
+              />
             )}
           </div>
 
@@ -417,7 +432,7 @@ function RegrasGeraisTab({
 interface Etapa {
   id: string;
   numero: number;
-  tipo: 'INÍCIO' | 'FINAL' | null;
+  tipo: 'INICIO' | 'FINAL' | null;
   nome: string;
   descricao: string;
   expandido: boolean;
@@ -429,14 +444,40 @@ interface ConfirmDeleteEtapa {
   nome: string;
 }
 
-function EtapasAtendimentoTab() {
-  const [etapas, setEtapas] = useState<Etapa[]>([
-    { id: '1', numero: 1, tipo: 'INÍCIO', nome: 'Boas-vindas', descricao: '', expandido: false },
-    { id: '2', numero: 2, tipo: null, nome: 'Qualificação', descricao: '', expandido: false },
-    { id: '3', numero: 3, tipo: null, nome: 'Pré-agendamento', descricao: '', expandido: false },
-    { id: '4', numero: 4, tipo: 'FINAL', nome: 'Reunião Agendada', descricao: '', expandido: false },
-  ]);
+function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
+  const [etapas, setEtapas] = useState<Etapa[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<ConfirmDeleteEtapa | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetchEtapas();
+  }, [agentId]);
+
+  const fetchEtapas = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('agent_ia_etapas')
+        .select('*')
+        .eq('agent_ia_id', agentId)
+        .order('numero', { ascending: true });
+
+      if (error) throw error;
+
+      setEtapas((data || []).map(e => ({
+        id: e.id,
+        numero: e.numero,
+        tipo: e.tipo as 'INICIO' | 'FINAL' | null,
+        nome: e.nome,
+        descricao: e.descricao || '',
+        expandido: false,
+      })));
+    } catch (error) {
+      console.error('Erro ao buscar etapas:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const toggleEtapa = (id: string) => {
     setEtapas(etapas.map(e => 
@@ -460,13 +501,23 @@ function EtapasAtendimentoTab() {
     setConfirmDelete({ show: true, id: etapa.id, nome: etapa.nome });
   };
 
-  const confirmDeleteEtapa = () => {
+  const confirmDeleteEtapa = async () => {
     if (confirmDelete) {
-      const novasEtapas = etapas
-        .filter(e => e.id !== confirmDelete.id)
-        .map((e, index) => ({ ...e, numero: index + 1 }));
-      setEtapas(novasEtapas);
-      toast.success('Etapa excluída com sucesso');
+      try {
+        // Tentar excluir do banco (pode falhar se for nova etapa não salva)
+        await supabase
+          .from('agent_ia_etapas')
+          .delete()
+          .eq('id', confirmDelete.id);
+
+        const novasEtapas = etapas
+          .filter(e => e.id !== confirmDelete.id)
+          .map((e, index) => ({ ...e, numero: index + 1 }));
+        setEtapas(novasEtapas);
+        toast.success('Etapa excluída com sucesso');
+      } catch (error) {
+        console.error('Erro ao excluir:', error);
+      }
       setConfirmDelete(null);
     }
   };
@@ -477,13 +528,42 @@ function EtapasAtendimentoTab() {
     ));
   };
 
-  const saveEtapa = (id: string) => {
+  const saveEtapa = async (id: string) => {
     const etapa = etapas.find(e => e.id === id);
-    if (etapa) {
+    if (!etapa) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('agent_ia_etapas')
+        .upsert({
+          id: etapa.id,
+          agent_ia_id: agentId,
+          numero: etapa.numero,
+          tipo: etapa.tipo === 'INICIO' ? 'INICIO' : etapa.tipo === 'FINAL' ? 'FINAL' : null,
+          nome: etapa.nome,
+          descricao: etapa.descricao,
+        });
+
+      if (error) throw error;
+
       toast.success(`Etapa "${etapa.nome}" salva com sucesso`);
       toggleEtapa(id);
+    } catch (error) {
+      console.error('Erro ao salvar etapa:', error);
+      toast.error('Erro ao salvar etapa');
+    } finally {
+      setSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -685,6 +765,7 @@ interface Pergunta {
   pergunta: string;
   resposta: string;
   expandido: boolean;
+  ordem: number;
 }
 
 interface ConfirmDeletePergunta {
@@ -693,15 +774,46 @@ interface ConfirmDeletePergunta {
   pergunta: string;
 }
 
-function PerguntasFrequentesTab() {
+function PerguntasFrequentesTab({ agentId }: { agentId: string }) {
   const [perguntas, setPerguntas] = useState<Pergunta[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<ConfirmDeletePergunta | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetchPerguntas();
+  }, [agentId]);
+
+  const fetchPerguntas = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('agent_ia_perguntas')
+        .select('*')
+        .eq('agent_ia_id', agentId)
+        .order('ordem', { ascending: true });
+
+      if (error) throw error;
+
+      setPerguntas((data || []).map((p, index) => ({
+        id: p.id,
+        pergunta: p.pergunta,
+        resposta: p.resposta,
+        ordem: p.ordem || index,
+        expandido: false,
+      })));
+    } catch (error) {
+      console.error('Erro ao buscar perguntas:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const addPergunta = () => {
     const novaPergunta: Pergunta = {
       id: crypto.randomUUID(),
       pergunta: '',
       resposta: '',
+      ordem: perguntas.length,
       expandido: true,
     };
     setPerguntas([...perguntas, novaPergunta]);
@@ -711,10 +823,19 @@ function PerguntasFrequentesTab() {
     setConfirmDelete({ show: true, id: item.id, pergunta: item.pergunta || 'Nova Pergunta' });
   };
 
-  const confirmDeletePergunta = () => {
+  const confirmDeletePergunta = async () => {
     if (confirmDelete) {
-      setPerguntas(perguntas.filter(p => p.id !== confirmDelete.id));
-      toast.success('Pergunta excluída com sucesso');
+      try {
+        await supabase
+          .from('agent_ia_perguntas')
+          .delete()
+          .eq('id', confirmDelete.id);
+
+        setPerguntas(perguntas.filter(p => p.id !== confirmDelete.id));
+        toast.success('Pergunta excluída com sucesso');
+      } catch (error) {
+        console.error('Erro ao excluir:', error);
+      }
       setConfirmDelete(null);
     }
   };
@@ -731,13 +852,46 @@ function PerguntasFrequentesTab() {
     ));
   };
 
-  const savePergunta = (id: string) => {
+  const savePergunta = async (id: string) => {
     const item = perguntas.find(p => p.id === id);
-    if (item) {
+    if (!item) return;
+
+    if (!item.pergunta.trim() || !item.resposta.trim()) {
+      toast.error('Preencha a pergunta e a resposta');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('agent_ia_perguntas')
+        .upsert({
+          id: item.id,
+          agent_ia_id: agentId,
+          pergunta: item.pergunta,
+          resposta: item.resposta,
+          ordem: item.ordem,
+        });
+
+      if (error) throw error;
+
       toast.success('Pergunta salva com sucesso');
       togglePergunta(id);
+    } catch (error) {
+      console.error('Erro ao salvar pergunta:', error);
+      toast.error('Erro ao salvar pergunta');
+    } finally {
+      setSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -902,6 +1056,240 @@ function PerguntasFrequentesTab() {
           </button>
         </>
       )}
+    </div>
+  );
+}
+
+// Tab: Configuração API
+function ConfiguracaoAPITab({ 
+  config, 
+  setConfig, 
+  onSave, 
+  saving 
+}: { 
+  config: AgentConfig;
+  setConfig: (c: AgentConfig) => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  const { usuario } = useAuth();
+  const [apiKey, setApiKey] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [loadingApiKey, setLoadingApiKey] = useState(true);
+  const [savingApiKey, setSavingApiKey] = useState(false);
+
+  useEffect(() => {
+    fetchApiKey();
+  }, [usuario?.conta_id]);
+
+  const fetchApiKey = async () => {
+    if (!usuario?.conta_id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('contas')
+        .select('openai_api_key')
+        .eq('id', usuario.conta_id)
+        .single();
+
+      if (error) throw error;
+      
+      if (data?.openai_api_key) {
+        setApiKey(data.openai_api_key);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar API key:', error);
+    } finally {
+      setLoadingApiKey(false);
+    }
+  };
+
+  const saveApiKey = async () => {
+    if (!usuario?.conta_id) return;
+
+    setSavingApiKey(true);
+    try {
+      const { error } = await supabase
+        .from('contas')
+        .update({ openai_api_key: apiKey })
+        .eq('id', usuario.conta_id);
+
+      if (error) throw error;
+      toast.success('API Key salva com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar API key:', error);
+      toast.error('Erro ao salvar API Key');
+    } finally {
+      setSavingApiKey(false);
+    }
+  };
+
+  const maskedApiKey = apiKey ? `sk-...${apiKey.slice(-8)}` : '';
+
+  return (
+    <div className="space-y-8 max-w-2xl">
+      {/* API Key Section */}
+      <div className="rounded-xl bg-card border border-border p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <Key className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">API Key da OpenAI</h2>
+            <p className="text-sm text-muted-foreground">
+              Configure sua chave de API para habilitar o agente de IA
+            </p>
+          </div>
+        </div>
+
+        {loadingApiKey ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                OpenAI API Key
+              </label>
+              <div className="relative">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk-..."
+                  className="w-full h-11 px-4 pr-12 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-mono text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showApiKey ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Obtenha sua chave em{' '}
+                <a 
+                  href="https://platform.openai.com/api-keys" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  platform.openai.com/api-keys
+                </a>
+              </p>
+            </div>
+
+            <button
+              onClick={saveApiKey}
+              disabled={savingApiKey || !apiKey}
+              className="flex items-center gap-2 h-10 px-6 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {savingApiKey ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              Salvar API Key
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Model Selection */}
+      <div className="rounded-xl bg-card border border-border p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <Bot className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Modelo de IA</h2>
+            <p className="text-sm text-muted-foreground">
+              Escolha o modelo que será usado para gerar as respostas
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Modelo
+            </label>
+            <select
+              value={config.modelo}
+              onChange={(e) => setConfig({ ...config, modelo: e.target.value })}
+              className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              {modelos.map((modelo) => (
+                <option key={modelo.value} value={modelo.value}>
+                  {modelo.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Temperatura ({config.temperatura})
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={config.temperatura}
+                onChange={(e) => setConfig({ ...config, temperatura: parseFloat(e.target.value) })}
+                className="w-full accent-primary"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Menor = mais preciso, Maior = mais criativo
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Max Tokens
+              </label>
+              <input
+                type="number"
+                value={config.max_tokens}
+                onChange={(e) => setConfig({ ...config, max_tokens: parseInt(e.target.value) || 1000 })}
+                min={100}
+                max={4000}
+                className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Limite de tokens na resposta (100-4000)
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onSave}
+            disabled={saving}
+            className="flex items-center gap-2 h-10 px-6 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Salvar Configurações
+          </button>
+        </div>
+      </div>
+
+      {/* Status Info */}
+      <div className={`rounded-xl border p-4 ${apiKey ? 'bg-primary/5 border-primary/20' : 'bg-destructive/5 border-destructive/20'}`}>
+        <div className="flex items-center gap-3">
+          <div className={`h-3 w-3 rounded-full ${apiKey ? 'bg-primary animate-pulse' : 'bg-destructive'}`} />
+          <span className={`text-sm font-medium ${apiKey ? 'text-primary' : 'text-destructive'}`}>
+            {apiKey ? 'API Key configurada - Agente pronto para uso' : 'API Key não configurada - Configure para habilitar o agente'}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
