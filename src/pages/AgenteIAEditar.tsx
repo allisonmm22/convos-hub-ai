@@ -414,17 +414,51 @@ function RegrasGeraisTab({
 }
 
 // Tab: Etapas de Atendimento
+interface Etapa {
+  id: string;
+  numero: number;
+  tipo: 'INÍCIO' | 'FINAL' | null;
+  nome: string;
+  descricao: string;
+  expandido: boolean;
+}
+
 function EtapasAtendimentoTab() {
-  const [etapas, setEtapas] = useState([
-    { id: '1', numero: 1, tipo: 'INÍCIO', nome: 'Boas-vindas', expandido: false },
-    { id: '2', numero: 2, tipo: null, nome: 'Qualificação', expandido: false },
-    { id: '3', numero: 3, tipo: null, nome: 'Pré-agendamento', expandido: false },
-    { id: '4', numero: 4, tipo: 'FINAL', nome: 'Reunião Agendada', expandido: false },
+  const [etapas, setEtapas] = useState<Etapa[]>([
+    { id: '1', numero: 1, tipo: 'INÍCIO', nome: 'Boas-vindas', descricao: '', expandido: false },
+    { id: '2', numero: 2, tipo: null, nome: 'Qualificação', descricao: '', expandido: false },
+    { id: '3', numero: 3, tipo: null, nome: 'Pré-agendamento', descricao: '', expandido: false },
+    { id: '4', numero: 4, tipo: 'FINAL', nome: 'Reunião Agendada', descricao: '', expandido: false },
   ]);
 
   const toggleEtapa = (id: string) => {
     setEtapas(etapas.map(e => 
       e.id === id ? { ...e, expandido: !e.expandido } : e
+    ));
+  };
+
+  const addEtapa = () => {
+    const novaEtapa: Etapa = {
+      id: crypto.randomUUID(),
+      numero: etapas.length + 1,
+      tipo: null,
+      nome: `Nova Etapa ${etapas.length + 1}`,
+      descricao: '',
+      expandido: true,
+    };
+    setEtapas([...etapas, novaEtapa]);
+  };
+
+  const deleteEtapa = (id: string) => {
+    const novasEtapas = etapas
+      .filter(e => e.id !== id)
+      .map((e, index) => ({ ...e, numero: index + 1 }));
+    setEtapas(novasEtapas);
+  };
+
+  const updateEtapa = (id: string, field: keyof Etapa, value: string) => {
+    setEtapas(etapas.map(e => 
+      e.id === id ? { ...e, [field]: value } : e
     ));
   };
 
@@ -435,7 +469,10 @@ function EtapasAtendimentoTab() {
           <h2 className="text-lg font-semibold text-foreground">Etapas de Atendimento</h2>
           <p className="text-sm text-muted-foreground">Configure o fluxo de conversação</p>
         </div>
-        <button className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors">
+        <button 
+          onClick={addEtapa}
+          className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+        >
           <Plus className="h-4 w-4" />
           Adicionar Etapa
         </button>
@@ -489,7 +526,10 @@ function EtapasAtendimentoTab() {
                 )}
               </button>
 
-              <button className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
+              <button 
+                onClick={() => deleteEtapa(etapa.id)}
+                className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+              >
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
@@ -504,6 +544,7 @@ function EtapasAtendimentoTab() {
                     <input
                       type="text"
                       value={etapa.nome}
+                      onChange={(e) => updateEtapa(etapa.id, 'nome', e.target.value)}
                       className="w-full h-10 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
@@ -529,6 +570,8 @@ function EtapasAtendimentoTab() {
                     </div>
                     <textarea
                       rows={6}
+                      value={etapa.descricao}
+                      onChange={(e) => updateEtapa(etapa.id, 'descricao', e.target.value)}
                       className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm"
                       placeholder="Descreva o comportamento desta etapa..."
                     />
@@ -551,16 +594,73 @@ function EtapasAtendimentoTab() {
         ))}
       </div>
 
-      <button className="w-full flex items-center justify-center gap-2 h-12 rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors">
-        <Plus className="h-5 w-5" />
-        Adicionar Etapa
-      </button>
+      {etapas.length === 0 && (
+        <div className="flex flex-col items-center justify-center p-12 rounded-xl bg-card border border-border">
+          <Layers className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h3 className="font-medium text-foreground mb-1">Nenhuma etapa configurada</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Adicione etapas para definir o fluxo de atendimento
+          </p>
+          <button 
+            onClick={addEtapa}
+            className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Adicionar Primeira Etapa
+          </button>
+        </div>
+      )}
+
+      {etapas.length > 0 && (
+        <button 
+          onClick={addEtapa}
+          className="w-full flex items-center justify-center gap-2 h-12 rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+        >
+          <Plus className="h-5 w-5" />
+          Adicionar Etapa
+        </button>
+      )}
     </div>
   );
 }
 
 // Tab: Perguntas Frequentes
+interface Pergunta {
+  id: string;
+  pergunta: string;
+  resposta: string;
+  expandido: boolean;
+}
+
 function PerguntasFrequentesTab() {
+  const [perguntas, setPerguntas] = useState<Pergunta[]>([]);
+
+  const addPergunta = () => {
+    const novaPergunta: Pergunta = {
+      id: crypto.randomUUID(),
+      pergunta: '',
+      resposta: '',
+      expandido: true,
+    };
+    setPerguntas([...perguntas, novaPergunta]);
+  };
+
+  const deletePergunta = (id: string) => {
+    setPerguntas(perguntas.filter(p => p.id !== id));
+  };
+
+  const updatePergunta = (id: string, field: keyof Pergunta, value: string) => {
+    setPerguntas(perguntas.map(p => 
+      p.id === id ? { ...p, [field]: value } : p
+    ));
+  };
+
+  const togglePergunta = (id: string) => {
+    setPerguntas(perguntas.map(p => 
+      p.id === id ? { ...p, expandido: !p.expandido } : p
+    ));
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -568,23 +668,130 @@ function PerguntasFrequentesTab() {
           <h2 className="text-lg font-semibold text-foreground">Perguntas Frequentes</h2>
           <p className="text-sm text-muted-foreground">Configure respostas automáticas para perguntas comuns</p>
         </div>
-        <button className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors">
+        <button 
+          onClick={addPergunta}
+          className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+        >
           <Plus className="h-4 w-4" />
           Adicionar Pergunta
         </button>
       </div>
 
-      <div className="flex flex-col items-center justify-center p-12 rounded-xl bg-card border border-border">
-        <HelpCircle className="h-12 w-12 text-muted-foreground/50 mb-4" />
-        <h3 className="font-medium text-foreground mb-1">Nenhuma pergunta configurada</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Adicione perguntas frequentes para respostas mais rápidas
-        </p>
-        <button className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors">
-          <Plus className="h-4 w-4" />
-          Adicionar Primeira Pergunta
-        </button>
-      </div>
+      {perguntas.length === 0 ? (
+        <div className="flex flex-col items-center justify-center p-12 rounded-xl bg-card border border-border">
+          <HelpCircle className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h3 className="font-medium text-foreground mb-1">Nenhuma pergunta configurada</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Adicione perguntas frequentes para respostas mais rápidas
+          </p>
+          <button 
+            onClick={addPergunta}
+            className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Adicionar Primeira Pergunta
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-3">
+            {perguntas.map((item, index) => (
+              <div 
+                key={item.id}
+                className="rounded-lg bg-card border border-border overflow-hidden"
+              >
+                <div className="flex items-center gap-3 p-4">
+                  <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/20 text-primary text-sm font-semibold">
+                    {index + 1}
+                  </div>
+
+                  <div className="flex-1">
+                    <h3 className="font-medium text-foreground">
+                      {item.pergunta || 'Nova Pergunta'}
+                    </h3>
+                    {item.resposta && (
+                      <p className="text-sm text-muted-foreground line-clamp-1">
+                        {item.resposta}
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => togglePergunta(item.id)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-sm text-muted-foreground hover:bg-muted transition-colors"
+                  >
+                    {item.expandido ? (
+                      <>
+                        <ChevronUp className="h-4 w-4" />
+                        Reduzir
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-4 w-4" />
+                        Expandir
+                      </>
+                    )}
+                  </button>
+
+                  <button 
+                    onClick={() => deletePergunta(item.id)}
+                    className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {item.expandido && (
+                  <div className="p-4 pt-0 border-t border-border mt-2">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">
+                          Pergunta
+                        </label>
+                        <input
+                          type="text"
+                          value={item.pergunta}
+                          onChange={(e) => updatePergunta(item.id, 'pergunta', e.target.value)}
+                          placeholder="Ex: Qual o horário de funcionamento?"
+                          className="w-full h-10 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">
+                          Resposta
+                        </label>
+                        <textarea
+                          rows={4}
+                          value={item.resposta}
+                          onChange={(e) => updatePergunta(item.id, 'resposta', e.target.value)}
+                          placeholder="Digite a resposta para esta pergunta..."
+                          className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm"
+                        />
+                      </div>
+
+                      <div className="flex justify-end">
+                        <button className="flex items-center gap-2 h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+                          <Save className="h-4 w-4" />
+                          Salvar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <button 
+            onClick={addPergunta}
+            className="w-full flex items-center justify-center gap-2 h-12 rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+          >
+            <Plus className="h-5 w-5" />
+            Adicionar Pergunta
+          </button>
+        </>
+      )}
     </div>
   );
 }
