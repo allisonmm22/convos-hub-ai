@@ -28,6 +28,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AudioRecorder } from '@/components/AudioRecorder';
+import { AudioPlayer } from '@/components/AudioPlayer';
 
 interface Contato {
   id: string;
@@ -93,6 +94,7 @@ export default function Conversas() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileType, setFileType] = useState<'imagem' | 'documento' | 'audio'>('imagem');
+  const [imagemExpandida, setImagemExpandida] = useState<string | null>(null);
   
   // Ref para manter a conversa selecionada atualizada no realtime
   const conversaSelecionadaRef = useRef<Conversa | null>(null);
@@ -507,7 +509,7 @@ export default function Conversas() {
             body: {
               conexao_id: conexaoIdToUse,
               telefone: conversaSelecionada.contatos.telefone,
-              mensagem: file.name,
+              mensagem: '',
               tipo: fileType,
               media_url: mediaUrl,
             },
@@ -693,14 +695,13 @@ export default function Conversas() {
               {msg.tipo === 'imagem' && (
                 <img 
                   src={msg.media_url!} 
-                  alt={msg.conteudo}
-                  className="max-w-full rounded-lg"
+                  alt="Imagem"
+                  className="max-w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                  onClick={() => setImagemExpandida(msg.media_url)}
                 />
               )}
               {msg.tipo === 'audio' && (
-                <audio controls className="max-w-full">
-                  <source src={msg.media_url!} />
-                </audio>
+                <AudioPlayer src={msg.media_url!} />
               )}
               {msg.tipo === 'documento' && (
                 <a 
@@ -1069,6 +1070,27 @@ export default function Conversas() {
                   ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Modal de Imagem Expandida */}
+        {imagemExpandida && (
+          <div 
+            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+            onClick={() => setImagemExpandida(null)}
+          >
+            <button 
+              className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+              onClick={() => setImagemExpandida(null)}
+            >
+              <X className="h-6 w-6 text-white" />
+            </button>
+            <img 
+              src={imagemExpandida} 
+              alt="Imagem ampliada" 
+              className="max-w-full max-h-full object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
         )}
       </div>
