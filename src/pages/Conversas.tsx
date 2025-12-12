@@ -345,11 +345,13 @@ export default function Conversas() {
         })
         .eq('id', conversaSelecionada.id);
 
-      // Buscar conexão para enviar via WhatsApp
-      if (conversaSelecionada.conexao_id) {
+      // Usar conexao_id da conversa ou pegar a conexão ativa
+      const conexaoIdToUse = conversaSelecionada.conexao_id || conexao?.id;
+      
+      if (conexaoIdToUse && conexao?.status === 'conectado') {
         const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
           body: {
-            conexao_id: conversaSelecionada.conexao_id,
+            conexao_id: conexaoIdToUse,
             telefone: conversaSelecionada.contatos.telefone,
             mensagem: novaMensagem,
           },
@@ -359,6 +361,16 @@ export default function Conversas() {
           console.error('Erro ao enviar via WhatsApp:', envioError);
           toast.error('Mensagem salva, mas erro ao enviar via WhatsApp');
         }
+        
+        // Atualizar conexao_id na conversa se estava vazio
+        if (!conversaSelecionada.conexao_id && conexaoIdToUse) {
+          await supabase
+            .from('conversas')
+            .update({ conexao_id: conexaoIdToUse })
+            .eq('id', conversaSelecionada.id);
+        }
+      } else if (!conexaoIdToUse || conexao?.status !== 'conectado') {
+        toast.warning('WhatsApp não conectado. Mensagem salva apenas no CRM.');
       }
 
       setNovaMensagem('');
