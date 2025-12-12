@@ -1,341 +1,368 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Bot, Save, Clock, Calendar, Loader2, Sparkles } from 'lucide-react';
+import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, ChevronRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
-interface AgentConfig {
+interface Agent {
   id: string;
   nome: string;
-  prompt_sistema: string;
-  modelo: string;
-  temperatura: number;
-  max_tokens: number;
+  tipo: 'principal' | 'secundario';
   ativo: boolean;
-  horario_inicio: string;
-  horario_fim: string;
-  dias_ativos: number[];
-  mensagem_fora_horario: string;
+  gatilho: string | null;
+  descricao: string | null;
 }
 
-const diasSemana = [
-  { value: 0, label: 'Dom' },
-  { value: 1, label: 'Seg' },
-  { value: 2, label: 'Ter' },
-  { value: 3, label: 'Qua' },
-  { value: 4, label: 'Qui' },
-  { value: 5, label: 'Sex' },
-  { value: 6, label: 'Sáb' },
-];
-
-const modelos = [
-  { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash (Recomendado)' },
-  { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro (Mais Poderoso)' },
-  { value: 'openai/gpt-5-mini', label: 'GPT-5 Mini' },
-];
+type SubPage = 'agentes' | 'followup' | 'sessoes';
 
 export default function AgenteIA() {
   const { usuario } = useAuth();
-  const [config, setConfig] = useState<AgentConfig | null>(null);
+  const navigate = useNavigate();
+  const [agentes, setAgentes] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [busca, setBusca] = useState('');
+  const [subPage, setSubPage] = useState<SubPage>('agentes');
 
   useEffect(() => {
     if (usuario?.conta_id) {
-      fetchConfig();
+      fetchAgentes();
     }
   }, [usuario]);
 
-  const fetchConfig = async () => {
+  const fetchAgentes = async () => {
     try {
       const { data, error } = await supabase
         .from('agent_ia')
-        .select('*')
+        .select('id, nome, tipo, ativo, gatilho, descricao')
         .eq('conta_id', usuario!.conta_id)
-        .maybeSingle();
+        .order('tipo', { ascending: true })
+        .order('nome', { ascending: true });
 
       if (error) throw error;
-
-      if (data) {
-        setConfig({
-          ...data,
-          temperatura: Number(data.temperatura),
-        });
-      }
+      setAgentes((data || []).map(d => ({
+        ...d,
+        tipo: (d.tipo === 'secundario' ? 'secundario' : 'principal') as 'principal' | 'secundario'
+      })));
     } catch (error) {
-      console.error('Erro ao buscar config:', error);
+      console.error('Erro ao buscar agentes:', error);
+      toast.error('Erro ao carregar agentes');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSave = async () => {
-    if (!config) return;
-
-    setSaving(true);
+  const toggleAgente = async (id: string, ativo: boolean) => {
     try {
       const { error } = await supabase
         .from('agent_ia')
-        .update({
-          nome: config.nome,
-          prompt_sistema: config.prompt_sistema,
-          modelo: config.modelo,
-          temperatura: config.temperatura,
-          max_tokens: config.max_tokens,
-          ativo: config.ativo,
-          horario_inicio: config.horario_inicio,
-          horario_fim: config.horario_fim,
-          dias_ativos: config.dias_ativos,
-          mensagem_fora_horario: config.mensagem_fora_horario,
-        })
-        .eq('id', config.id);
+        .update({ ativo: !ativo })
+        .eq('id', id);
 
       if (error) throw error;
-      toast.success('Configurações salvas com sucesso!');
+
+      setAgentes(agentes.map(a => 
+        a.id === id ? { ...a, ativo: !ativo } : a
+      ));
+      
+      toast.success(ativo ? 'Agente desativado' : 'Agente ativado');
     } catch (error) {
-      console.error('Erro ao salvar:', error);
-      toast.error('Erro ao salvar configurações');
-    } finally {
-      setSaving(false);
+      console.error('Erro ao atualizar agente:', error);
+      toast.error('Erro ao atualizar agente');
     }
   };
 
-  const toggleDia = (dia: number) => {
-    if (!config) return;
+  const criarNovoAgente = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('agent_ia')
+        .insert({
+          conta_id: usuario!.conta_id,
+          nome: 'Novo Agente',
+          tipo: 'secundario',
+          ativo: false,
+          prompt_sistema: 'Você é um assistente virtual amigável e profissional.',
+        })
+        .select('id')
+        .single();
 
-    const novosDias = config.dias_ativos.includes(dia)
-      ? config.dias_ativos.filter((d) => d !== dia)
-      : [...config.dias_ativos, dia].sort();
+      if (error) throw error;
 
-    setConfig({ ...config, dias_ativos: novosDias });
+      toast.success('Agente criado! Configure-o agora.');
+      navigate(`/agente-ia/${data.id}`);
+    } catch (error) {
+      console.error('Erro ao criar agente:', error);
+      toast.error('Erro ao criar agente');
+    }
   };
 
-  if (loading) {
-    return (
-      <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </MainLayout>
-    );
-  }
+  const agentesFiltrados = agentes.filter(a =>
+    a.nome.toLowerCase().includes(busca.toLowerCase()) ||
+    (a.gatilho && a.gatilho.toLowerCase().includes(busca.toLowerCase()))
+  );
 
-  if (!config) {
-    return (
-      <MainLayout>
-        <div className="text-center text-muted-foreground py-12">
-          <Bot className="h-16 w-16 mx-auto mb-4 opacity-50" />
-          <p>Configuração do Agente IA não encontrada</p>
-        </div>
-      </MainLayout>
-    );
-  }
+  const agentesPrincipais = agentesFiltrados.filter(a => a.tipo === 'principal');
+  const agentesSecundarios = agentesFiltrados.filter(a => a.tipo === 'secundario');
+
+  const subNavItems = [
+    { id: 'agentes' as SubPage, label: 'Agentes', icon: Bot },
+    { id: 'followup' as SubPage, label: 'Follow-up', icon: Clock },
+    { id: 'sessoes' as SubPage, label: 'Sessões', icon: Users },
+  ];
 
   return (
     <MainLayout>
-      <div className="max-w-4xl space-y-8 animate-fade-in">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Agente IA</h1>
-            <p className="text-muted-foreground mt-1">
-              Configure o comportamento do seu assistente virtual inteligente.
-            </p>
+      <div className="flex h-full animate-fade-in">
+        {/* Sub-Sidebar */}
+        <div className="w-56 border-r border-border bg-card/50 flex flex-col">
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20">
+                <Bot className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-foreground">Agentes</h2>
+                <p className="text-xs text-muted-foreground">Gerenciamento de agentes</p>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">
-              {config.ativo ? 'Ativo' : 'Desativado'}
-            </span>
-            <button
-              onClick={() => setConfig({ ...config, ativo: !config.ativo })}
-              className={`relative h-6 w-11 rounded-full transition-colors ${
-                config.ativo ? 'bg-primary' : 'bg-muted'
-              }`}
-            >
-              <div
-                className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-                  config.ativo ? 'translate-x-5' : ''
+
+          <nav className="flex-1 p-2 space-y-1">
+            {subNavItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setSubPage(item.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  subPage === item.id
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                 }`}
-              />
-            </button>
-          </div>
+              >
+                <item.icon className="h-4 w-4" />
+                {item.label}
+              </button>
+            ))}
+          </nav>
         </div>
 
-        {/* Personalidade */}
-        <div className="p-6 rounded-xl bg-card border border-border space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20">
-              <Sparkles className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">Personalidade do Agente</h2>
-              <p className="text-sm text-muted-foreground">
-                Defina como o agente deve se comportar nas conversas
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Nome do Agente
-              </label>
-              <input
-                type="text"
-                value={config.nome}
-                onChange={(e) => setConfig({ ...config, nome: e.target.value })}
-                className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Prompt do Sistema
-              </label>
-              <textarea
-                value={config.prompt_sistema}
-                onChange={(e) => setConfig({ ...config, prompt_sistema: e.target.value })}
-                rows={6}
-                className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                placeholder="Descreva a personalidade e comportamento do agente..."
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Use este campo para definir o tom, estilo e conhecimento do agente
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Modelo</label>
-                <select
-                  value={config.modelo}
-                  onChange={(e) => setConfig({ ...config, modelo: e.target.value })}
-                  className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  {modelos.map((modelo) => (
-                    <option key={modelo.value} value={modelo.value}>
-                      {modelo.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Temperatura: {config.temperatura}
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={config.temperatura}
-                  onChange={(e) =>
-                    setConfig({ ...config, temperatura: parseFloat(e.target.value) })
-                  }
-                  className="w-full h-11 accent-primary"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Preciso</span>
-                  <span>Criativo</span>
+        {/* Conteúdo Principal */}
+        <div className="flex-1 overflow-auto">
+          {subPage === 'agentes' && (
+            <div className="p-6 space-y-6">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={busca}
+                    onChange={(e) => setBusca(e.target.value)}
+                    placeholder="Buscar por nome ou gatilho..."
+                    className="w-full h-10 pl-10 pr-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
                 </div>
+                <button
+                  onClick={criarNovoAgente}
+                  className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  Novo Agente
+                </button>
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Horário de Funcionamento */}
-        <div className="p-6 rounded-xl bg-card border border-border space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/20">
-              <Clock className="h-5 w-5 text-warning" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">Horário de Funcionamento</h2>
-              <p className="text-sm text-muted-foreground">
-                Defina quando o agente deve responder automaticamente
-              </p>
-            </div>
-          </div>
+              {loading ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Agentes Principais */}
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Agentes Principais ({agentesPrincipais.length})
+                    </h3>
+                    {agentesPrincipais.length === 0 ? (
+                      <div className="p-4 rounded-lg bg-card border border-border text-center text-muted-foreground text-sm">
+                        Nenhum agente principal configurado
+                      </div>
+                    ) : (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {agentesPrincipais.map((agente) => (
+                          <AgentCard
+                            key={agente.id}
+                            agente={agente}
+                            onToggle={() => toggleAgente(agente.id, agente.ativo)}
+                            onEdit={() => navigate(`/agente-ia/${agente.id}`)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Horário de Início
-                </label>
-                <input
-                  type="time"
-                  value={config.horario_inicio}
-                  onChange={(e) => setConfig({ ...config, horario_inicio: e.target.value })}
-                  className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Horário de Fim
-                </label>
-                <input
-                  type="time"
-                  value={config.horario_fim}
-                  onChange={(e) => setConfig({ ...config, horario_fim: e.target.value })}
-                  className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
+                  {/* Agentes Secundários */}
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Agentes Secundários ({agentesSecundarios.length})
+                    </h3>
+                    {agentesSecundarios.length === 0 ? (
+                      <div className="p-4 rounded-lg bg-card border border-border text-center text-muted-foreground text-sm">
+                        Nenhum agente secundário configurado
+                      </div>
+                    ) : (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {agentesSecundarios.map((agente) => (
+                          <AgentCard
+                            key={agente.id}
+                            agente={agente}
+                            onToggle={() => toggleAgente(agente.id, agente.ativo)}
+                            onEdit={() => navigate(`/agente-ia/${agente.id}`)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-3">
-                Dias de Funcionamento
-              </label>
-              <div className="flex gap-2">
-                {diasSemana.map((dia) => (
-                  <button
-                    key={dia.value}
-                    onClick={() => toggleDia(dia.value)}
-                    className={`h-10 w-12 rounded-lg text-sm font-medium transition-colors ${
-                      config.dias_ativos.includes(dia.value)
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                    }`}
-                  >
-                    {dia.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Mensagem Fora do Horário
-              </label>
-              <textarea
-                value={config.mensagem_fora_horario}
-                onChange={(e) => setConfig({ ...config, mensagem_fora_horario: e.target.value })}
-                rows={3}
-                className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                placeholder="Mensagem enviada quando o agente está fora do horário..."
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Botão Salvar */}
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50 shadow-glow"
-        >
-          {saving ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <>
-              <Save className="h-5 w-5" />
-              Salvar Configurações
-            </>
           )}
-        </button>
+
+          {subPage === 'followup' && (
+            <FollowUpPage />
+          )}
+
+          {subPage === 'sessoes' && (
+            <SessoesPage />
+          )}
+        </div>
       </div>
     </MainLayout>
+  );
+}
+
+// Componente AgentCard
+function AgentCard({ 
+  agente, 
+  onToggle, 
+  onEdit 
+}: { 
+  agente: Agent; 
+  onToggle: () => void; 
+  onEdit: () => void;
+}) {
+  return (
+    <div className="group flex items-center justify-between p-4 rounded-lg bg-card border border-border hover:border-primary/30 transition-colors">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+          <Bot className="h-5 w-5 text-muted-foreground" />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-foreground">{agente.nome}</span>
+          <button
+            onClick={onEdit}
+            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-muted transition-all"
+          >
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        </div>
+      </div>
+      <button
+        onClick={onToggle}
+        className={`relative h-6 w-11 rounded-full transition-colors ${
+          agente.ativo ? 'bg-primary' : 'bg-muted'
+        }`}
+      >
+        <div
+          className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+            agente.ativo ? 'translate-x-5' : ''
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+// Página de Follow-up (placeholder)
+function FollowUpPage() {
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Follow-up Automático</h1>
+        <p className="text-muted-foreground mt-1">
+          Configure mensagens de acompanhamento para manter seus leads engajados
+        </p>
+      </div>
+
+      <div className="p-6 rounded-xl bg-card border border-border space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20">
+            <Clock className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-foreground">Follow-up Automático</h2>
+            <p className="text-sm text-muted-foreground">Configure mensagens automáticas para reativar leads</p>
+          </div>
+        </div>
+
+        <button className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors">
+          <Plus className="h-4 w-4" />
+          Criar Novo Follow-up
+        </button>
+
+        <div className="p-4 rounded-lg bg-muted/30 border border-dashed border-border">
+          <p className="text-sm text-muted-foreground mb-2">
+            Selecione os estados de IA que receberão follow-up automático
+          </p>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" className="rounded border-border" />
+              <span>IA Ativa</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" className="rounded border-border" />
+              <span>IA Pausada</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" className="rounded border-border" />
+              <span>IA Desativada</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col items-center justify-center p-12 rounded-xl bg-card border border-border">
+        <Clock className="h-12 w-12 text-muted-foreground/50 mb-4" />
+        <h3 className="font-medium text-foreground mb-1">Nenhum follow-up configurado</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Crie mensagens automáticas para reengajar seus leads
+        </p>
+        <button className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors">
+          <Plus className="h-4 w-4" />
+          Criar Primeiro Follow-up
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Página de Sessões (placeholder)
+function SessoesPage() {
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Sessões</h1>
+        <p className="text-muted-foreground mt-1">
+          Visualize e gerencie as sessões de atendimento dos agentes
+        </p>
+      </div>
+
+      <div className="flex flex-col items-center justify-center p-12 rounded-xl bg-card border border-border">
+        <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />
+        <h3 className="font-medium text-foreground mb-1">Nenhuma sessão ativa</h3>
+        <p className="text-sm text-muted-foreground">
+          As sessões de atendimento aparecerão aqui
+        </p>
+      </div>
+    </div>
   );
 }

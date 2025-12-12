@@ -83,7 +83,9 @@ export type Database = {
           ativo: boolean | null
           conta_id: string
           created_at: string
+          descricao: string | null
           dias_ativos: number[] | null
+          gatilho: string | null
           horario_fim: string | null
           horario_inicio: string | null
           id: string
@@ -93,13 +95,16 @@ export type Database = {
           nome: string | null
           prompt_sistema: string | null
           temperatura: number | null
+          tipo: string | null
           updated_at: string
         }
         Insert: {
           ativo?: boolean | null
           conta_id: string
           created_at?: string
+          descricao?: string | null
           dias_ativos?: number[] | null
+          gatilho?: string | null
           horario_fim?: string | null
           horario_inicio?: string | null
           id?: string
@@ -109,13 +114,16 @@ export type Database = {
           nome?: string | null
           prompt_sistema?: string | null
           temperatura?: number | null
+          tipo?: string | null
           updated_at?: string
         }
         Update: {
           ativo?: boolean | null
           conta_id?: string
           created_at?: string
+          descricao?: string | null
           dias_ativos?: number[] | null
+          gatilho?: string | null
           horario_fim?: string | null
           horario_inicio?: string | null
           id?: string
@@ -125,6 +133,7 @@ export type Database = {
           nome?: string | null
           prompt_sistema?: string | null
           temperatura?: number | null
+          tipo?: string | null
           updated_at?: string
         }
         Relationships: [
