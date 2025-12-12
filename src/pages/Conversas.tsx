@@ -404,18 +404,40 @@ export default function Conversas() {
         .from('conversas')
         .update({ 
           status: 'encerrado', 
-          arquivada: true,
+          arquivada: false,
           agente_ia_ativo: false 
         })
         .eq('id', conversaSelecionada.id);
 
       toast.success('Atendimento encerrado');
-      setConversaSelecionada(null);
+      setConversaSelecionada(prev => prev ? { ...prev, status: 'encerrado' } : null);
       fetchConversas();
     } catch (error) {
       toast.error('Erro ao encerrar atendimento');
     }
   };
+
+  const reabrirAtendimento = async () => {
+    if (!conversaSelecionada) return;
+
+    try {
+      await supabase
+        .from('conversas')
+        .update({ 
+          status: 'em_atendimento', 
+          arquivada: false 
+        })
+        .eq('id', conversaSelecionada.id);
+
+      toast.success('Conversa reaberta');
+      setConversaSelecionada(prev => prev ? { ...prev, status: 'em_atendimento' } : null);
+      fetchConversas();
+    } catch (error) {
+      toast.error('Erro ao reabrir conversa');
+    }
+  };
+
+  const conversaEncerrada = conversaSelecionada?.status === 'encerrado';
 
   const transferirAtendimento = async (paraUsuarioId: string | null, paraIA: boolean) => {
     if (!conversaSelecionada) return;
@@ -901,39 +923,52 @@ export default function Conversas() {
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                {/* Toggle Agente IA */}
-                <button
-                  onClick={toggleAgenteIA}
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                    conversaSelecionada.agente_ia_ativo
-                      ? 'bg-primary/20 text-primary'
-                      : 'bg-muted text-muted-foreground'
-                  )}
-                >
-                  <Bot className="h-4 w-4" />
-                  IA {conversaSelecionada.agente_ia_ativo ? 'ON' : 'OFF'}
-                </button>
+              {!conversaEncerrada ? (
+                <div className="flex items-center gap-2">
+                  {/* Toggle Agente IA */}
+                  <button
+                    onClick={toggleAgenteIA}
+                    className={cn(
+                      'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+                      conversaSelecionada.agente_ia_ativo
+                        ? 'bg-primary/20 text-primary'
+                        : 'bg-muted text-muted-foreground'
+                    )}
+                  >
+                    <Bot className="h-4 w-4" />
+                    IA {conversaSelecionada.agente_ia_ativo ? 'ON' : 'OFF'}
+                  </button>
 
-                {/* Transferir */}
-                <button
-                  onClick={() => setShowTransferModal(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
-                >
-                  <ArrowRightLeft className="h-4 w-4" />
-                  Transferir
-                </button>
+                  {/* Transferir */}
+                  <button
+                    onClick={() => setShowTransferModal(true)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+                  >
+                    <ArrowRightLeft className="h-4 w-4" />
+                    Transferir
+                  </button>
 
-                {/* Encerrar */}
-                <button
-                  onClick={encerrarAtendimento}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
-                >
-                  <XCircle className="h-4 w-4" />
-                  Encerrar
-                </button>
-              </div>
+                  {/* Encerrar */}
+                  <button
+                    onClick={encerrarAtendimento}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                  >
+                    <XCircle className="h-4 w-4" />
+                    Encerrar
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Conversa encerrada</span>
+                  <button
+                    onClick={reabrirAtendimento}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Reabrir
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Mensagens */}
@@ -944,79 +979,95 @@ export default function Conversas() {
 
             {/* Input */}
             <div className="p-4 border-t border-border">
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <button 
-                    onClick={() => setShowAttachMenu(!showAttachMenu)}
-                    className="p-2 rounded-lg hover:bg-muted transition-colors"
-                    disabled={uploading}
+              {conversaEncerrada ? (
+                <div className="flex items-center justify-between bg-muted/50 rounded-lg p-4">
+                  <div className="flex items-center gap-3 text-muted-foreground">
+                    <XCircle className="h-5 w-5" />
+                    <span>Esta conversa foi encerrada</span>
+                  </div>
+                  <button
+                    onClick={reabrirAtendimento}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium"
                   >
-                    <Paperclip className={cn("h-5 w-5 text-muted-foreground", uploading && "animate-pulse")} />
+                    <RefreshCw className="h-4 w-4" />
+                    Reabrir Conversa
                   </button>
-                  
-                  {showAttachMenu && (
-                    <div className="absolute bottom-12 left-0 bg-card border border-border rounded-lg shadow-lg p-2 min-w-[150px]">
-                      <button
-                        onClick={() => handleFileSelect('imagem')}
-                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted rounded-lg transition-colors text-sm"
-                      >
-                        <Image className="h-4 w-4 text-blue-500" />
-                        Imagem
-                      </button>
-                      <button
-                        onClick={() => handleFileSelect('documento')}
-                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted rounded-lg transition-colors text-sm"
-                      >
-                        <FileText className="h-4 w-4 text-orange-500" />
-                        Documento
-                      </button>
-                      <button
-                        onClick={() => handleFileSelect('audio')}
-                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted rounded-lg transition-colors text-sm"
-                      >
-                        <Mic className="h-4 w-4 text-green-500" />
-                        Áudio
-                      </button>
-                    </div>
-                  )}
                 </div>
-                
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  accept={fileType === 'imagem' ? 'image/*' : fileType === 'audio' ? 'audio/*' : '*/*'}
-                />
-                
-                <input
-                  type="text"
-                  placeholder="Digite uma mensagem..."
-                  value={novaMensagem}
-                  onChange={(e) => setNovaMensagem(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && enviarMensagem()}
-                  className="flex-1 h-10 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  disabled={enviando}
-                />
-                
-                {/* Gravador de Áudio */}
-                <AudioRecorder 
-                  onSend={handleSendAudio}
-                  disabled={enviando || uploading}
-                />
-                
-                <button
-                  onClick={enviarMensagem}
-                  disabled={!novaMensagem.trim() || enviando}
-                  className="h-10 w-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50"
-                >
-                  {enviando ? (
-                    <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Send className="h-5 w-5" />
-                  )}
-                </button>
-              </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <button 
+                      onClick={() => setShowAttachMenu(!showAttachMenu)}
+                      className="p-2 rounded-lg hover:bg-muted transition-colors"
+                      disabled={uploading}
+                    >
+                      <Paperclip className={cn("h-5 w-5 text-muted-foreground", uploading && "animate-pulse")} />
+                    </button>
+                    
+                    {showAttachMenu && (
+                      <div className="absolute bottom-12 left-0 bg-card border border-border rounded-lg shadow-lg p-2 min-w-[150px]">
+                        <button
+                          onClick={() => handleFileSelect('imagem')}
+                          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted rounded-lg transition-colors text-sm"
+                        >
+                          <Image className="h-4 w-4 text-blue-500" />
+                          Imagem
+                        </button>
+                        <button
+                          onClick={() => handleFileSelect('documento')}
+                          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted rounded-lg transition-colors text-sm"
+                        >
+                          <FileText className="h-4 w-4 text-orange-500" />
+                          Documento
+                        </button>
+                        <button
+                          onClick={() => handleFileSelect('audio')}
+                          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted rounded-lg transition-colors text-sm"
+                        >
+                          <Mic className="h-4 w-4 text-green-500" />
+                          Áudio
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    accept={fileType === 'imagem' ? 'image/*' : fileType === 'audio' ? 'audio/*' : '*/*'}
+                  />
+                  
+                  <input
+                    type="text"
+                    placeholder="Digite uma mensagem..."
+                    value={novaMensagem}
+                    onChange={(e) => setNovaMensagem(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && enviarMensagem()}
+                    className="flex-1 h-10 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    disabled={enviando}
+                  />
+                  
+                  {/* Gravador de Áudio */}
+                  <AudioRecorder 
+                    onSend={handleSendAudio}
+                    disabled={enviando || uploading}
+                  />
+                  
+                  <button
+                    onClick={enviarMensagem}
+                    disabled={!novaMensagem.trim() || enviando}
+                    className="h-10 w-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  >
+                    {enviando ? (
+                      <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Send className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ) : (
