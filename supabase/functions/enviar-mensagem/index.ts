@@ -52,13 +52,25 @@ serve(async (req) => {
     let evolutionUrl: string;
     let body: Record<string, unknown>;
 
-    // Se tem base64, fazer upload para o storage primeiro (exceto para áudio que vai direto)
+    // Se tem base64, fazer upload para o storage primeiro
     let finalMediaUrl = media_url;
     
-    if (media_base64 && tipo !== 'audio') {
-      // Fazer upload do base64 para o storage
-      const extension = tipo === 'imagem' ? 'jpg' : tipo === 'documento' ? 'pdf' : 'bin';
-      const mimeType = tipo === 'imagem' ? 'image/jpeg' : tipo === 'documento' ? 'application/pdf' : 'application/octet-stream';
+    if (media_base64) {
+      // Determinar extensão e mimetype baseado no tipo
+      let extension = 'bin';
+      let mimeType = 'application/octet-stream';
+      
+      if (tipo === 'imagem') {
+        extension = 'jpg';
+        mimeType = 'image/jpeg';
+      } else if (tipo === 'audio') {
+        extension = 'mp3';
+        mimeType = 'audio/mpeg';
+      } else if (tipo === 'documento') {
+        extension = 'pdf';
+        mimeType = 'application/pdf';
+      }
+      
       const fileName = `${Date.now()}-upload.${extension}`;
       
       // Converter base64 para Uint8Array
@@ -74,13 +86,17 @@ serve(async (req) => {
       
       if (uploadError) {
         console.error('Erro ao fazer upload:', uploadError);
-      } else {
-        const { data: urlData } = supabase.storage
-          .from('whatsapp-media')
-          .getPublicUrl(fileName);
-        finalMediaUrl = urlData.publicUrl;
-        console.log('Upload realizado:', finalMediaUrl);
+        return new Response(JSON.stringify({ error: 'Erro ao fazer upload', details: uploadError }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
+      
+      const { data: urlData } = supabase.storage
+        .from('whatsapp-media')
+        .getPublicUrl(fileName);
+      finalMediaUrl = urlData.publicUrl;
+      console.log('Upload realizado:', finalMediaUrl);
     }
 
     // Determinar endpoint e body baseado no tipo
@@ -96,10 +112,9 @@ serve(async (req) => {
         break;
       case 'audio':
         evolutionUrl = `${EVOLUTION_API_URL}/message/sendWhatsAppAudio/${conexao.instance_name}`;
-        // Para áudio, a Evolution API aceita base64 diretamente
         body = {
           number: formattedNumber,
-          audio: media_base64 ? `data:audio/webm;base64,${media_base64}` : finalMediaUrl,
+          audio: finalMediaUrl,
         };
         break;
       case 'documento':
