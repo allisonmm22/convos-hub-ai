@@ -285,6 +285,7 @@ serve(async (req) => {
       }
 
       // Inserir mensagem
+      // Se fromMe = true (veio do dispositivo físico via webhook), marcar como enviada_por_dispositivo
       const { error: msgError } = await supabase.from('mensagens').insert({
         conversa_id: conversa!.id,
         contato_id: contato!.id,
@@ -292,6 +293,7 @@ serve(async (req) => {
         direcao: fromMe ? 'saida' : 'entrada',
         tipo: messageType,
         media_url: mediaUrl,
+        enviada_por_dispositivo: fromMe, // Mensagens do dispositivo físico
       });
 
       if (msgError) {
