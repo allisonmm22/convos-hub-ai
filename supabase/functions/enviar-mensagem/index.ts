@@ -107,8 +107,11 @@ serve(async (req) => {
           number: formattedNumber,
           mediatype: 'image',
           media: finalMediaUrl,
-          caption: mensagem || '',
         };
+        // Só adiciona caption se tiver mensagem
+        if (mensagem && mensagem.trim()) {
+          body.caption = mensagem;
+        }
         break;
       case 'audio':
         evolutionUrl = `${EVOLUTION_API_URL}/message/sendWhatsAppAudio/${conexao.instance_name}`;
