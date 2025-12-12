@@ -423,6 +423,12 @@ interface Etapa {
   expandido: boolean;
 }
 
+interface ConfirmDeleteEtapa {
+  show: boolean;
+  id: string;
+  nome: string;
+}
+
 function EtapasAtendimentoTab() {
   const [etapas, setEtapas] = useState<Etapa[]>([
     { id: '1', numero: 1, tipo: 'INÍCIO', nome: 'Boas-vindas', descricao: '', expandido: false },
@@ -430,6 +436,7 @@ function EtapasAtendimentoTab() {
     { id: '3', numero: 3, tipo: null, nome: 'Pré-agendamento', descricao: '', expandido: false },
     { id: '4', numero: 4, tipo: 'FINAL', nome: 'Reunião Agendada', descricao: '', expandido: false },
   ]);
+  const [confirmDelete, setConfirmDelete] = useState<ConfirmDeleteEtapa | null>(null);
 
   const toggleEtapa = (id: string) => {
     setEtapas(etapas.map(e => 
@@ -449,11 +456,19 @@ function EtapasAtendimentoTab() {
     setEtapas([...etapas, novaEtapa]);
   };
 
-  const deleteEtapa = (id: string) => {
-    const novasEtapas = etapas
-      .filter(e => e.id !== id)
-      .map((e, index) => ({ ...e, numero: index + 1 }));
-    setEtapas(novasEtapas);
+  const handleDeleteClick = (etapa: Etapa) => {
+    setConfirmDelete({ show: true, id: etapa.id, nome: etapa.nome });
+  };
+
+  const confirmDeleteEtapa = () => {
+    if (confirmDelete) {
+      const novasEtapas = etapas
+        .filter(e => e.id !== confirmDelete.id)
+        .map((e, index) => ({ ...e, numero: index + 1 }));
+      setEtapas(novasEtapas);
+      toast.success('Etapa excluída com sucesso');
+      setConfirmDelete(null);
+    }
   };
 
   const updateEtapa = (id: string, field: keyof Etapa, value: string) => {
@@ -462,8 +477,45 @@ function EtapasAtendimentoTab() {
     ));
   };
 
+  const saveEtapa = (id: string) => {
+    const etapa = etapas.find(e => e.id === id);
+    if (etapa) {
+      toast.success(`Etapa "${etapa.nome}" salva com sucesso`);
+      toggleEtapa(id);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Modal de Confirmação de Exclusão */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card rounded-xl p-6 w-full max-w-md border border-border shadow-2xl animate-fade-in">
+            <h3 className="text-lg font-semibold text-foreground mb-2">
+              Confirmar Exclusão
+            </h3>
+            <p className="text-muted-foreground mb-6">
+              Tem certeza que deseja excluir a etapa "{confirmDelete.nome}"? 
+              Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setConfirmDelete(null)}
+                className="px-4 py-2 rounded-lg border border-border text-foreground hover:bg-muted transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={confirmDeleteEtapa}
+                className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Etapas de Atendimento</h2>
@@ -527,7 +579,7 @@ function EtapasAtendimentoTab() {
               </button>
 
               <button 
-                onClick={() => deleteEtapa(etapa.id)}
+                onClick={() => handleDeleteClick(etapa)}
                 className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
               >
                 <Trash2 className="h-4 w-4" />
@@ -582,7 +634,10 @@ function EtapasAtendimentoTab() {
                       <input type="checkbox" className="rounded border-border" />
                       Atribuir automaticamente usuário ao lead
                     </label>
-                    <button className="flex items-center gap-2 h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+                    <button 
+                      onClick={() => saveEtapa(etapa.id)}
+                      className="flex items-center gap-2 h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+                    >
                       <Save className="h-4 w-4" />
                       Salvar
                     </button>
@@ -632,8 +687,15 @@ interface Pergunta {
   expandido: boolean;
 }
 
+interface ConfirmDeletePergunta {
+  show: boolean;
+  id: string;
+  pergunta: string;
+}
+
 function PerguntasFrequentesTab() {
   const [perguntas, setPerguntas] = useState<Pergunta[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState<ConfirmDeletePergunta | null>(null);
 
   const addPergunta = () => {
     const novaPergunta: Pergunta = {
@@ -645,8 +707,16 @@ function PerguntasFrequentesTab() {
     setPerguntas([...perguntas, novaPergunta]);
   };
 
-  const deletePergunta = (id: string) => {
-    setPerguntas(perguntas.filter(p => p.id !== id));
+  const handleDeleteClick = (item: Pergunta) => {
+    setConfirmDelete({ show: true, id: item.id, pergunta: item.pergunta || 'Nova Pergunta' });
+  };
+
+  const confirmDeletePergunta = () => {
+    if (confirmDelete) {
+      setPerguntas(perguntas.filter(p => p.id !== confirmDelete.id));
+      toast.success('Pergunta excluída com sucesso');
+      setConfirmDelete(null);
+    }
   };
 
   const updatePergunta = (id: string, field: keyof Pergunta, value: string) => {
@@ -661,8 +731,45 @@ function PerguntasFrequentesTab() {
     ));
   };
 
+  const savePergunta = (id: string) => {
+    const item = perguntas.find(p => p.id === id);
+    if (item) {
+      toast.success('Pergunta salva com sucesso');
+      togglePergunta(id);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Modal de Confirmação de Exclusão */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card rounded-xl p-6 w-full max-w-md border border-border shadow-2xl animate-fade-in">
+            <h3 className="text-lg font-semibold text-foreground mb-2">
+              Confirmar Exclusão
+            </h3>
+            <p className="text-muted-foreground mb-6">
+              Tem certeza que deseja excluir a pergunta "{confirmDelete.pergunta}"? 
+              Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setConfirmDelete(null)}
+                className="px-4 py-2 rounded-lg border border-border text-foreground hover:bg-muted transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={confirmDeletePergunta}
+                className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Perguntas Frequentes</h2>
@@ -734,7 +841,7 @@ function PerguntasFrequentesTab() {
                   </button>
 
                   <button 
-                    onClick={() => deletePergunta(item.id)}
+                    onClick={() => handleDeleteClick(item)}
                     className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -771,7 +878,10 @@ function PerguntasFrequentesTab() {
                       </div>
 
                       <div className="flex justify-end">
-                        <button className="flex items-center gap-2 h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+                        <button 
+                          onClick={() => savePergunta(item.id)}
+                          className="flex items-center gap-2 h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+                        >
                           <Save className="h-4 w-4" />
                           Salvar
                         </button>
