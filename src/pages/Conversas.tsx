@@ -93,6 +93,9 @@ export default function Conversas() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileType, setFileType] = useState<'imagem' | 'documento' | 'audio'>('imagem');
   
+  // Ref para manter a conversa selecionada atualizada no realtime
+  const conversaSelecionadaRef = useRef<Conversa | null>(null);
+  
   // Estado da conexão WhatsApp
   const [conexao, setConexao] = useState<Conexao | null>(null);
   const [pollingActive, setPollingActive] = useState(false);
@@ -184,6 +187,11 @@ export default function Conversas() {
     }
   }, [usuario, fetchConexao]);
 
+  // Manter a ref sincronizada com o estado
+  useEffect(() => {
+    conversaSelecionadaRef.current = conversaSelecionada;
+  }, [conversaSelecionada]);
+
   useEffect(() => {
     if (conversaSelecionada) {
       fetchMensagens(conversaSelecionada.id);
@@ -208,7 +216,8 @@ export default function Conversas() {
         (payload) => {
           console.log('Nova mensagem recebida via realtime:', payload);
           const novaMensagem = payload.new as Mensagem;
-          if (conversaSelecionada && novaMensagem.conversa_id === conversaSelecionada.id) {
+          // Usar a ref para verificar a conversa selecionada atual
+          if (conversaSelecionadaRef.current && novaMensagem.conversa_id === conversaSelecionadaRef.current.id) {
             setMensagens((prev) => [...prev, novaMensagem]);
           }
           fetchConversas();
