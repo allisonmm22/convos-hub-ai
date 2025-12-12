@@ -54,7 +54,7 @@ serve(async (req) => {
     console.log('Reconfigurando webhook para:', conexao.instance_name);
     console.log('URL do webhook:', webhookUrl);
 
-    // Configurar webhook na Evolution API (formato v2) com headers de autorização
+    // Configurar webhook na Evolution API (formato v2) com headers de autorização e base64 habilitado
     const webhookResponse = await fetch(`${EVOLUTION_API_URL}/webhook/set/${conexao.instance_name}`, {
       method: 'POST',
       headers: {
@@ -104,6 +104,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ 
       success: true,
       webhook_url: webhookUrl,
+      webhookBase64: true,
       evolution_response: webhookResult
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

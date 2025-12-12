@@ -92,18 +92,24 @@ serve(async (req) => {
     const messagesData = await messagesResponse.json();
     console.log('Resposta da Evolution API:', JSON.stringify(messagesData).substring(0, 500));
     
-    // Tratar diferentes formatos de resposta
+    // Tratar diferentes formatos de resposta da Evolution API
     let messages: any[] = [];
     if (Array.isArray(messagesData)) {
       messages = messagesData;
+    } else if (messagesData?.messages?.records && Array.isArray(messagesData.messages.records)) {
+      // Formato: { messages: { records: [...] } }
+      messages = messagesData.messages.records;
+      console.log('Formato messages.records detectado, total:', messagesData.messages.total);
     } else if (messagesData?.messages && Array.isArray(messagesData.messages)) {
       messages = messagesData.messages;
     } else if (messagesData?.data && Array.isArray(messagesData.data)) {
       messages = messagesData.data;
+    } else if (messagesData?.records && Array.isArray(messagesData.records)) {
+      messages = messagesData.records;
     } else if (typeof messagesData === 'object' && messagesData !== null) {
       // Se for um objeto único, tentar converter para array
       messages = [];
-      console.log('Formato de resposta não reconhecido, ignorando');
+      console.log('Formato de resposta não reconhecido, estrutura:', Object.keys(messagesData));
     }
     
     console.log('Mensagens a processar:', messages.length);

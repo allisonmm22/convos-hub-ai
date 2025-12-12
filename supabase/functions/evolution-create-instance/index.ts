@@ -79,7 +79,7 @@ serve(async (req) => {
       });
     }
 
-    // Configurar webhook
+    // Configurar webhook com formato correto da API v2
     const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-webhook`;
     console.log('Configurando webhook:', webhookUrl);
 
@@ -90,14 +90,21 @@ serve(async (req) => {
         'apikey': evolutionApiKey,
       },
       body: JSON.stringify({
-        url: webhookUrl,
-        webhook_by_events: false,
-        webhook_base64: true,
-        events: [
-          'MESSAGES_UPSERT',
-          'CONNECTION_UPDATE',
-          'QRCODE_UPDATED',
-        ],
+        webhook: {
+          url: webhookUrl,
+          enabled: true,
+          webhookByEvents: false,
+          webhookBase64: true,
+          events: [
+            'MESSAGES_UPSERT',
+            'CONNECTION_UPDATE',
+            'QRCODE_UPDATED',
+          ],
+          headers: {
+            'Authorization': `Bearer ${supabaseKey}`,
+            'apikey': Deno.env.get('SUPABASE_ANON_KEY') || supabaseKey,
+          },
+        },
       }),
     });
 
@@ -131,7 +138,8 @@ serve(async (req) => {
     return new Response(JSON.stringify({ 
       success: true, 
       conexao,
-      evolution: createResult 
+      evolution: createResult,
+      webhook: webhookResult,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

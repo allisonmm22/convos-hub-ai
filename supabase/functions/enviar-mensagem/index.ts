@@ -6,6 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const EVOLUTION_API_URL = 'https://evolution.cognityx.com.br';
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -53,7 +55,7 @@ serve(async (req) => {
     // Determinar endpoint e body baseado no tipo
     switch (tipo) {
       case 'imagem':
-        evolutionUrl = `https://evo.whatlead.com.br/message/sendMedia/${conexao.instance_name}`;
+        evolutionUrl = `${EVOLUTION_API_URL}/message/sendMedia/${conexao.instance_name}`;
         body = {
           number: formattedNumber,
           mediatype: 'image',
@@ -62,14 +64,14 @@ serve(async (req) => {
         };
         break;
       case 'audio':
-        evolutionUrl = `https://evo.whatlead.com.br/message/sendWhatsAppAudio/${conexao.instance_name}`;
+        evolutionUrl = `${EVOLUTION_API_URL}/message/sendWhatsAppAudio/${conexao.instance_name}`;
         body = {
           number: formattedNumber,
           audio: media_url,
         };
         break;
       case 'documento':
-        evolutionUrl = `https://evo.whatlead.com.br/message/sendMedia/${conexao.instance_name}`;
+        evolutionUrl = `${EVOLUTION_API_URL}/message/sendMedia/${conexao.instance_name}`;
         body = {
           number: formattedNumber,
           mediatype: 'document',
@@ -78,7 +80,7 @@ serve(async (req) => {
         };
         break;
       default:
-        evolutionUrl = `https://evo.whatlead.com.br/message/sendText/${conexao.instance_name}`;
+        evolutionUrl = `${EVOLUTION_API_URL}/message/sendText/${conexao.instance_name}`;
         body = {
           number: formattedNumber,
           text: mensagem,
