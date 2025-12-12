@@ -27,6 +27,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { AudioRecorder } from '@/components/AudioRecorder';
 
 interface Contato {
   id: string;
@@ -456,11 +457,103 @@ export default function Conversas() {
 
     setUploading(true);
     try {
+      // Converter arquivo para base64
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      
+      reader.onloadend = async () => {
+        const base64Full = reader.result as string;
+        const base64Data = base64Full.split(',')[1];
+        
+        // Upload para o storage
+        const fileName = `${Date.now()}-${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('whatsapp-media')
+          .upload(fileName, file);
+
+        if (uploadError) throw uploadError;
+
+        // Obter URL pública
+        const { data: urlData } = supabase.storage
+          .from('whatsapp-media')
+          .getPublicUrl(fileName);
+
+        const mediaUrl = urlData.publicUrl;
+
+        // Salvar mensagem no banco
+        await supabase.from('mensagens').insert({
+          conversa_id: conversaSelecionada.id,
+          usuario_id: usuario!.id,
+          conteudo: file.name,
+          direcao: 'saida',
+          tipo: fileType,
+          media_url: mediaUrl,
+          enviada_por_ia: false,
+        });
+
+        // Atualizar conversa
+        await supabase
+          .from('conversas')
+          .update({
+            ultima_mensagem: `📎 ${file.name}`,
+            ultima_mensagem_at: new Date().toISOString(),
+          })
+          .eq('id', conversaSelecionada.id);
+
+        // Enviar via WhatsApp
+        const conexaoIdToUse = conversaSelecionada.conexao_id || conexao?.id;
+        if (conexaoIdToUse && conexao?.status === 'conectado') {
+          const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
+            body: {
+              conexao_id: conexaoIdToUse,
+              telefone: conversaSelecionada.contatos.telefone,
+              mensagem: file.name,
+              tipo: fileType,
+              media_url: mediaUrl,
+            },
+          });
+
+          if (envioError) {
+            console.error('Erro ao enviar via WhatsApp:', envioError);
+            toast.warning('Arquivo salvo, mas erro ao enviar via WhatsApp');
+          }
+        }
+
+        fetchMensagens(conversaSelecionada.id);
+        fetchConversas();
+        toast.success('Arquivo enviado');
+        setUploading(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      };
+    } catch (error) {
+      console.error('Erro ao enviar arquivo:', error);
+      toast.error('Erro ao enviar arquivo');
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleSendAudio = async (audioBase64: string, duration: number) => {
+    if (!conversaSelecionada) return;
+
+    try {
+      // Converter base64 para blob para salvar no storage
+      const binaryString = atob(audioBase64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'audio/webm' });
+      
       // Upload para o storage
-      const fileName = `${Date.now()}-${file.name}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const fileName = `${Date.now()}-audio.webm`;
+      const { error: uploadError } = await supabase.storage
         .from('whatsapp-media')
-        .upload(fileName, file);
+        .upload(fileName, blob, { contentType: 'audio/webm' });
 
       if (uploadError) throw uploadError;
 
@@ -470,14 +563,16 @@ export default function Conversas() {
         .getPublicUrl(fileName);
 
       const mediaUrl = urlData.publicUrl;
+      
+      const durationFormatted = `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}`;
 
       // Salvar mensagem no banco
       await supabase.from('mensagens').insert({
         conversa_id: conversaSelecionada.id,
         usuario_id: usuario!.id,
-        conteudo: file.name,
+        conteudo: `🎤 Áudio (${durationFormatted})`,
         direcao: 'saida',
-        tipo: fileType,
+        tipo: 'audio',
         media_url: mediaUrl,
         enviada_por_ia: false,
       });
@@ -486,28 +581,36 @@ export default function Conversas() {
       await supabase
         .from('conversas')
         .update({
-          ultima_mensagem: `📎 ${file.name}`,
+          ultima_mensagem: `🎤 Áudio (${durationFormatted})`,
           ultima_mensagem_at: new Date().toISOString(),
         })
         .eq('id', conversaSelecionada.id);
 
-      // Enviar via WhatsApp (implementação futura para cada tipo)
-      if (conversaSelecionada.conexao_id) {
-        // TODO: Chamar edge function específica para o tipo de mídia
-        console.log('Enviando mídia via WhatsApp:', { tipo: fileType, mediaUrl });
+      // Enviar via WhatsApp
+      const conexaoIdToUse = conversaSelecionada.conexao_id || conexao?.id;
+      if (conexaoIdToUse && conexao?.status === 'conectado') {
+        const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
+          body: {
+            conexao_id: conexaoIdToUse,
+            telefone: conversaSelecionada.contatos.telefone,
+            mensagem: '',
+            tipo: 'audio',
+            media_base64: audioBase64,
+          },
+        });
+
+        if (envioError) {
+          console.error('Erro ao enviar áudio via WhatsApp:', envioError);
+          toast.warning('Áudio salvo, mas erro ao enviar via WhatsApp');
+        }
       }
 
       fetchMensagens(conversaSelecionada.id);
       fetchConversas();
-      toast.success('Arquivo enviado');
+      toast.success('Áudio enviado');
     } catch (error) {
-      console.error('Erro ao enviar arquivo:', error);
-      toast.error('Erro ao enviar arquivo');
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      console.error('Erro ao enviar áudio:', error);
+      toast.error('Erro ao enviar áudio');
     }
   };
 
@@ -891,6 +994,13 @@ export default function Conversas() {
                   className="flex-1 h-10 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   disabled={enviando}
                 />
+                
+                {/* Gravador de Áudio */}
+                <AudioRecorder 
+                  onSend={handleSendAudio}
+                  disabled={enviando || uploading}
+                />
+                
                 <button
                   onClick={enviarMensagem}
                   disabled={!novaMensagem.trim() || enviando}
