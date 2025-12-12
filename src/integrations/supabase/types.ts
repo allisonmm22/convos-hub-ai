@@ -146,6 +146,85 @@ export type Database = {
           },
         ]
       }
+      agent_ia_etapas: {
+        Row: {
+          agent_ia_id: string
+          created_at: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          numero: number
+          tipo: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          agent_ia_id: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          numero: number
+          tipo?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          agent_ia_id?: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          numero?: number
+          tipo?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_ia_etapas_agent_ia_id_fkey"
+            columns: ["agent_ia_id"]
+            isOneToOne: false
+            referencedRelation: "agent_ia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_ia_perguntas: {
+        Row: {
+          agent_ia_id: string
+          created_at: string | null
+          id: string
+          ordem: number | null
+          pergunta: string
+          resposta: string
+          updated_at: string | null
+        }
+        Insert: {
+          agent_ia_id: string
+          created_at?: string | null
+          id?: string
+          ordem?: number | null
+          pergunta: string
+          resposta: string
+          updated_at?: string | null
+        }
+        Update: {
+          agent_ia_id?: string
+          created_at?: string | null
+          id?: string
+          ordem?: number | null
+          pergunta?: string
+          resposta?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_ia_perguntas_agent_ia_id_fkey"
+            columns: ["agent_ia_id"]
+            isOneToOne: false
+            referencedRelation: "agent_ia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conexoes_whatsapp: {
         Row: {
           conta_id: string
@@ -201,18 +280,21 @@ export type Database = {
           created_at: string
           id: string
           nome: string
+          openai_api_key: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
           id?: string
           nome: string
+          openai_api_key?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
           id?: string
           nome?: string
+          openai_api_key?: string | null
           updated_at?: string
         }
         Relationships: []
