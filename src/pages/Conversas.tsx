@@ -701,7 +701,10 @@ export default function Conversas() {
                 />
               )}
               {msg.tipo === 'audio' && (
-                <AudioPlayer src={msg.media_url!} />
+                <AudioPlayer 
+                  src={msg.media_url!} 
+                  variant={msg.direcao === 'saida' ? 'sent' : 'received'}
+                />
               )}
               {msg.tipo === 'documento' && (
                 <a 
