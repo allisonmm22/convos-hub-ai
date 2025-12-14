@@ -397,7 +397,7 @@ serve(async (req) => {
                 .single();
 
               if (conexaoCompleta) {
-                const evolutionApiUrl = 'https://evo.notificacrm.com.br';
+                const evolutionApiUrl = 'https://evolution.cognityx.com.br';
                 
                 // Enviar mensagem via Evolution API
                 const sendResponse = await fetch(
