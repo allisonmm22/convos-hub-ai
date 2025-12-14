@@ -176,15 +176,31 @@ serve(async (req) => {
 
         const telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
 
-        // Verificar se já existe mensagem com esse ID
-        const { data: existingMsg } = await supabase
+        // Verificar se já existe mensagem com esse ID da Evolution
+        const { data: existingByEvolutionId } = await supabase
           .from('mensagens')
           .select('id')
-          .eq('metadata->>evolution_msg_id', messageId)
-          .single();
+          .contains('metadata', { evolution_msg_id: messageId })
+          .maybeSingle();
 
-        if (existingMsg) {
-          console.log('Mensagem já existe:', messageId);
+        if (existingByEvolutionId) {
+          console.log('Mensagem já existe (evolution_id):', messageId);
+          continue;
+        }
+
+        // Verificação adicional: buscar por conteúdo similar nos últimos 5 minutos
+        // Isso previne duplicação de mensagens antigas sem evolution_msg_id
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+        const { data: existingByContent } = await supabase
+          .from('mensagens')
+          .select('id')
+          .eq('conteudo', messageContent)
+          .eq('direcao', 'entrada')
+          .gte('created_at', fiveMinutesAgo)
+          .maybeSingle();
+
+        if (existingByContent) {
+          console.log('Mensagem similar já existe recentemente:', messageContent.substring(0, 30));
           continue;
         }
 
