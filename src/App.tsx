@@ -10,6 +10,7 @@ import Conversas from "./pages/Conversas";
 import AgenteIA from "./pages/AgenteIA";
 import AgenteIAEditar from "./pages/AgenteIAEditar";
 import CRM from "./pages/CRM";
+import CRMConfiguracoes from "./pages/CRMConfiguracoes";
 import Agendamentos from "./pages/Agendamentos";
 import Prospeccao from "./pages/Prospeccao";
 import Contatos from "./pages/Contatos";
@@ -70,6 +71,7 @@ const App = () => (
             <Route path="/agente-ia" element={<ProtectedRoute><AgenteIA /></ProtectedRoute>} />
             <Route path="/agente-ia/:id" element={<ProtectedRoute><AgenteIAEditar /></ProtectedRoute>} />
             <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
+            <Route path="/crm/configuracoes" element={<ProtectedRoute><CRMConfiguracoes /></ProtectedRoute>} />
             <Route path="/agendamentos" element={<ProtectedRoute><Agendamentos /></ProtectedRoute>} />
             <Route path="/prospeccao" element={<ProtectedRoute><Prospeccao /></ProtectedRoute>} />
             <Route path="/contatos" element={<ProtectedRoute><Contatos /></ProtectedRoute>} />
