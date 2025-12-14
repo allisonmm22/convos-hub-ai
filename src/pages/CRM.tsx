@@ -1,10 +1,18 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Plus, DollarSign, User, MoreVertical, GripVertical, Loader2 } from 'lucide-react';
+import { Plus, DollarSign, User, MoreVertical, GripVertical, Loader2, Settings } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { Link } from 'react-router-dom';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Estagio {
   id: string;
@@ -28,15 +36,19 @@ interface Negociacao {
 interface Funil {
   id: string;
   nome: string;
+  cor: string;
   estagios: Estagio[];
 }
 
 export default function CRM() {
   const { usuario } = useAuth();
-  const [funil, setFunil] = useState<Funil | null>(null);
+  const [funis, setFunis] = useState<Funil[]>([]);
+  const [selectedFunilId, setSelectedFunilId] = useState<string | null>(null);
   const [negociacoes, setNegociacoes] = useState<Negociacao[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragging, setDragging] = useState<string | null>(null);
+
+  const selectedFunil = funis.find(f => f.id === selectedFunilId) || null;
 
   useEffect(() => {
     if (usuario?.conta_id) {
@@ -44,16 +56,29 @@ export default function CRM() {
     }
   }, [usuario]);
 
+  useEffect(() => {
+    // Load last selected funil from localStorage
+    const savedFunilId = localStorage.getItem('crm_selected_funil');
+    if (savedFunilId && funis.some(f => f.id === savedFunilId)) {
+      setSelectedFunilId(savedFunilId);
+    } else if (funis.length > 0 && !selectedFunilId) {
+      setSelectedFunilId(funis[0].id);
+    }
+  }, [funis]);
+
+  const handleFunilChange = (funilId: string) => {
+    setSelectedFunilId(funilId);
+    localStorage.setItem('crm_selected_funil', funilId);
+  };
+
   const fetchData = async () => {
     try {
-      const [funilRes, negociacoesRes] = await Promise.all([
+      const [funisRes, negociacoesRes] = await Promise.all([
         supabase
           .from('funis')
           .select(`*, estagios(*)`)
           .eq('conta_id', usuario!.conta_id)
-          .order('ordem')
-          .limit(1)
-          .single(),
+          .order('ordem'),
         supabase
           .from('negociacoes')
           .select(`*, contatos(nome, telefone)`)
@@ -61,11 +86,14 @@ export default function CRM() {
           .eq('status', 'aberto'),
       ]);
 
-      if (funilRes.data) {
-        const sortedEstagios = funilRes.data.estagios.sort(
-          (a: Estagio, b: Estagio) => a.ordem - b.ordem
-        );
-        setFunil({ ...funilRes.data, estagios: sortedEstagios });
+      if (funisRes.data) {
+        const funisWithSortedEstagios = funisRes.data.map(funil => ({
+          ...funil,
+          estagios: (funil.estagios || []).sort(
+            (a: Estagio, b: Estagio) => a.ordem - b.ordem
+          )
+        }));
+        setFunis(funisWithSortedEstagios);
       }
 
       if (negociacoesRes.data) {
@@ -145,16 +173,50 @@ export default function CRM() {
               Gerencie suas negociações e acompanhe o funil de vendas.
             </p>
           </div>
-          <button className="h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors">
-            <Plus className="h-5 w-5" />
-            Nova Negociação
-          </button>
+          <div className="flex items-center gap-3">
+            <Link
+              to="/crm/configuracoes"
+              className="p-2.5 rounded-lg border border-border hover:bg-muted transition-colors"
+              title="Configurações do CRM"
+            >
+              <Settings className="h-5 w-5 text-muted-foreground" />
+            </Link>
+            <button className="h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors">
+              <Plus className="h-5 w-5" />
+              Nova Negociação
+            </button>
+          </div>
         </div>
 
+        {/* Funnel Selector */}
+        {funis.length > 0 && (
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">Funil:</span>
+            <Select value={selectedFunilId || ''} onValueChange={handleFunilChange}>
+              <SelectTrigger className="w-[250px]">
+                <SelectValue placeholder="Selecione um funil" />
+              </SelectTrigger>
+              <SelectContent>
+                {funis.map((funil) => (
+                  <SelectItem key={funil.id} value={funil.id}>
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="h-3 w-3 rounded-full" 
+                        style={{ backgroundColor: funil.cor }}
+                      />
+                      {funil.nome}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         {/* Kanban */}
-        {funil ? (
+        {selectedFunil ? (
           <div className="flex gap-4 overflow-x-auto pb-4">
-            {funil.estagios.map((estagio) => (
+            {selectedFunil.estagios.map((estagio) => (
               <div
                 key={estagio.id}
                 className="flex-shrink-0 w-80"
