@@ -57,25 +57,37 @@ serve(async (req) => {
 
     console.log('Agente encontrado:', agente.nome);
 
-    // Verificar horário de funcionamento
-    const agora = new Date();
-    const diaSemana = agora.getDay(); // 0 = domingo
-    const horaAtual = agora.toTimeString().slice(0, 5); // HH:MM
+    // Verificar se o agente está configurado para atender 24h
+    if (!agente.atender_24h) {
+      // Usar timezone do Brasil (UTC-3)
+      const agora = new Date();
+      const brasilOffset = -3 * 60; // UTC-3 em minutos
+      const localTime = new Date(agora.getTime() + (brasilOffset + agora.getTimezoneOffset()) * 60000);
+      
+      const diaSemana = localTime.getDay(); // 0 = domingo
+      const horaAtual = localTime.toTimeString().slice(0, 5); // HH:MM
 
-    const dentroDoHorario = agente.dias_ativos?.includes(diaSemana) &&
-      horaAtual >= agente.horario_inicio &&
-      horaAtual <= agente.horario_fim;
+      console.log('Verificando horário - Dia:', diaSemana, 'Hora (Brasil):', horaAtual);
+      console.log('Dias ativos:', agente.dias_ativos);
+      console.log('Horário configurado:', agente.horario_inicio, '-', agente.horario_fim);
 
-    if (!dentroDoHorario && agente.mensagem_fora_horario) {
-      console.log('Fora do horário de atendimento');
-      return new Response(
-        JSON.stringify({ 
-          resposta: agente.mensagem_fora_horario, 
-          should_respond: true,
-          fora_horario: true 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      const dentroDoHorario = agente.dias_ativos?.includes(diaSemana) &&
+        horaAtual >= agente.horario_inicio &&
+        horaAtual <= agente.horario_fim;
+
+      if (!dentroDoHorario && agente.mensagem_fora_horario) {
+        console.log('Fora do horário de atendimento');
+        return new Response(
+          JSON.stringify({ 
+            resposta: agente.mensagem_fora_horario, 
+            should_respond: true,
+            fora_horario: true 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else {
+      console.log('Agente configurado para atender 24h - ignorando verificação de horário');
     }
 
     // 3. Buscar etapas de atendimento

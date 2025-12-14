@@ -26,9 +26,10 @@ interface AgentConfig {
   mensagem_fora_horario: string;
   gatilho: string | null;
   descricao: string | null;
+  atender_24h: boolean;
 }
 
-type Tab = 'regras' | 'etapas' | 'perguntas' | 'configuracao';
+type Tab = 'regras' | 'etapas' | 'perguntas' | 'horario' | 'configuracao';
 
 const MAX_CARACTERES = 15000;
 
@@ -86,6 +87,7 @@ export default function AgenteIAEditar() {
           ...data,
           temperatura: Number(data.temperatura),
           tipo: (data.tipo === 'secundario' ? 'secundario' : 'principal') as 'principal' | 'secundario',
+          atender_24h: data.atender_24h ?? false,
         });
         setTempName(data.nome || '');
       } else {
@@ -122,6 +124,7 @@ export default function AgenteIAEditar() {
           mensagem_fora_horario: config.mensagem_fora_horario,
           gatilho: config.gatilho,
           descricao: config.descricao,
+          atender_24h: config.atender_24h,
         })
         .eq('id', config.id);
 
@@ -159,6 +162,7 @@ export default function AgenteIAEditar() {
     { id: 'regras' as Tab, label: 'Regras Gerais', icon: FileText },
     { id: 'etapas' as Tab, label: 'Etapas de Atendimento', icon: MessageCircle },
     { id: 'perguntas' as Tab, label: 'Perguntas Frequentes', icon: HelpCircle },
+    { id: 'horario' as Tab, label: 'Horário de Funcionamento', icon: Clock },
     { id: 'configuracao' as Tab, label: 'Configuração API', icon: Key },
   ];
 
@@ -316,6 +320,16 @@ export default function AgenteIAEditar() {
 
             {activeTab === 'perguntas' && config && (
               <PerguntasFrequentesTab agentId={config.id} />
+            )}
+
+            {activeTab === 'horario' && config && (
+              <HorarioFuncionamentoTab 
+                config={config}
+                setConfig={setConfig}
+                onSave={handleSave}
+                saving={saving}
+                toggleDia={toggleDia}
+              />
             )}
 
             {activeTab === 'configuracao' && config && (
@@ -1056,6 +1070,159 @@ function PerguntasFrequentesTab({ agentId }: { agentId: string }) {
           </button>
         </>
       )}
+    </div>
+  );
+}
+
+// Tab: Horário de Funcionamento
+function HorarioFuncionamentoTab({ 
+  config, 
+  setConfig, 
+  onSave, 
+  saving,
+  toggleDia
+}: { 
+  config: AgentConfig;
+  setConfig: (c: AgentConfig) => void;
+  onSave: () => void;
+  saving: boolean;
+  toggleDia: (dia: number) => void;
+}) {
+  return (
+    <div className="space-y-6 max-w-2xl">
+      {/* Toggle 24h */}
+      <div className="rounded-xl bg-card border border-border p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+              <Clock className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Atendimento 24 horas</h2>
+              <p className="text-sm text-muted-foreground">
+                Quando ativado, o agente responde a qualquer hora e dia
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setConfig({ ...config, atender_24h: !config.atender_24h })}
+            className={`relative h-7 w-14 rounded-full transition-colors ${
+              config.atender_24h ? 'bg-primary' : 'bg-muted'
+            }`}
+          >
+            <div
+              className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
+                config.atender_24h ? 'translate-x-7' : ''
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* Configuração de Horário (desabilitada se 24h) */}
+      <div className={`rounded-xl bg-card border border-border p-6 transition-opacity ${config.atender_24h ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <Calendar className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Dias de Atendimento</h2>
+            <p className="text-sm text-muted-foreground">
+              Selecione os dias em que o agente estará ativo
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-6">
+          {diasSemana.map((dia) => (
+            <button
+              key={dia.value}
+              onClick={() => toggleDia(dia.value)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                config.dias_ativos.includes(dia.value)
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+            >
+              {dia.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Horário de Início
+            </label>
+            <input
+              type="time"
+              value={config.horario_inicio}
+              onChange={(e) => setConfig({ ...config, horario_inicio: e.target.value })}
+              className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Horário de Fim
+            </label>
+            <input
+              type="time"
+              value={config.horario_fim}
+              onChange={(e) => setConfig({ ...config, horario_fim: e.target.value })}
+              className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Mensagem Fora do Horário */}
+      <div className={`rounded-xl bg-card border border-border p-6 transition-opacity ${config.atender_24h ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <MessageCircle className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Mensagem Fora do Horário</h2>
+            <p className="text-sm text-muted-foreground">
+              Mensagem automática enviada quando o agente está fora do horário
+            </p>
+          </div>
+        </div>
+
+        <textarea
+          value={config.mensagem_fora_horario}
+          onChange={(e) => setConfig({ ...config, mensagem_fora_horario: e.target.value })}
+          rows={4}
+          className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+          placeholder="Ex: Obrigado pelo contato! Nosso horário de atendimento é de segunda a sexta, das 8h às 18h."
+        />
+      </div>
+
+      {/* Status atual */}
+      <div className={`rounded-xl border p-4 ${config.atender_24h ? 'bg-primary/5 border-primary/20' : 'bg-muted/50 border-border'}`}>
+        <div className="flex items-center gap-3">
+          <div className={`h-3 w-3 rounded-full ${config.atender_24h ? 'bg-primary animate-pulse' : 'bg-muted-foreground'}`} />
+          <span className={`text-sm font-medium ${config.atender_24h ? 'text-primary' : 'text-foreground'}`}>
+            {config.atender_24h 
+              ? 'Atendimento 24/7 - O agente responde a qualquer momento'
+              : `Atendimento: ${config.dias_ativos.map(d => diasSemana.find(ds => ds.value === d)?.label).join(', ')} das ${config.horario_inicio} às ${config.horario_fim}`
+            }
+          </span>
+        </div>
+      </div>
+
+      <button
+        onClick={onSave}
+        disabled={saving}
+        className="flex items-center gap-2 h-10 px-6 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+      >
+        {saving ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Save className="h-4 w-4" />
+        )}
+        Salvar Configurações de Horário
+      </button>
     </div>
   );
 }
