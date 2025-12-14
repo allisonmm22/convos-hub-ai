@@ -80,6 +80,7 @@ export type Database = {
       }
       agent_ia: {
         Row: {
+          atender_24h: boolean | null
           ativo: boolean | null
           conta_id: string
           created_at: string
@@ -99,6 +100,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          atender_24h?: boolean | null
           ativo?: boolean | null
           conta_id: string
           created_at?: string
@@ -118,6 +120,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          atender_24h?: boolean | null
           ativo?: boolean | null
           conta_id?: string
           created_at?: string
