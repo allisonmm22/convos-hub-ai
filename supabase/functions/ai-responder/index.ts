@@ -7,6 +7,110 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Mapeamento de modelos OpenAI para Lovable AI
+const modelMapping: Record<string, string> = {
+  'gpt-4o-mini': 'google/gemini-2.5-flash',
+  'gpt-4o': 'google/gemini-2.5-pro',
+  'gpt-4.1-mini-2025-04-14': 'google/gemini-2.5-flash',
+  'gpt-4.1-2025-04-14': 'google/gemini-2.5-pro',
+  'gpt-5-2025-08-07': 'openai/gpt-5',
+  'gpt-5-mini-2025-08-07': 'openai/gpt-5-mini',
+  'gpt-5-nano-2025-08-07': 'openai/gpt-5-nano',
+};
+
+interface AIResponse {
+  resposta: string;
+  provider: 'openai' | 'lovable';
+}
+
+async function callOpenAI(
+  apiKey: string,
+  messages: { role: string; content: string }[],
+  modelo: string,
+  maxTokens: number,
+  temperatura: number
+): Promise<AIResponse> {
+  const isModeloNovo = modelo.includes('gpt-5') || modelo.includes('gpt-4.1') || 
+                       modelo.includes('o3') || modelo.includes('o4');
+  
+  const requestBody: any = {
+    model: modelo,
+    messages,
+  };
+
+  if (isModeloNovo) {
+    requestBody.max_completion_tokens = maxTokens;
+  } else {
+    requestBody.max_tokens = maxTokens;
+    requestBody.temperature = temperatura;
+  }
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenAI error ${response.status}: ${errorText}`);
+  }
+
+  const data = await response.json();
+  const resposta = data.choices?.[0]?.message?.content;
+
+  if (!resposta) {
+    throw new Error('Resposta vazia da OpenAI');
+  }
+
+  return { resposta, provider: 'openai' };
+}
+
+async function callLovableAI(
+  messages: { role: string; content: string }[],
+  modelo: string
+): Promise<AIResponse> {
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  
+  if (!LOVABLE_API_KEY) {
+    throw new Error('LOVABLE_API_KEY não configurada');
+  }
+
+  // Mapear modelo OpenAI para equivalente Lovable AI
+  const lovableModel = modelMapping[modelo] || 'google/gemini-2.5-flash';
+
+  console.log('Usando Lovable AI com modelo:', lovableModel);
+
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: lovableModel,
+      messages,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Lovable AI error ${response.status}: ${errorText}`);
+  }
+
+  const data = await response.json();
+  const resposta = data.choices?.[0]?.message?.content;
+
+  if (!resposta) {
+    throw new Error('Resposta vazia da Lovable AI');
+  }
+
+  return { resposta, provider: 'lovable' };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -24,20 +128,15 @@ serve(async (req) => {
     console.log('Conta ID:', conta_id);
     console.log('Mensagem recebida:', mensagem);
 
-    // 1. Buscar API Key da OpenAI da conta
-    const { data: conta, error: contaError } = await supabase
+    // 1. Buscar API Key da OpenAI da conta (opcional agora)
+    const { data: conta } = await supabase
       .from('contas')
       .select('openai_api_key')
       .eq('id', conta_id)
       .single();
 
-    if (contaError || !conta?.openai_api_key) {
-      console.log('API Key não configurada para esta conta');
-      return new Response(
-        JSON.stringify({ error: 'API Key da OpenAI não configurada', should_respond: false }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const hasOpenAIKey = !!conta?.openai_api_key;
+    console.log('OpenAI API Key configurada:', hasOpenAIKey);
 
     // 2. Buscar configuração do agente IA ativo
     const { data: agente, error: agenteError } = await supabase
@@ -59,17 +158,14 @@ serve(async (req) => {
 
     // Verificar se o agente está configurado para atender 24h
     if (!agente.atender_24h) {
-      // Usar timezone do Brasil (UTC-3)
       const agora = new Date();
-      const brasilOffset = -3 * 60; // UTC-3 em minutos
+      const brasilOffset = -3 * 60;
       const localTime = new Date(agora.getTime() + (brasilOffset + agora.getTimezoneOffset()) * 60000);
       
-      const diaSemana = localTime.getDay(); // 0 = domingo
-      const horaAtual = localTime.toTimeString().slice(0, 5); // HH:MM
+      const diaSemana = localTime.getDay();
+      const horaAtual = localTime.toTimeString().slice(0, 5);
 
       console.log('Verificando horário - Dia:', diaSemana, 'Hora (Brasil):', horaAtual);
-      console.log('Dias ativos:', agente.dias_ativos);
-      console.log('Horário configurado:', agente.horario_inicio, '-', agente.horario_fim);
 
       const dentroDoHorario = agente.dias_ativos?.includes(diaSemana) &&
         horaAtual >= agente.horario_inicio &&
@@ -86,8 +182,6 @@ serve(async (req) => {
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-    } else {
-      console.log('Agente configurado para atender 24h - ignorando verificação de horário');
     }
 
     // 3. Buscar etapas de atendimento
@@ -115,7 +209,6 @@ serve(async (req) => {
     // 6. Montar o prompt completo
     let promptCompleto = agente.prompt_sistema || '';
 
-    // Adicionar etapas de atendimento
     if (etapas && etapas.length > 0) {
       promptCompleto += '\n\n## ETAPAS DE ATENDIMENTO\n';
       promptCompleto += 'Siga estas etapas no fluxo de atendimento:\n\n';
@@ -127,7 +220,6 @@ serve(async (req) => {
       });
     }
 
-    // Adicionar perguntas frequentes
     if (perguntas && perguntas.length > 0) {
       promptCompleto += '\n\n## PERGUNTAS FREQUENTES\n';
       promptCompleto += 'Use estas respostas quando apropriado:\n\n';
@@ -143,7 +235,6 @@ serve(async (req) => {
       { role: 'system', content: promptCompleto }
     ];
 
-    // Adicionar histórico da conversa
     if (historico && historico.length > 0) {
       historico.forEach((msg: any) => {
         messages.push({
@@ -153,7 +244,6 @@ serve(async (req) => {
       });
     }
 
-    // Adicionar mensagem atual (se não estiver no histórico)
     const ultimaMensagem = historico?.[historico.length - 1];
     if (!ultimaMensagem || ultimaMensagem.conteudo !== mensagem) {
       messages.push({ role: 'user', content: mensagem });
@@ -161,62 +251,55 @@ serve(async (req) => {
 
     console.log('Total de mensagens para API:', messages.length);
 
-    // 8. Chamar API da OpenAI
+    // 8. Chamar API com fallback inteligente
     const modelo = agente.modelo || 'gpt-4o-mini';
-    
-    // Determinar se é modelo novo (GPT-5, O3, O4) ou legado
-    const isModeloNovo = modelo.includes('gpt-5') || modelo.includes('gpt-4.1') || 
-                         modelo.includes('o3') || modelo.includes('o4');
-    
-    const requestBody: any = {
-      model: modelo,
-      messages,
-    };
+    const maxTokens = agente.max_tokens || 1000;
+    const temperatura = agente.temperatura || 0.7;
 
-    // Configurar parâmetros baseado no modelo
-    if (isModeloNovo) {
-      requestBody.max_completion_tokens = agente.max_tokens || 1000;
-      // Modelos novos não suportam temperature
+    let result: AIResponse;
+
+    // Tentar OpenAI primeiro se tiver chave configurada
+    if (hasOpenAIKey) {
+      try {
+        console.log('Tentando OpenAI com modelo:', modelo);
+        result = await callOpenAI(conta.openai_api_key, messages, modelo, maxTokens, temperatura);
+        console.log('✅ Resposta via OpenAI');
+      } catch (openaiError: any) {
+        const errorMsg = openaiError.message || '';
+        console.error('❌ Erro OpenAI:', errorMsg);
+        
+        // Fallback para Lovable AI em caso de erro 429 (rate limit) ou 402 (quota) ou qualquer erro
+        console.log('⚡ Fallback para Lovable AI...');
+        try {
+          result = await callLovableAI(messages, modelo);
+          console.log('✅ Resposta via Lovable AI (fallback)');
+        } catch (lovableError: any) {
+          console.error('❌ Erro Lovable AI:', lovableError.message);
+          return new Response(
+            JSON.stringify({ error: `Erro em ambos provedores: OpenAI - ${errorMsg}, Lovable AI - ${lovableError.message}`, should_respond: false }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
     } else {
-      requestBody.max_tokens = agente.max_tokens || 1000;
-      requestBody.temperature = agente.temperatura || 0.7;
+      // Usar Lovable AI diretamente se não tiver chave OpenAI
+      console.log('Usando Lovable AI diretamente (sem chave OpenAI configurada)');
+      try {
+        result = await callLovableAI(messages, modelo);
+        console.log('✅ Resposta via Lovable AI');
+      } catch (lovableError: any) {
+        console.error('❌ Erro Lovable AI:', lovableError.message);
+        return new Response(
+          JSON.stringify({ error: lovableError.message, should_respond: false }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
-    console.log('Chamando OpenAI com modelo:', modelo);
-
-    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${conta.openai_api_key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!openaiResponse.ok) {
-      const errorText = await openaiResponse.text();
-      console.error('Erro da OpenAI:', openaiResponse.status, errorText);
-      return new Response(
-        JSON.stringify({ error: `Erro da OpenAI: ${errorText}`, should_respond: false }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const openaiData = await openaiResponse.json();
-    const resposta = openaiData.choices?.[0]?.message?.content;
-
-    if (!resposta) {
-      console.error('Resposta vazia da OpenAI');
-      return new Response(
-        JSON.stringify({ error: 'Resposta vazia da OpenAI', should_respond: false }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log('Resposta gerada:', resposta.substring(0, 100) + '...');
+    console.log('Resposta gerada via', result.provider + ':', result.resposta.substring(0, 100) + '...');
 
     return new Response(
-      JSON.stringify({ resposta, should_respond: true }),
+      JSON.stringify({ resposta: result.resposta, should_respond: true, provider: result.provider }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
