@@ -319,7 +319,22 @@ serve(async (req) => {
         console.log('Conversa criada:', conversa?.id);
       }
 
-      // Inserir mensagem
+      // Verificar se mensagem já existe (evitar duplicação com polling)
+      if (messageId) {
+        const { data: existingMsg } = await supabase
+          .from('mensagens')
+          .select('id')
+          .eq('conversa_id', conversa!.id)
+          .contains('metadata', { evolution_msg_id: messageId })
+          .maybeSingle();
+          
+        if (existingMsg) {
+          console.log('Mensagem já existe, ignorando:', messageId);
+          return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+        }
+      }
+
+      // Inserir mensagem com evolution_msg_id nos metadados
       // Se fromMe = true (veio do dispositivo físico via webhook), marcar como enviada_por_dispositivo
       const { error: msgError } = await supabase.from('mensagens').insert({
         conversa_id: conversa!.id,
@@ -328,7 +343,8 @@ serve(async (req) => {
         direcao: fromMe ? 'saida' : 'entrada',
         tipo: messageType,
         media_url: mediaUrl,
-        enviada_por_dispositivo: fromMe, // Mensagens do dispositivo físico
+        enviada_por_dispositivo: fromMe,
+        metadata: messageId ? { evolution_msg_id: messageId } : {},
       });
 
       if (msgError) {
