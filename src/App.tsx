@@ -17,6 +17,7 @@ import Contatos from "./pages/Contatos";
 import Usuarios from "./pages/Usuarios";
 import Conexao from "./pages/Conexao";
 import Integracoes from "./pages/Integracoes";
+import IntegracaoGoogleCalendar from "./pages/IntegracaoGoogleCalendar";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
 
@@ -80,6 +81,7 @@ const App = () => (
             <Route path="/usuarios" element={<ProtectedRoute><Usuarios /></ProtectedRoute>} />
             <Route path="/conexao" element={<ProtectedRoute><Conexao /></ProtectedRoute>} />
             <Route path="/integracoes" element={<ProtectedRoute><Integracoes /></ProtectedRoute>} />
+            <Route path="/integracoes/google-calendar" element={<ProtectedRoute><IntegracaoGoogleCalendar /></ProtectedRoute>} />
             <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

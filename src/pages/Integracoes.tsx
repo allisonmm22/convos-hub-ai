@@ -90,6 +90,7 @@ const Integracoes = () => {
   const [hasOpenAIKey, setHasOpenAIKey] = useState(false);
   const [whatsappStatus, setWhatsappStatus] = useState<'connected' | 'disconnected'>('disconnected');
   const [whatsappCount, setWhatsappCount] = useState(0);
+  const [googleCalendarCount, setGoogleCalendarCount] = useState(0);
 
   useEffect(() => {
     if (usuario?.conta_id) {
@@ -122,6 +123,16 @@ const Integracoes = () => {
       const connected = conexoes.some(c => c.status === 'conectado');
       setWhatsappStatus(connected ? 'connected' : 'disconnected');
       setWhatsappCount(conexoes.length);
+    }
+
+    // Check Google Calendar connections
+    const { data: calendarios } = await supabase
+      .from('calendarios_google')
+      .select('id, ativo')
+      .eq('conta_id', usuario.conta_id);
+
+    if (calendarios) {
+      setGoogleCalendarCount(calendarios.filter(c => c.ativo).length);
     }
   };
 
@@ -207,11 +218,12 @@ const Integracoes = () => {
 
           {/* Google Calendar */}
           <IntegrationCard
-            icon={<Calendar className="h-5 w-5 text-muted-foreground" />}
+            icon={<Calendar className="h-5 w-5 text-blue-500" />}
             title="Google Calendar"
             description="Sincronizar agendamentos"
-            status="coming_soon"
-            comingSoon
+            status={googleCalendarCount > 0 ? 'connected' : 'disconnected'}
+            statusLabel={googleCalendarCount > 0 ? `${googleCalendarCount} calendário(s) conectado(s)` : undefined}
+            onConfigure={() => navigate('/integracoes/google-calendar')}
           />
 
           {/* Email SMTP */}
