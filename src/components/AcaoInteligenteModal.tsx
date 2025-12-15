@@ -366,41 +366,43 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
           </p>
         </DialogHeader>
 
-        <div className="flex min-h-[400px]">
-          <div className="w-1/2 border-r border-border p-4 overflow-auto">
-            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+        <div className="flex max-h-[70vh]">
+          <div className="w-1/2 border-r border-border p-4 flex flex-col">
+            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 flex-shrink-0">
               Tipo de Ação
             </h3>
-            <div className="space-y-1">
-              {tiposAcao.map((tipo) => (
-                <button
-                  key={tipo.id}
-                  onClick={() => setTipoSelecionado(tipo.id)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-all ${
-                    tipoSelecionado === tipo.id
-                      ? 'bg-primary/10 ring-2 ring-primary/30'
-                      : 'hover:bg-muted'
-                  }`}
-                >
-                  <div 
-                    className="flex items-center justify-center h-9 w-9 rounded-lg"
-                    style={{ backgroundColor: tipo.bgColor }}
+            <div className="flex-1 overflow-y-auto min-h-0">
+              <div className="space-y-1 pr-2">
+                {tiposAcao.map((tipo) => (
+                  <button
+                    key={tipo.id}
+                    onClick={() => setTipoSelecionado(tipo.id)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-all ${
+                      tipoSelecionado === tipo.id
+                        ? 'bg-primary/10 ring-2 ring-primary/30'
+                        : 'hover:bg-muted'
+                    }`}
                   >
-                    <tipo.icon className="h-4 w-4" style={{ color: tipo.color }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-foreground text-sm">{tipo.label}</div>
-                    <div className="text-xs text-muted-foreground truncate">{tipo.description}</div>
-                  </div>
-                  {tipoSelecionado === tipo.id && (
-                    <Check className="h-4 w-4 text-primary flex-shrink-0" />
-                  )}
-                </button>
-              ))}
+                    <div 
+                      className="flex items-center justify-center h-9 w-9 rounded-lg"
+                      style={{ backgroundColor: tipo.bgColor }}
+                    >
+                      <tipo.icon className="h-4 w-4" style={{ color: tipo.color }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-foreground text-sm">{tipo.label}</div>
+                      <div className="text-xs text-muted-foreground truncate">{tipo.description}</div>
+                    </div>
+                    {tipoSelecionado === tipo.id && (
+                      <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="w-1/2 p-4 overflow-auto bg-muted/30">
+          <div className="w-1/2 p-4 overflow-y-auto bg-muted/30">
             <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
               Configuração
             </h3>
