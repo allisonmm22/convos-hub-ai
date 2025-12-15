@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Phone, Edit2, Save, Briefcase, Mail, Tag, Plus, MoreVertical, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Phone, Edit2, Save, Briefcase, Mail, Tag, Plus, MoreVertical, History, ChevronDown, ChevronUp, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -19,6 +19,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { NegociacaoDetalheModal } from '@/components/NegociacaoDetalheModal';
 
 interface Contato {
@@ -69,6 +74,12 @@ interface HistoricoItem {
   usuario?: { nome: string } | null;
 }
 
+interface TagItem {
+  id: string;
+  nome: string;
+  cor: string;
+}
+
 interface ContatoSidebarProps {
   contato: Contato;
   conversaId?: string;
@@ -97,6 +108,9 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
   const [modalDetalheAberto, setModalDetalheAberto] = useState(false);
   const [historicos, setHistoricos] = useState<Record<string, HistoricoItem[]>>({});
   const [historicoExpandido, setHistoricoExpandido] = useState<string | null>(null);
+  const [tagsDisponiveis, setTagsDisponiveis] = useState<TagItem[]>([]);
+  const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
+  const [salvandoTags, setSalvandoTags] = useState(false);
 
   useEffect(() => {
     setTelefoneEdit(contato.telefone);
@@ -105,6 +119,7 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
     if (isOpen) {
       fetchNegociacoes();
       fetchFunis();
+      fetchTagsDisponiveis();
     }
   }, [contato, isOpen]);
 
@@ -130,6 +145,57 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
     } catch (error) {
       console.error('Erro ao buscar funis:', error);
     }
+  };
+
+  const fetchTagsDisponiveis = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tags')
+        .select('id, nome, cor')
+        .order('nome');
+      
+      if (error) throw error;
+      setTagsDisponiveis(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar tags:', error);
+    }
+  };
+
+  const handleToggleTag = async (tagNome: string) => {
+    setSalvandoTags(true);
+    try {
+      const currentTags = contato.tags || [];
+      const hasTag = currentTags.includes(tagNome);
+      const newTags = hasTag 
+        ? currentTags.filter(t => t !== tagNome)
+        : [...currentTags, tagNome];
+      
+      const { error } = await supabase
+        .from('contatos')
+        .update({ tags: newTags })
+        .eq('id', contato.id);
+
+      if (error) throw error;
+
+      if (onContatoUpdate) {
+        onContatoUpdate({
+          ...contato,
+          tags: newTags,
+        });
+      }
+      
+      toast.success(hasTag ? 'Tag removida' : 'Tag adicionada');
+    } catch (error) {
+      console.error('Erro ao atualizar tags:', error);
+      toast.error('Erro ao atualizar tags');
+    } finally {
+      setSalvandoTags(false);
+    }
+  };
+
+  const getTagColor = (tagNome: string) => {
+    const tag = tagsDisponiveis.find(t => t.nome === tagNome);
+    return tag?.cor || '#3b82f6';
   };
 
   const fetchNegociacoes = async () => {
@@ -483,24 +549,85 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
             </div>
 
             {/* Tags */}
-            {contato.tags && contato.tags.length > 0 && (
-              <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+            <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Tag className="h-4 w-4" />
                   <span className="text-xs">Tags</span>
                 </div>
+                <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <button 
+                      className="flex items-center gap-1 text-xs text-primary hover:underline"
+                      disabled={salvandoTags}
+                    >
+                      <Plus className="h-3 w-3" />
+                      Gerenciar
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-2" align="end">
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground px-2 py-1">Selecione as tags:</p>
+                      {tagsDisponiveis.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">
+                          Nenhuma tag cadastrada.
+                          <br />
+                          <span className="text-primary">Configure em CRM → Configurações</span>
+                        </p>
+                      ) : (
+                        tagsDisponiveis.map((tag) => {
+                          const isSelected = contato.tags?.includes(tag.nome) || false;
+                          return (
+                            <button
+                              key={tag.id}
+                              onClick={() => handleToggleTag(tag.nome)}
+                              disabled={salvandoTags}
+                              className={cn(
+                                "w-full flex items-center justify-between px-2 py-1.5 rounded-md text-sm transition-colors",
+                                isSelected ? "bg-muted" : "hover:bg-muted/50"
+                              )}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div 
+                                  className="h-3 w-3 rounded-full shrink-0"
+                                  style={{ backgroundColor: tag.cor }}
+                                />
+                                <span className="text-foreground">{tag.nome}</span>
+                              </div>
+                              {isSelected && (
+                                <Check className="h-4 w-4 text-primary" />
+                              )}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              {contato.tags && contato.tags.length > 0 ? (
                 <div className="flex flex-wrap gap-1">
-                  {contato.tags.map((tag, index) => (
+                  {contato.tags.map((tagNome, index) => (
                     <span
                       key={index}
-                      className="px-2 py-0.5 bg-primary/20 text-primary text-xs rounded-full"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full text-white"
+                      style={{ backgroundColor: getTagColor(tagNome) }}
                     >
-                      {tag}
+                      {tagNome}
+                      <button
+                        onClick={() => handleToggleTag(tagNome)}
+                        disabled={salvandoTags}
+                        className="hover:opacity-70 transition-opacity"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
                     </span>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-xs text-muted-foreground italic">Nenhuma tag atribuída</p>
+              )}
+            </div>
           </div>
 
           {/* Negociações */}
