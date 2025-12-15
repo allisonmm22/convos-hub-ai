@@ -110,6 +110,7 @@ interface Conexao {
 
 type StatusFilter = 'todos' | 'abertos' | 'em_atendimento' | 'aguardando_cliente' | 'encerrado';
 type AtendenteFilter = 'todos' | 'agente_ia' | 'humano';
+type TipoFilter = 'todos' | 'individual' | 'grupo';
 
 export default function Conversas() {
   const { usuario } = useAuth();
@@ -124,6 +125,7 @@ export default function Conversas() {
   const [enviando, setEnviando] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('abertos');
   const [atendenteFilter, setAtendenteFilter] = useState<AtendenteFilter>('todos');
+  const [tipoFilter, setTipoFilter] = useState<TipoFilter>('todos');
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferType, setTransferType] = useState<'choice' | 'humano' | 'agente'>('choice');
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -860,7 +862,11 @@ export default function Conversas() {
       atendenteFilter === 'todos' ||
       (atendenteFilter === 'agente_ia' && c.agente_ia_ativo === true) ||
       (atendenteFilter === 'humano' && c.agente_ia_ativo === false);
-    return matchesSearch && matchesStatus && matchesAtendente;
+    const matchesTipo =
+      tipoFilter === 'todos' ||
+      (tipoFilter === 'grupo' && c.contatos.is_grupo === true) ||
+      (tipoFilter === 'individual' && !c.contatos.is_grupo);
+    return matchesSearch && matchesStatus && matchesAtendente && matchesTipo;
   });
 
   const renderMensagem = (msg: Mensagem, index: number) => {
@@ -1033,16 +1039,16 @@ export default function Conversas() {
                     <button
                       className={cn(
                         'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 border',
-                        atendenteFilter !== 'todos'
+                        (atendenteFilter !== 'todos' || tipoFilter !== 'todos')
                           ? 'bg-primary/20 text-primary border-primary/30'
                           : 'bg-muted/50 text-muted-foreground border-border/50 hover:bg-muted hover:text-foreground'
                       )}
                     >
                       <SlidersHorizontal className="h-3.5 w-3.5" />
                       Filtros
-                      {atendenteFilter !== 'todos' && (
+                      {(atendenteFilter !== 'todos' || tipoFilter !== 'todos') && (
                         <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">
-                          1
+                          {(atendenteFilter !== 'todos' ? 1 : 0) + (tipoFilter !== 'todos' ? 1 : 0)}
                         </span>
                       )}
                     </button>
@@ -1096,9 +1102,56 @@ export default function Conversas() {
 
                       <div className="h-px bg-border/50" />
 
+                      {/* Tipo de Conversa */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 px-2">
+                          Tipo
+                        </span>
+                        <div className="space-y-1">
+                          <button
+                            onClick={() => setTipoFilter('todos')}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                              tipoFilter === 'todos'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-foreground hover:bg-muted'
+                            )}
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                            Todos
+                          </button>
+                          <button
+                            onClick={() => setTipoFilter('individual')}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                              tipoFilter === 'individual'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-foreground hover:bg-muted'
+                            )}
+                          >
+                            <User className="h-4 w-4" />
+                            Individual
+                          </button>
+                          <button
+                            onClick={() => setTipoFilter('grupo')}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                              tipoFilter === 'grupo'
+                                ? 'bg-blue-500 text-white'
+                                : 'text-foreground hover:bg-muted'
+                            )}
+                          >
+                            <Users className="h-4 w-4" />
+                            Grupos
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="h-px bg-border/50" />
+
                       {/* Limpar Filtros */}
                       <button
-                        onClick={() => setAtendenteFilter('todos')}
+                        onClick={() => { setAtendenteFilter('todos'); setTipoFilter('todos'); }}
                         className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
                       >
                         <X className="h-4 w-4" />
