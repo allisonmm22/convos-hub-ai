@@ -139,7 +139,6 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
   const [fonteValue, setFonteValue] = useState('');
   const [notificacaoValue, setNotificacaoValue] = useState('');
   const [produtoValue, setProdutoValue] = useState('');
-  const [nomeValue, setNomeValue] = useState('');
 
   // Reset ao fechar
   useEffect(() => {
@@ -153,7 +152,6 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
       setFonteValue('');
       setNotificacaoValue('');
       setProdutoValue('');
-      setNomeValue('');
     }
   }, [isOpen]);
 
@@ -226,9 +224,8 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
       case 'produto':
         return produtoValue.trim().length > 0;
       case 'finalizar':
-        return true;
       case 'nome':
-        return nomeValue.trim().length > 0;
+        return true;
       default:
         return false;
     }
@@ -260,7 +257,7 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
       case 'finalizar':
         return '@finalizar';
       case 'nome':
-        return `@nome:${nomeValue.trim()}`;
+        return '@nome';
       default:
         return '';
     }
@@ -537,19 +534,13 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
 
                 {/* Alterar Nome */}
                 {tipoSelecionado === 'nome' && (
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Nome do Contato
-                    </label>
-                    <input
-                      type="text"
-                      value={nomeValue}
-                      onChange={(e) => setNomeValue(e.target.value)}
-                      placeholder="Ex: {nome_do_cliente}"
-                      className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                    <p className="text-xs text-muted-foreground mt-2">
-                      💡 O agente IA usará esta ação para renomear o contato quando identificar o nome do cliente
+                  <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-sm text-foreground mb-2">
+                      📝 <strong>Captura Automática</strong>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      O agente IA irá extrair automaticamente o nome do lead quando ele 
+                      se identificar durante a conversa e salvará no cadastro do contato.
                     </p>
                   </div>
                 )}
