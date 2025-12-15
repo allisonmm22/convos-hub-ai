@@ -76,11 +76,12 @@ serve(async (req) => {
       minutosAtras.setMinutes(minutosAtras.getMinutes() - regra.horas_sem_resposta);
 
       // Buscar conversas elegíveis para esta regra
+      // Incluir status em_atendimento E aguardando_cliente
       let query = supabase
         .from('conversas')
         .select('id, conta_id, contato_id, conexao_id, agente_ia_ativo, ultima_mensagem_at, status')
         .eq('conta_id', regra.conta_id)
-        .eq('status', 'em_atendimento')
+        .in('status', ['em_atendimento', 'aguardando_cliente'])
         .lt('ultima_mensagem_at', minutosAtras.toISOString());
 
       // Aplicar filtros de estado da IA
@@ -107,6 +108,28 @@ serve(async (req) => {
       console.log(`[processar-followups] ${conversas.length} conversas elegíveis para regra: ${regra.nome}`);
 
       for (const conversa of conversas as Conversa[]) {
+        // Verificar a direção da última mensagem
+        // Só enviar follow-up se a última mensagem foi do AGENTE (saída)
+        // Se foi do lead (entrada), significa que ELE respondeu e não precisamos fazer follow-up
+        const { data: ultimaMensagem, error: ultimaMensagemError } = await supabase
+          .from('mensagens')
+          .select('direcao')
+          .eq('conversa_id', conversa.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (ultimaMensagemError) {
+          console.error(`[processar-followups] Erro ao verificar última mensagem:`, ultimaMensagemError);
+          continue;
+        }
+
+        // Se última mensagem foi do lead (entrada), pular - ele já respondeu
+        if (ultimaMensagem?.direcao === 'entrada') {
+          console.log(`[processar-followups] Conversa ${conversa.id}: última mensagem foi do lead, pulando`);
+          continue;
+        }
+
         // Verificar quantos follow-ups já foram enviados para esta conversa
         const { data: followupsExistentes, error: followupsError } = await supabase
           .from('followup_enviados')
