@@ -5,7 +5,7 @@ interface DescricaoEditorProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  onDecisaoClick?: () => void;
+  onDecisaoClick?: (cursorPosition: number) => void;
 }
 
 interface ChipConfig {
@@ -179,6 +179,22 @@ export function DescricaoEditor({ value, onChange, placeholder, onDecisaoClick }
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const lastValueRef = useRef(value);
   const isRenderingChipsRef = useRef(false);
+  const lastCursorPositionRef = useRef<number>(0);
+
+  // Obter e guardar posição do cursor atual
+  const getCurrentCursorPosition = useCallback((): number => {
+    if (!editorRef.current) return lastValueRef.current.length;
+    
+    const selection = window.getSelection();
+    if (selection?.rangeCount && editorRef.current.contains(selection.anchorNode)) {
+      const range = selection.getRangeAt(0);
+      const preCaretRange = range.cloneRange();
+      preCaretRange.selectNodeContents(editorRef.current);
+      preCaretRange.setEnd(range.startContainer, range.startOffset);
+      return preCaretRange.toString().length;
+    }
+    return lastCursorPositionRef.current;
+  }, []);
 
   // Renderizar chips no HTML
   const renderChips = useCallback(() => {
@@ -318,9 +334,24 @@ export function DescricaoEditor({ value, onChange, placeholder, onDecisaoClick }
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === '@' && onDecisaoClick) {
       e.preventDefault();
-      onDecisaoClick();
+      // Guardar posição ANTES de abrir o modal
+      const cursorPos = getCurrentCursorPosition();
+      lastCursorPositionRef.current = cursorPos;
+      onDecisaoClick(cursorPos);
     }
-  }, [onDecisaoClick]);
+  }, [onDecisaoClick, getCurrentCursorPosition]);
+
+  // Atualizar posição do cursor a cada seleção
+  const handleSelectionChange = useCallback(() => {
+    if (!editorRef.current || !isFocused) return;
+    lastCursorPositionRef.current = getCurrentCursorPosition();
+  }, [getCurrentCursorPosition, isFocused]);
+
+  // Listener para mudanças de seleção
+  useEffect(() => {
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, [handleSelectionChange]);
 
   // Cleanup debounce
   useEffect(() => {
@@ -354,29 +385,14 @@ export function DescricaoEditor({ value, onChange, placeholder, onDecisaoClick }
 
 // Inserir ação na posição do cursor com callback para renderização imediata
 export function inserirAcaoNoEditor(
-  editorRef: HTMLDivElement | null,
   currentValue: string,
   action: string,
   onChange: (value: string) => void,
+  savedCursorPosition?: number,
   onAfterInsert?: () => void
 ) {
-  if (!editorRef) {
-    onChange(currentValue + ' ' + action);
-    // Renderizar imediatamente após a inserção
-    setTimeout(() => onAfterInsert?.(), 10);
-    return;
-  }
-
-  const selection = window.getSelection();
-  let insertPosition = currentValue.length;
-  
-  if (selection?.rangeCount && editorRef.contains(selection.anchorNode)) {
-    const range = selection.getRangeAt(0);
-    const preCaretRange = range.cloneRange();
-    preCaretRange.selectNodeContents(editorRef);
-    preCaretRange.setEnd(range.startContainer, range.startOffset);
-    insertPosition = preCaretRange.toString().length;
-  }
+  // Usar posição salva ou final do texto
+  const insertPosition = savedCursorPosition ?? currentValue.length;
   
   const before = currentValue.substring(0, insertPosition);
   const after = currentValue.substring(insertPosition);
