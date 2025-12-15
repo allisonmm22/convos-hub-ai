@@ -8,7 +8,7 @@ import { useNotificationPreferences } from '@/hooks/useNotificationPreferences';
 import { requestNotificationPermission } from '@/lib/notificationSound';
 
 export default function Configuracoes() {
-  const { usuario } = useAuth();
+  const { usuario, refreshUsuario } = useAuth();
   const [loading, setLoading] = useState(false);
   const [userData, setUserData] = useState({
     nome: '',
@@ -110,6 +110,7 @@ export default function Configuracoes() {
       if (error) throw error;
       
       setAssinaturaAtiva(enabled);
+      await refreshUsuario();
       toast.success(enabled ? 'Assinatura ativada' : 'Assinatura desativada');
     } catch (error) {
       toast.error('Erro ao salvar preferência');
