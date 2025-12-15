@@ -349,16 +349,43 @@ export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: D
     }
   }, [onChange, renderChips]);
 
-  // Handler para tecla @
+  // Handler para tecla @ e Enter
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Handler para @ - abre modal de ação
     if (e.key === '@' && onAcaoClick) {
       e.preventDefault();
-      // Guardar posição ANTES de abrir o modal
       const cursorPos = getCurrentCursorPosition();
       lastCursorPositionRef.current = cursorPos;
       onAcaoClick(cursorPos);
+      return;
     }
-  }, [onAcaoClick, getCurrentCursorPosition]);
+    
+    // Handler para Enter - inserir quebra de linha corretamente
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      
+      const selection = window.getSelection();
+      if (!selection?.rangeCount || !editorRef.current) return;
+      
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      
+      // Criar <br> e um text node para manter cursor visível
+      const br = document.createElement('br');
+      range.insertNode(br);
+      
+      // Criar segundo <br> para linha em branco funcionar (comportamento consistente)
+      // e mover cursor após o primeiro <br>
+      const newRange = document.createRange();
+      newRange.setStartAfter(br);
+      newRange.setEndAfter(br);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+      
+      // Disparar onInput para atualizar valor
+      handleInput();
+    }
+  }, [onAcaoClick, getCurrentCursorPosition, handleInput]);
 
   // Atualizar posição do cursor a cada seleção
   const handleSelectionChange = useCallback(() => {
@@ -394,7 +421,7 @@ export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: D
         onBlur={handleBlur}
         onClick={handleClick}
         onKeyDown={handleKeyDown}
-        className={`min-h-[120px] w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary overflow-auto ${isEmpty ? 'before:content-[attr(data-placeholder)] before:text-muted-foreground before:pointer-events-none' : ''}`}
+        className={`min-h-[160px] w-full px-4 py-4 rounded-xl bg-input border border-border text-foreground text-sm leading-7 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:shadow-lg transition-all duration-200 overflow-auto ${isEmpty ? 'before:content-[attr(data-placeholder)] before:text-muted-foreground before:pointer-events-none' : ''}`}
         data-placeholder={placeholder}
         style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
       />
