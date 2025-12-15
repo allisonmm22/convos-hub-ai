@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils';
 import { AudioRecorder } from '@/components/AudioRecorder';
 import { AudioPlayer } from '@/components/AudioPlayer';
 import { ContatoSidebar } from '@/components/ContatoSidebar';
+import { playNotificationSound } from '@/lib/notificationSound';
 
 interface Contato {
   id: string;
@@ -276,10 +277,20 @@ export default function Conversas() {
         (payload) => {
           console.log('Nova mensagem recebida via realtime:', payload);
           const novaMensagem = payload.new as Mensagem;
+          
           // Usar a ref para verificar a conversa selecionada atual
           if (conversaSelecionadaRef.current && novaMensagem.conversa_id === conversaSelecionadaRef.current.id) {
             setMensagens((prev) => [...prev, novaMensagem]);
           }
+          
+          // Notificação sonora para mensagens de entrada em conversas atendidas por humano
+          if (novaMensagem.direcao === 'entrada') {
+            const conversaDaMensagem = conversas.find(c => c.id === novaMensagem.conversa_id);
+            if (conversaDaMensagem && conversaDaMensagem.agente_ia_ativo === false) {
+              playNotificationSound();
+            }
+          }
+          
           fetchConversas();
         }
       )
