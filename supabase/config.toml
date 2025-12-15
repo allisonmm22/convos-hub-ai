@@ -47,3 +47,18 @@ verify_jwt = false
 
 [functions.processar-followups]
 verify_jwt = false
+
+[functions.reset-user-password]
+verify_jwt = false
+
+[functions.google-calendar-auth]
+verify_jwt = false
+
+[functions.google-calendar-callback]
+verify_jwt = false
+
+[functions.google-calendar-refresh]
+verify_jwt = false
+
+[functions.google-calendar-actions]
+verify_jwt = false
