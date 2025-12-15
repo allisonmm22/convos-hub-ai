@@ -172,9 +172,17 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
           {/* Avatar e Nome */}
           <div className="flex flex-col items-center text-center">
-            <div className="h-20 w-20 rounded-full bg-primary/20 flex items-center justify-center text-primary text-2xl font-bold mb-3">
-              {contato.nome.charAt(0).toUpperCase()}
-            </div>
+            {contato.avatar_url ? (
+              <img
+                src={contato.avatar_url}
+                alt={contato.nome}
+                className="h-20 w-20 rounded-full object-cover mb-3"
+              />
+            ) : (
+              <div className="h-20 w-20 rounded-full bg-primary/20 flex items-center justify-center text-primary text-2xl font-bold mb-3">
+                {contato.nome.charAt(0).toUpperCase()}
+              </div>
+            )}
             <h4 className="text-xl font-semibold text-foreground">{contato.nome}</h4>
           </div>
 

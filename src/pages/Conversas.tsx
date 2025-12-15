@@ -973,9 +973,17 @@ export default function Conversas() {
                   )}
                 >
                   <div className="relative">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold">
-                      {conversa.contatos.nome.charAt(0).toUpperCase()}
-                    </div>
+                    {conversa.contatos.avatar_url ? (
+                      <img
+                        src={conversa.contatos.avatar_url}
+                        alt={conversa.contatos.nome}
+                        className="h-12 w-12 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold">
+                        {conversa.contatos.nome.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     {conversa.agente_ia_ativo ? (
                       <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-primary flex items-center justify-center">
                         <Bot className="h-3 w-3 text-primary-foreground" />
@@ -1024,9 +1032,17 @@ export default function Conversas() {
                 onClick={() => setShowContatoSidebar(true)}
                 className="flex items-center gap-3 hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors cursor-pointer text-left"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold">
-                  {conversaSelecionada.contatos.nome.charAt(0).toUpperCase()}
-                </div>
+                {conversaSelecionada.contatos.avatar_url ? (
+                  <img
+                    src={conversaSelecionada.contatos.avatar_url}
+                    alt={conversaSelecionada.contatos.nome}
+                    className="h-10 w-10 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold">
+                    {conversaSelecionada.contatos.nome.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-foreground">

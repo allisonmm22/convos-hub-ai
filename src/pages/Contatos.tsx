@@ -140,12 +140,20 @@ export default function Contatos() {
                 key={contato.id}
                 className="p-4 rounded-xl bg-card border border-border hover:border-primary/50 transition-all"
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold text-lg">
-                      {contato.nome.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      {contato.avatar_url ? (
+                        <img
+                          src={contato.avatar_url}
+                          alt={contato.nome}
+                          className="h-12 w-12 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold text-lg">
+                          {contato.nome.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
                       <h3 className="font-medium text-foreground">{contato.nome}</h3>
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
                         <Phone className="h-3 w-3" />
