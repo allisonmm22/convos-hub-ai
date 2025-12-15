@@ -66,6 +66,7 @@ export default function AgenteIAEditar() {
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState('');
   const [etapasCaracteres, setEtapasCaracteres] = useState(0);
+  const [perguntasCaracteres, setPerguntasCaracteres] = useState(0);
 
   useEffect(() => {
     if (usuario?.conta_id && id) {
@@ -158,7 +159,7 @@ export default function AgenteIAEditar() {
   };
 
   // Contador unificado: Regras Gerais + Etapas de Atendimento
-  const caracteresUsados = (config?.prompt_sistema?.length || 0) + etapasCaracteres;
+  const caracteresUsados = (config?.prompt_sistema?.length || 0) + etapasCaracteres + perguntasCaracteres;
   const porcentagemUsada = (caracteresUsados / MAX_CARACTERES) * 100;
 
   const tabs = [
@@ -351,7 +352,10 @@ export default function AgenteIAEditar() {
             )}
 
             {activeTab === 'perguntas' && config && (
-              <PerguntasFrequentesTab agentId={config.id} />
+              <PerguntasFrequentesTab 
+                agentId={config.id} 
+                onCaracteresChange={setPerguntasCaracteres}
+              />
             )}
 
             {activeTab === 'horario' && config && (
@@ -841,11 +845,25 @@ interface ConfirmDeletePergunta {
   pergunta: string;
 }
 
-function PerguntasFrequentesTab({ agentId }: { agentId: string }) {
+function PerguntasFrequentesTab({ 
+  agentId,
+  onCaracteresChange 
+}: { 
+  agentId: string;
+  onCaracteresChange: (count: number) => void;
+}) {
   const [perguntas, setPerguntas] = useState<Pergunta[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<ConfirmDeletePergunta | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Calcular e reportar total de caracteres das perguntas
+  useEffect(() => {
+    const totalCaracteres = perguntas.reduce((acc, p) => {
+      return acc + (p.pergunta?.length || 0) + (p.resposta?.length || 0);
+    }, 0);
+    onCaracteresChange(totalCaracteres);
+  }, [perguntas, onCaracteresChange]);
 
   useEffect(() => {
     fetchPerguntas();
