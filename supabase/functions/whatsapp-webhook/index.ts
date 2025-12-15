@@ -52,6 +52,47 @@ async function fetchProfilePicture(
   }
 }
 
+// Função para buscar foto e info do grupo
+async function fetchGroupInfo(
+  instanceName: string,
+  grupoJid: string,
+  evolutionApiKey: string
+): Promise<{ pictureUrl: string | null; subject: string | null }> {
+  try {
+    console.log('Buscando info do grupo:', grupoJid);
+    
+    const response = await fetch(
+      `${EVOLUTION_API_URL}/group/findGroupInfos/${instanceName}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': evolutionApiKey,
+        },
+        body: JSON.stringify({
+          groupJid: grupoJid,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      console.log('Não foi possível buscar info do grupo:', response.status);
+      return { pictureUrl: null, subject: null };
+    }
+
+    const data = await response.json();
+    const pictureUrl = data.pictureUrl || data.profilePictureUrl || null;
+    const subject = data.subject || null;
+    
+    console.log('Info do grupo obtida:', { pictureUrl: pictureUrl ? 'sim' : 'não', subject });
+    
+    return { pictureUrl, subject };
+  } catch (error) {
+    console.error('Erro ao buscar info do grupo:', error);
+    return { pictureUrl: null, subject: null };
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -158,10 +199,14 @@ serve(async (req) => {
       const remoteJid = key.remoteJid || data?.remoteJid || data?.from;
       const fromMe = key.fromMe ?? data?.fromMe ?? false;
       const pushName = data?.pushName || message?.pushName || '';
+      
+      // Extrair participante do grupo (quem enviou a mensagem)
+      const participant = key.participant || data?.participant || null;
 
       console.log('RemoteJid:', remoteJid);
       console.log('FromMe:', fromMe);
       console.log('PushName:', pushName);
+      console.log('Participant:', participant);
 
       if (!remoteJid) {
         console.log('RemoteJid não encontrado, ignorando');
@@ -170,6 +215,11 @@ serve(async (req) => {
 
       // Detectar se é mensagem de grupo
       const isGrupo = remoteJid.includes('@g.us');
+      
+      // Extrair telefone do participante (para grupos)
+      const participanteTelefone = participant 
+        ? participant.replace('@s.whatsapp.net', '').replace('@c.us', '')
+        : null;
       console.log('É grupo:', isGrupo);
 
       // Extrair conteúdo da mensagem
@@ -374,16 +424,18 @@ serve(async (req) => {
       if (!contato) {
         console.log('Criando novo contato/grupo...');
         
-        // Buscar foto de perfil antes de criar o contato (não para grupos)
         let avatarUrl: string | null = null;
-        if (!isGrupo && conexaoCompleta?.token) {
+        let nomeContato = pushName || telefone;
+        
+        if (isGrupo && conexaoCompleta?.token && grupoJid) {
+          // Buscar info do grupo (foto + nome)
+          const groupInfo = await fetchGroupInfo(instance, grupoJid, conexaoCompleta.token);
+          avatarUrl = groupInfo.pictureUrl;
+          nomeContato = groupInfo.subject || pushName || `Grupo ${telefone}`;
+        } else if (!isGrupo && conexaoCompleta?.token) {
+          // Buscar foto de perfil para contato individual
           avatarUrl = await fetchProfilePicture(instance, telefone, conexaoCompleta.token);
         }
-        
-        // Nome do grupo ou contato
-        const nomeContato = isGrupo 
-          ? (pushName || `Grupo ${telefone}`)
-          : (pushName || telefone);
         
         const { data: novoContato, error: contatoError } = await supabase
           .from('contatos')
@@ -404,10 +456,17 @@ serve(async (req) => {
         }
         contato = novoContato;
         console.log('Contato criado:', contato?.id, 'É grupo:', isGrupo, 'Avatar:', avatarUrl ? 'sim' : 'não');
-      } else if (!contato.avatar_url && !isGrupo && conexaoCompleta?.token) {
-        // Contato existe mas não tem foto, tentar buscar (não para grupos)
+      } else if (!contato.avatar_url && conexaoCompleta?.token) {
+        // Contato existe mas não tem foto, tentar buscar
         console.log('Contato sem foto, buscando...');
-        const avatarUrl = await fetchProfilePicture(instance, telefone, conexaoCompleta.token);
+        
+        let avatarUrl: string | null = null;
+        if (isGrupo && grupoJid) {
+          const groupInfo = await fetchGroupInfo(instance, grupoJid, conexaoCompleta.token);
+          avatarUrl = groupInfo.pictureUrl;
+        } else if (!isGrupo) {
+          avatarUrl = await fetchProfilePicture(instance, telefone, conexaoCompleta.token);
+        }
         
         if (avatarUrl) {
           await supabase
@@ -516,7 +575,7 @@ serve(async (req) => {
         }
       }
 
-      // Inserir mensagem com evolution_msg_id, transcrição e descrição de imagem nos metadados
+      // Inserir mensagem com evolution_msg_id, transcrição, descrição de imagem e info do participante nos metadados
       // Se fromMe = true (veio do dispositivo físico via webhook), marcar como enviada_por_dispositivo
       const messageMetadata: Record<string, any> = {};
       if (messageId) {
@@ -527,6 +586,12 @@ serve(async (req) => {
       }
       if (descricaoImagem) {
         messageMetadata.descricao_imagem = descricaoImagem;
+      }
+      // Adicionar info do participante para mensagens de grupo
+      if (isGrupo && !fromMe && participanteTelefone) {
+        messageMetadata.participante_nome = pushName || participanteTelefone;
+        messageMetadata.participante_telefone = participanteTelefone;
+        console.log('Info do participante adicionada:', messageMetadata.participante_nome, messageMetadata.participante_telefone);
       }
       
       const { error: msgError } = await supabase.from('mensagens').insert({
