@@ -65,6 +65,7 @@ export default function AgenteIAEditar() {
   const [activeTab, setActiveTab] = useState<Tab>('regras');
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState('');
+  const [etapasCaracteres, setEtapasCaracteres] = useState(0);
 
   useEffect(() => {
     if (usuario?.conta_id && id) {
@@ -156,7 +157,8 @@ export default function AgenteIAEditar() {
     setConfig({ ...config, dias_ativos: novosDias });
   };
 
-  const caracteresUsados = config?.prompt_sistema?.length || 0;
+  // Contador unificado: Regras Gerais + Etapas de Atendimento
+  const caracteresUsados = (config?.prompt_sistema?.length || 0) + etapasCaracteres;
   const porcentagemUsada = (caracteresUsados / MAX_CARACTERES) * 100;
 
   const tabs = [
@@ -316,7 +318,10 @@ export default function AgenteIAEditar() {
             )}
 
             {activeTab === 'etapas' && config && (
-              <EtapasAtendimentoTab agentId={config.id} />
+              <EtapasAtendimentoTab 
+                agentId={config.id} 
+                onCaracteresChange={setEtapasCaracteres}
+              />
             )}
 
             {activeTab === 'perguntas' && config && (
@@ -465,7 +470,13 @@ interface ModalDecisaoState {
   cursorPosition: number;
 }
 
-function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
+function EtapasAtendimentoTab({ 
+  agentId, 
+  onCaracteresChange 
+}: { 
+  agentId: string;
+  onCaracteresChange: (count: number) => void;
+}) {
   const [etapas, setEtapas] = useState<Etapa[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<ConfirmDeleteEtapa | null>(null);
   const [loading, setLoading] = useState(true);
@@ -475,6 +486,14 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
     etapaId: '',
     cursorPosition: 0,
   });
+
+  // Calcular e reportar total de caracteres das etapas
+  useEffect(() => {
+    const totalCaracteres = etapas.reduce((acc, etapa) => {
+      return acc + (etapa.nome?.length || 0) + (etapa.descricao?.length || 0);
+    }, 0);
+    onCaracteresChange(totalCaracteres);
+  }, [etapas, onCaracteresChange]);
 
   useEffect(() => {
     fetchEtapas();
@@ -740,22 +759,21 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
                     <label className="block text-sm font-medium text-foreground mb-2">
                       Descrição da Etapa
                     </label>
-                    <div className="flex items-center gap-2 mb-2 p-2 rounded-lg bg-muted/50 border border-border">
-                      <button className="flex items-center gap-1 px-2 py-1 rounded text-xs text-muted-foreground hover:bg-muted">
+                    <div className="flex items-center gap-1 mb-3 p-1.5 rounded-lg bg-muted/30 border border-border/50">
+                      <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
                         <MessageCircle className="h-3 w-3" />
-                        Situação/Mensagem
+                        Mensagem
                       </button>
-                      <button className="flex items-center gap-1 px-2 py-1 rounded text-xs text-muted-foreground hover:bg-muted">
+                      <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
                         📎 Mídia
                       </button>
-                      <button className="flex items-center gap-1 px-2 py-1 rounded text-xs text-muted-foreground hover:bg-muted">
-                        ⚡ Ação
-                      </button>
+                      <div className="flex-1" />
                       <button 
-                        className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-primary/10 text-primary hover:bg-primary/20"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary/15 text-primary hover:bg-primary/25 transition-colors"
                         onClick={() => abrirModalDecisao(etapa.id)}
                       >
-                        @ Decisão
+                        <Sparkles className="h-3 w-3" />
+                        @ Ação
                       </button>
                     </div>
                     
@@ -766,8 +784,8 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
                       placeholder="Descreva o comportamento desta etapa..."
                       onAcaoClick={(cursorPos) => abrirModalDecisao(etapa.id, cursorPos)}
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      💡 Clique em <span className="text-primary font-medium">@ Decisão</span> ou digite <span className="text-primary font-medium">@</span> para inserir ações como mover para estágio do CRM, adicionar tag, transferir, etc.
+                    <p className="text-xs text-muted-foreground mt-2">
+                      💡 Clique em <span className="text-primary font-medium">@ Ação</span> ou digite <span className="text-primary font-medium">@</span> para inserir ações inteligentes
                     </p>
                   </div>
 
