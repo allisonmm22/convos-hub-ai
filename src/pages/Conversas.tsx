@@ -23,6 +23,7 @@ import {
   WifiOff,
   RefreshCw,
   User,
+  ChevronDown,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -106,6 +107,9 @@ export default function Conversas() {
   const [fileType, setFileType] = useState<'imagem' | 'documento' | 'audio'>('imagem');
   const [imagemExpandida, setImagemExpandida] = useState<string | null>(null);
   const [showContatoSidebar, setShowContatoSidebar] = useState(false);
+  const [agentesDisponiveis, setAgentesDisponiveis] = useState<AgenteIA[]>([]);
+  const [showAgenteDropdown, setShowAgenteDropdown] = useState(false);
+  const agenteDropdownRef = useRef<HTMLDivElement>(null);
   
   // Ref para manter a conversa selecionada atualizada no realtime
   const conversaSelecionadaRef = useRef<Conversa | null>(null);
@@ -188,6 +192,7 @@ export default function Conversas() {
     if (usuario?.conta_id) {
       fetchConversas();
       fetchUsuarios();
+      fetchAgentes();
       fetchConexao();
       const cleanup = setupRealtimeSubscription();
       
@@ -200,6 +205,18 @@ export default function Conversas() {
       };
     }
   }, [usuario, fetchConexao]);
+
+  // Fechar dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (agenteDropdownRef.current && !agenteDropdownRef.current.contains(event.target as Node)) {
+        setShowAgenteDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Manter a ref sincronizada com o estado
   useEffect(() => {
@@ -296,6 +313,50 @@ export default function Conversas() {
       setUsuarios(data || []);
     } catch (error) {
       console.error('Erro ao buscar usuários:', error);
+    }
+  };
+
+  const fetchAgentes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('agent_ia')
+        .select('id, nome')
+        .eq('conta_id', usuario!.conta_id)
+        .eq('ativo', true)
+        .order('tipo', { ascending: false }); // principal primeiro
+
+      if (error) throw error;
+      setAgentesDisponiveis(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar agentes:', error);
+    }
+  };
+
+  const trocarAgente = async (agenteId: string) => {
+    if (!conversaSelecionada) return;
+
+    try {
+      const agenteEscolhido = agentesDisponiveis.find(a => a.id === agenteId);
+      
+      await supabase
+        .from('conversas')
+        .update({ 
+          agente_ia_id: agenteId,
+          agente_ia_ativo: true 
+        })
+        .eq('id', conversaSelecionada.id);
+
+      setConversaSelecionada({ 
+        ...conversaSelecionada, 
+        agente_ia_id: agenteId,
+        agente_ia_ativo: true,
+        agent_ia: agenteEscolhido || null
+      });
+      
+      setShowAgenteDropdown(false);
+      toast.success(`Agente alterado para ${agenteEscolhido?.nome || 'Agente IA'}`);
+    } catch (error) {
+      toast.error('Erro ao alterar agente');
     }
   };
 
@@ -973,33 +1034,86 @@ export default function Conversas() {
               </button>
               {!conversaEncerrada ? (
                 <div className="flex items-center gap-2">
-                  {/* Toggle Agente IA */}
-                  <button
-                    onClick={toggleAgenteIA}
-                    className={cn(
-                      'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                      conversaSelecionada.agente_ia_ativo
-                        ? 'bg-primary/20 text-primary'
-                        : 'bg-orange-500/20 text-orange-500'
+                  {/* Dropdown Agente IA */}
+                  <div className="relative" ref={agenteDropdownRef}>
+                    <button
+                      onClick={() => setShowAgenteDropdown(!showAgenteDropdown)}
+                      className={cn(
+                        'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+                        conversaSelecionada.agente_ia_ativo
+                          ? 'bg-primary/20 text-primary'
+                          : 'bg-orange-500/20 text-orange-500'
+                      )}
+                    >
+                      {conversaSelecionada.agente_ia_ativo ? (
+                        <>
+                          <Bot className="h-4 w-4" />
+                          <span className="max-w-[100px] truncate">
+                            {conversaSelecionada.agent_ia?.nome || 'Agente IA'}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <User className="h-4 w-4" />
+                          Humano
+                        </>
+                      )}
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                    
+                    {showAgenteDropdown && (
+                      <div className="absolute top-full right-0 mt-1 w-48 bg-popover border border-border rounded-lg shadow-lg z-50">
+                        <div className="py-1">
+                          {/* Opção Humano */}
+                          <button
+                            onClick={() => {
+                              toggleAgenteIA();
+                              setShowAgenteDropdown(false);
+                            }}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors',
+                              !conversaSelecionada.agente_ia_ativo && 'bg-muted'
+                            )}
+                          >
+                            <User className="h-4 w-4 text-orange-500" />
+                            <span>Humano</span>
+                            {!conversaSelecionada.agente_ia_ativo && (
+                              <Check className="h-4 w-4 ml-auto text-primary" />
+                            )}
+                          </button>
+                          
+                          {/* Separador */}
+                          <div className="border-t border-border my-1" />
+                          
+                          {/* Agentes disponíveis */}
+                          {agentesDisponiveis.map((agente) => (
+                            <button
+                              key={agente.id}
+                              onClick={() => trocarAgente(agente.id)}
+                              className={cn(
+                                'w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors',
+                                conversaSelecionada.agente_ia_ativo && 
+                                conversaSelecionada.agente_ia_id === agente.id && 'bg-muted'
+                              )}
+                            >
+                              <Bot className="h-4 w-4 text-primary" />
+                              <span className="truncate">{agente.nome || 'Agente IA'}</span>
+                              {conversaSelecionada.agente_ia_ativo && 
+                               conversaSelecionada.agente_ia_id === agente.id && (
+                                <Check className="h-4 w-4 ml-auto text-primary" />
+                              )}
+                            </button>
+                          ))}
+                          
+                          {agentesDisponiveis.length === 0 && (
+                            <div className="px-3 py-2 text-sm text-muted-foreground">
+                              Nenhum agente configurado
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     )}
-                    title={conversaSelecionada.agente_ia_ativo && conversaSelecionada.agent_ia?.nome 
-                      ? `Agente: ${conversaSelecionada.agent_ia.nome}` 
-                      : undefined}
-                  >
-                    {conversaSelecionada.agente_ia_ativo ? (
-                      <>
-                        <Bot className="h-4 w-4" />
-                        <span className="max-w-[120px] truncate">
-                          {conversaSelecionada.agent_ia?.nome || 'Agente IA'}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <User className="h-4 w-4" />
-                        Humano
-                      </>
-                    )}
-                  </button>
+                  </div>
 
                   {/* Transferir */}
                   <button
