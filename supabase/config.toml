@@ -71,3 +71,6 @@ verify_jwt = false
 
 [functions.criar-conta-admin]
 verify_jwt = false
+
+[functions.evolution-delete-instance]
+verify_jwt = false
