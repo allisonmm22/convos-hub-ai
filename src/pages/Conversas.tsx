@@ -143,6 +143,20 @@ type StatusFilter = 'todos' | 'abertos' | 'em_atendimento' | 'aguardando_cliente
 type AtendenteFilter = 'todos' | 'agente_ia' | 'humano';
 type TipoFilter = 'todos' | 'individual' | 'grupo';
 
+const FILTERS_STORAGE_KEY = 'conversas_filters';
+
+const getInitialFilters = () => {
+  try {
+    const saved = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Erro ao ler filtros do localStorage:', e);
+  }
+  return { status: 'abertos', atendente: 'todos', tipo: 'todos' };
+};
+
 export default function Conversas() {
   const { usuario } = useAuth();
   const [searchParams] = useSearchParams();
@@ -154,9 +168,11 @@ export default function Conversas() {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('abertos');
-  const [atendenteFilter, setAtendenteFilter] = useState<AtendenteFilter>('todos');
-  const [tipoFilter, setTipoFilter] = useState<TipoFilter>('todos');
+  
+  const initialFilters = getInitialFilters();
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialFilters.status);
+  const [atendenteFilter, setAtendenteFilter] = useState<AtendenteFilter>(initialFilters.atendente);
+  const [tipoFilter, setTipoFilter] = useState<TipoFilter>(initialFilters.tipo);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferType, setTransferType] = useState<'choice' | 'humano' | 'agente'>('choice');
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -181,6 +197,16 @@ export default function Conversas() {
   // Calcular total de mensagens não lidas e atualizar título
   const totalNaoLidas = conversas.reduce((acc, c) => acc + (c.nao_lidas || 0), 0);
   useDocumentTitle(totalNaoLidas);
+
+  // Salvar filtros no localStorage quando mudarem
+  useEffect(() => {
+    const filters = {
+      status: statusFilter,
+      atendente: atendenteFilter,
+      tipo: tipoFilter
+    };
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
+  }, [statusFilter, atendenteFilter, tipoFilter]);
 
   // Buscar conexão WhatsApp
   const fetchConexao = useCallback(async () => {
