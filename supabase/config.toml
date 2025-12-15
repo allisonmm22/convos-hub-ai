@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.processar-resposta-agora]
 verify_jwt = false
+
+[functions.criar-conta-admin]
+verify_jwt = false
