@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useCallback } from 'react';
 import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen, Handshake } from 'lucide-react';
 
 interface DescricaoEditorProps {
@@ -6,7 +6,6 @@ interface DescricaoEditorProps {
   onChange: (value: string) => void;
   placeholder?: string;
   onAcaoClick?: (cursorPosition: number) => void;
-  onCursorChange?: (position: number) => void;
 }
 
 interface ChipConfig {
@@ -143,310 +142,153 @@ function parseAcao(acao: string): ChipConfig {
 // Regex para encontrar ações no texto (exclui pontuação final)
 const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao)(:[^\s@<>.,;!?]+)?/gi;
 
-// Converter texto com ações para HTML com chips
-function textToHtml(text: string): string {
-  if (!text) return '';
+// Componente ActionChip para renderização visual
+function ActionChip({ action, onRemove }: { action: string; onRemove?: () => void }) {
+  const config = parseAcao(action);
+  const Icon = config.icon;
   
-  // Escapar HTML primeiro
-  let html = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-  
-  // Substituir ações por chips
-  html = html.replace(ACTION_REGEX, (match) => {
-    const config = parseAcao(match);
-    return `<span contenteditable="false" data-action="${match}" class="inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded border text-xs font-medium align-middle ${config.bgClass} ${config.colorClass} select-none cursor-default"><span class="chip-label">${config.label}</span><button type="button" class="chip-remove ml-1 hover:opacity-70 text-current" data-remove="${match}">×</button></span>`;
-  });
-  
-  // Converter quebras de linha
-  html = html.replace(/\n/g, '<br>');
-  
-  return html;
-}
-
-// Converter HTML de volta para texto
-function htmlToText(html: string): string {
-  const temp = document.createElement('div');
-  temp.innerHTML = html;
-  
-  // Substituir chips de volta para ações
-  temp.querySelectorAll('[data-action]').forEach(chip => {
-    const action = chip.getAttribute('data-action') || '';
-    const textNode = document.createTextNode(action);
-    chip.replaceWith(textNode);
-  });
-  
-  // Converter <br> para quebras de linha
-  temp.querySelectorAll('br').forEach(br => {
-    br.replaceWith('\n');
-  });
-  
-  // Converter divs para quebras de linha (Chrome behavior)
-  temp.querySelectorAll('div').forEach(div => {
-    if (div.textContent) {
-      div.before('\n');
-      div.replaceWith(...Array.from(div.childNodes));
-    }
-  });
-  
-  return temp.textContent || '';
-}
-
-export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick, onCursorChange }: DescricaoEditorProps) {
-  const editorRef = useRef<HTMLDivElement>(null);
-  const [isFocused, setIsFocused] = useState(false);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
-  const lastValueRef = useRef(value);
-  const isRenderingChipsRef = useRef(false);
-  const lastCursorPositionRef = useRef<number>(0);
-
-  // Obter e guardar posição do cursor atual
-  const getCurrentCursorPosition = useCallback((): number => {
-    if (!editorRef.current) return lastValueRef.current.length;
-    
-    const selection = window.getSelection();
-    if (selection?.rangeCount && editorRef.current.contains(selection.anchorNode)) {
-      const range = selection.getRangeAt(0);
-      const preCaretRange = range.cloneRange();
-      preCaretRange.selectNodeContents(editorRef.current);
-      preCaretRange.setEnd(range.startContainer, range.startOffset);
-      return preCaretRange.toString().length;
-    }
-    return lastCursorPositionRef.current;
-  }, []);
-
-  // Renderizar chips no HTML
-  const renderChips = useCallback(() => {
-    if (!editorRef.current || isRenderingChipsRef.current) return;
-    
-    isRenderingChipsRef.current = true;
-    
-    // Salvar posição do cursor
-    const selection = window.getSelection();
-    let cursorOffset = 0;
-    let hadSelection = false;
-    
-    if (selection?.rangeCount && editorRef.current.contains(selection.anchorNode)) {
-      hadSelection = true;
-      const range = selection.getRangeAt(0);
-      const preCaretRange = range.cloneRange();
-      preCaretRange.selectNodeContents(editorRef.current);
-      preCaretRange.setEnd(range.endContainer, range.endOffset);
-      cursorOffset = preCaretRange.toString().length;
-    }
-    
-    // Converter para HTML com chips
-    const html = textToHtml(lastValueRef.current);
-    editorRef.current.innerHTML = html;
-    
-    // Restaurar cursor se estava focado
-    if (hadSelection && isFocused) {
-      try {
-        const walker = document.createTreeWalker(editorRef.current, NodeFilter.SHOW_TEXT);
-        let currentOffset = 0;
-        let node;
-        
-        while ((node = walker.nextNode())) {
-          const nodeLength = node.textContent?.length || 0;
-          if (currentOffset + nodeLength >= cursorOffset) {
-            const range = document.createRange();
-            range.setStart(node, Math.min(cursorOffset - currentOffset, nodeLength));
-            range.collapse(true);
-            selection?.removeAllRanges();
-            selection?.addRange(range);
-            break;
-          }
-          currentOffset += nodeLength;
-        }
-      } catch (e) {
-        // Cursor no final como fallback
-        editorRef.current.focus();
-        const range = document.createRange();
-        range.selectNodeContents(editorRef.current);
-        range.collapse(false);
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-      }
-    }
-    
-    isRenderingChipsRef.current = false;
-  }, [isFocused]);
-
-  // Renderizar chips imediatamente (usado ao inserir via modal)
-  const forceRenderChips = useCallback(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-    renderChips();
-  }, [renderChips]);
-
-  // Debounce para renderizar chips (digitação normal)
-  const scheduleChipRender = useCallback(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-    debounceRef.current = setTimeout(() => {
-      renderChips();
-    }, 400);
-  }, [renderChips]);
-
-  // Inicializar e atualizar quando value muda externamente
-  useEffect(() => {
-    if (lastValueRef.current !== value) {
-      lastValueRef.current = value;
-      // Sempre renderizar imediatamente quando valor muda externamente (ex: via modal)
-      renderChips();
-    }
-  }, [value, renderChips]);
-
-  // Renderizar inicial
-  useEffect(() => {
-    renderChips();
-  }, []);
-
-  // Handler de input - NÃO re-renderiza imediatamente
-  const handleInput = useCallback(() => {
-    if (!editorRef.current || isRenderingChipsRef.current) return;
-    
-    const text = htmlToText(editorRef.current.innerHTML);
-    lastValueRef.current = text;
-    onChange(text);
-    
-    // Agendar renderização de chips com debounce
-    scheduleChipRender();
-  }, [onChange, scheduleChipRender]);
-
-  // Handler de foco
-  const handleFocus = useCallback(() => {
-    setIsFocused(true);
-  }, []);
-
-  // Handler de blur - salva posição do cursor ANTES de perder foco, depois renderiza chips
-  const handleBlur = useCallback(() => {
-    // IMPORTANTE: Salvar posição do cursor ANTES de perder o foco
-    const pos = getCurrentCursorPosition();
-    lastCursorPositionRef.current = pos;
-    onCursorChange?.(pos);
-    
-    setIsFocused(false);
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-    renderChips();
-  }, [renderChips, getCurrentCursorPosition, onCursorChange]);
-
-  // Handler para remover chips
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.classList.contains('chip-remove') || target.closest('.chip-remove')) {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      const button = target.classList.contains('chip-remove') ? target : target.closest('.chip-remove');
-      const actionToRemove = button?.getAttribute('data-remove');
-      
-      if (actionToRemove) {
-        const newText = lastValueRef.current.replace(actionToRemove, '').replace(/\s{2,}/g, ' ').trim();
-        lastValueRef.current = newText;
-        onChange(newText);
-        renderChips();
-      }
-    }
-  }, [onChange, renderChips]);
-
-  // Handler para tecla @ e Enter
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    // Handler para @ - abre modal de ação
-    if (e.key === '@' && onAcaoClick) {
-      e.preventDefault();
-      const cursorPos = getCurrentCursorPosition();
-      lastCursorPositionRef.current = cursorPos;
-      onAcaoClick(cursorPos);
-      return;
-    }
-    
-    // Handler para Enter - inserir quebra de linha corretamente
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      
-      const selection = window.getSelection();
-      if (!selection?.rangeCount || !editorRef.current) return;
-      
-      const range = selection.getRangeAt(0);
-      range.deleteContents();
-      
-      // Criar <br> e um text node para manter cursor visível
-      const br = document.createElement('br');
-      range.insertNode(br);
-      
-      // Criar segundo <br> para linha em branco funcionar (comportamento consistente)
-      // e mover cursor após o primeiro <br>
-      const newRange = document.createRange();
-      newRange.setStartAfter(br);
-      newRange.setEndAfter(br);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-      
-      // Disparar onInput para atualizar valor
-      handleInput();
-    }
-  }, [onAcaoClick, getCurrentCursorPosition, handleInput]);
-
-  // Atualizar posição do cursor a cada seleção
-  const handleSelectionChange = useCallback(() => {
-    if (!editorRef.current || !isFocused) return;
-    const pos = getCurrentCursorPosition();
-    lastCursorPositionRef.current = pos;
-    onCursorChange?.(pos);
-  }, [getCurrentCursorPosition, isFocused, onCursorChange]);
-
-  // Listener para mudanças de seleção
-  useEffect(() => {
-    document.addEventListener('selectionchange', handleSelectionChange);
-    return () => document.removeEventListener('selectionchange', handleSelectionChange);
-  }, [handleSelectionChange]);
-
-  // Cleanup debounce
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, []);
-
-  const isEmpty = !value || value.trim() === '';
-
   return (
-    <div className="relative">
-      <div
-        ref={editorRef}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={handleInput}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        onClick={handleClick}
-        onKeyDown={handleKeyDown}
-        className={`min-h-[160px] w-full px-4 py-4 rounded-xl bg-input border border-border text-foreground text-sm leading-7 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:shadow-lg transition-all duration-200 overflow-auto ${isEmpty ? 'before:content-[attr(data-placeholder)] before:text-muted-foreground before:pointer-events-none' : ''}`}
-        data-placeholder={placeholder}
-        style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-      />
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded border text-xs font-medium ${config.bgClass} ${config.colorClass}`}>
+      <Icon className="h-3 w-3" />
+      <span>{config.label}</span>
+      {onRemove && (
+        <button 
+          type="button" 
+          onClick={onRemove}
+          className="ml-1 hover:opacity-70 text-current"
+        >
+          ×
+        </button>
+      )}
+    </span>
+  );
+}
+
+// Componente de Preview de Chips (renderiza texto com chips visuais)
+function ChipsPreview({ text, onRemoveAction }: { text: string; onRemoveAction: (action: string, index: number) => void }) {
+  if (!text) return null;
+  
+  const parts: { type: 'text' | 'action'; content: string; index: number }[] = [];
+  let lastIndex = 0;
+  let actionIndex = 0;
+  
+  // Resetar regex
+  ACTION_REGEX.lastIndex = 0;
+  
+  let match;
+  while ((match = ACTION_REGEX.exec(text)) !== null) {
+    // Adicionar texto antes da ação
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', content: text.slice(lastIndex, match.index), index: -1 });
+    }
+    // Adicionar ação
+    parts.push({ type: 'action', content: match[0], index: actionIndex++ });
+    lastIndex = match.index + match[0].length;
+  }
+  
+  // Adicionar texto restante
+  if (lastIndex < text.length) {
+    parts.push({ type: 'text', content: text.slice(lastIndex), index: -1 });
+  }
+  
+  if (parts.length === 0) return null;
+  
+  return (
+    <div className="p-3 rounded-lg bg-muted/30 border border-border/50 text-sm leading-7">
+      <div className="text-xs text-muted-foreground mb-2 font-medium">Preview das ações:</div>
+      <div className="whitespace-pre-wrap">
+        {parts.map((part, i) => (
+          part.type === 'action' ? (
+            <ActionChip 
+              key={i} 
+              action={part.content} 
+              onRemove={() => onRemoveAction(part.content, part.index)}
+            />
+          ) : (
+            <span key={i}>{part.content}</span>
+          )
+        ))}
+      </div>
     </div>
   );
 }
 
-// Inserir ação na posição do cursor com callback para renderização imediata
+export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: DescricaoEditorProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Handler para tecla @
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === '@' && onAcaoClick) {
+      e.preventDefault();
+      const pos = textareaRef.current?.selectionStart ?? value.length;
+      onAcaoClick(pos);
+    }
+  }, [onAcaoClick, value.length]);
+
+  // Obter posição do cursor (chamado pelo botão externo)
+  const getCursorPosition = useCallback(() => {
+    return textareaRef.current?.selectionStart ?? value.length;
+  }, [value.length]);
+
+  // Remover ação específica do texto
+  const handleRemoveAction = useCallback((action: string, actionIndex: number) => {
+    // Encontrar a n-ésima ocorrência da ação
+    ACTION_REGEX.lastIndex = 0;
+    let currentIndex = 0;
+    let match;
+    
+    while ((match = ACTION_REGEX.exec(value)) !== null) {
+      if (match[0] === action && currentIndex === actionIndex) {
+        // Remover esta ocorrência
+        const before = value.slice(0, match.index);
+        const after = value.slice(match.index + match[0].length);
+        // Limpar espaços extras
+        const newValue = (before.trimEnd() + ' ' + after.trimStart()).trim();
+        onChange(newValue);
+        return;
+      }
+      currentIndex++;
+    }
+  }, [value, onChange]);
+
+  // Verificar se há ações no texto
+  ACTION_REGEX.lastIndex = 0;
+  const hasActions = ACTION_REGEX.test(value);
+
+  return (
+    <div className="space-y-3">
+      {/* Textarea de edição */}
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className="w-full min-h-[160px] px-4 py-4 rounded-xl bg-input border border-border text-foreground text-sm leading-7 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:shadow-lg transition-all duration-200 resize-y"
+        style={{ fontFamily: 'inherit' }}
+      />
+
+      {/* Preview com chips visuais */}
+      {hasActions && (
+        <ChipsPreview text={value} onRemoveAction={handleRemoveAction} />
+      )}
+    </div>
+  );
+}
+
+// Função auxiliar para obter posição do cursor de um textarea específico
+export function getTextareaCursorPosition(textareaElement: HTMLTextAreaElement | null): number {
+  return textareaElement?.selectionStart ?? 0;
+}
+
+// Inserir ação na posição do cursor
 export function inserirAcaoNoEditor(
   currentValue: string,
   action: string,
   onChange: (value: string) => void,
-  savedCursorPosition?: number,
-  onAfterInsert?: () => void
+  cursorPosition?: number
 ) {
-  // Usar posição salva ou final do texto
-  const insertPosition = savedCursorPosition ?? currentValue.length;
+  const insertPosition = cursorPosition ?? currentValue.length;
   
   const before = currentValue.substring(0, insertPosition);
   const after = currentValue.substring(insertPosition);
@@ -455,7 +297,4 @@ export function inserirAcaoNoEditor(
   
   const newValue = before + (needsSpaceBefore ? ' ' : '') + action + (needsSpaceAfter ? ' ' : '') + after;
   onChange(newValue);
-  
-  // Renderizar chips imediatamente após a inserção
-  setTimeout(() => onAfterInsert?.(), 10);
 }

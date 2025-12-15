@@ -784,15 +784,12 @@ function EtapasAtendimentoTab({
                       </button>
                     </div>
                     
-                    {/* Editor rico com chips inline */}
+                    {/* Editor com textarea + preview de chips */}
                     <DescricaoEditor
                       value={etapa.descricao}
                       onChange={(value) => updateEtapa(etapa.id, 'descricao', value)}
                       placeholder="Descreva o comportamento desta etapa..."
                       onAcaoClick={(cursorPos) => abrirModalDecisao(etapa.id, cursorPos)}
-                      onCursorChange={(pos) => {
-                        cursorPositionsByEtapa.current[etapa.id] = pos;
-                      }}
                     />
                     <p className="text-xs text-muted-foreground mt-2">
                       💡 Clique em <span className="text-primary font-medium">@ Ação</span> ou digite <span className="text-primary font-medium">@</span> para inserir ações inteligentes
