@@ -23,6 +23,7 @@ import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminContas from "./pages/admin/AdminContas";
 import AdminContaDetalhe from "./pages/admin/AdminContaDetalhe";
+import AdminPlanos from "./pages/admin/AdminPlanos";
 
 const queryClient = new QueryClient();
 
@@ -78,6 +79,14 @@ function AppRoutes() {
           !user ? <Navigate to="/auth" replace /> :
           !usuario?.isSuperAdmin ? <Navigate to="/dashboard" replace /> :
           <AdminContaDetalhe />
+        } 
+      />
+      <Route 
+        path="/admin/planos" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          !usuario?.isSuperAdmin ? <Navigate to="/dashboard" replace /> :
+          <AdminPlanos />
         } 
       />
       

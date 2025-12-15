@@ -372,6 +372,7 @@ export type Database = {
           nome: string
           openai_api_key: string | null
           permitir_multiplas_negociacoes: boolean | null
+          plano_id: string | null
           updated_at: string
         }
         Insert: {
@@ -381,6 +382,7 @@ export type Database = {
           nome: string
           openai_api_key?: string | null
           permitir_multiplas_negociacoes?: boolean | null
+          plano_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -390,9 +392,18 @@ export type Database = {
           nome?: string
           openai_api_key?: string | null
           permitir_multiplas_negociacoes?: boolean | null
+          plano_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "contas_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       contatos: {
         Row: {
@@ -1040,6 +1051,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      planos: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          descricao: string | null
+          id: string
+          limite_agentes: number
+          limite_conexoes_whatsapp: number
+          limite_funis: number
+          limite_usuarios: number
+          nome: string
+          preco_mensal: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          limite_agentes?: number
+          limite_conexoes_whatsapp?: number
+          limite_funis?: number
+          limite_usuarios?: number
+          nome: string
+          preco_mensal?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          limite_agentes?: number
+          limite_conexoes_whatsapp?: number
+          limite_funis?: number
+          limite_usuarios?: number
+          nome?: string
+          preco_mensal?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       respostas_pendentes: {
         Row: {

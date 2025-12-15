@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Building2, LogOut, Settings } from 'lucide-react';
+import { LayoutDashboard, Building2, LogOut, Settings, CreditCard } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/admin' },
   { icon: Building2, label: 'Contas', path: '/admin/contas' },
+  { icon: CreditCard, label: 'Planos', path: '/admin/planos' },
 ];
 
 export default function AdminSidebar() {
