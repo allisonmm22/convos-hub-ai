@@ -1089,21 +1089,45 @@ export default function Conversas() {
                 </div>
               )}
               
-              {msg.direcao === 'saida' && (msg.enviada_por_ia || msg.enviada_por_dispositivo) && (
-                <div className="flex items-center gap-1.5 text-xs opacity-80 mb-1.5 font-medium">
-                  {msg.enviada_por_ia ? (
-                    <>
+              {/* Label do remetente - IA, dispositivo ou humano com assinatura */}
+              {msg.direcao === 'saida' && (() => {
+                // Detectar assinatura no formato "Nome:\n" no início do conteúdo
+                const parseAssinatura = () => {
+                  const content = msg.conteudo || '';
+                  // Só tenta parsear se não for IA nem dispositivo
+                  if (msg.enviada_por_ia || msg.enviada_por_dispositivo) return null;
+                  const match = content.match(/^(.+?):\n/);
+                  if (match && match[1].length <= 30) { // Nome até 30 chars
+                    return match[1];
+                  }
+                  return null;
+                };
+                
+                const assinaturaNome = parseAssinatura();
+                
+                if (msg.enviada_por_ia) {
+                  return (
+                    <div className="flex items-center gap-1.5 text-xs opacity-80 mb-1.5 font-medium">
                       <Bot className="h-3.5 w-3.5" />
                       <span>Agente IA</span>
-                    </>
-                  ) : msg.enviada_por_dispositivo ? (
-                    <>
+                    </div>
+                  );
+                } else if (msg.enviada_por_dispositivo) {
+                  return (
+                    <div className="flex items-center gap-1.5 text-xs opacity-80 mb-1.5 font-medium">
                       <Phone className="h-3.5 w-3.5" />
                       <span>Via dispositivo</span>
-                    </>
-                  ) : null}
-                </div>
-              )}
+                    </div>
+                  );
+                } else if (assinaturaNome) {
+                  return (
+                    <div className="text-xs opacity-80 mb-1 font-medium">
+                      {assinaturaNome}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               
               {isMedia ? (
                 <div className="space-y-2">
@@ -1139,7 +1163,12 @@ export default function Conversas() {
                   )}
                 </div>
               ) : (
-                <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.conteudo}</p>
+                <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                  {/* Remover assinatura do conteúdo se presente */}
+                  {msg.direcao === 'saida' && !msg.enviada_por_ia && !msg.enviada_por_dispositivo
+                    ? (msg.conteudo || '').replace(/^.+?:\n/, '')
+                    : msg.conteudo}
+                </p>
               )}
               
               <div
