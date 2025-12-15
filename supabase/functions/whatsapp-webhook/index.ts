@@ -287,6 +287,17 @@ serve(async (req) => {
       if (!conversa) {
         console.log('Criando nova conversa com SQL direto...');
         
+        // Buscar agente principal da conta
+        const { data: agentePrincipal } = await supabase
+          .from('agent_ia')
+          .select('id')
+          .eq('conta_id', conexao.conta_id)
+          .eq('tipo', 'principal')
+          .eq('ativo', true)
+          .maybeSingle();
+        
+        console.log('Agente principal encontrado:', agentePrincipal?.id);
+        
         // Inserir conversa usando SQL direto
         const insertResponse = await fetch(
           `${supabaseUrl}/rest/v1/conversas`,
@@ -303,6 +314,7 @@ serve(async (req) => {
               contato_id: contato!.id,
               conexao_id: conexao.id,
               agente_ia_ativo: true,
+              agente_ia_id: agentePrincipal?.id || null,
               status: 'em_atendimento',
             }),
           }
