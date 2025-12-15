@@ -45,17 +45,24 @@ interface Usuario {
   email: string;
 }
 
+interface AgenteIA {
+  id: string;
+  nome: string | null;
+}
+
 interface Conversa {
   id: string;
   contato_id: string;
   conexao_id: string | null;
   agente_ia_ativo: boolean | null;
+  agente_ia_id: string | null;
   atendente_id: string | null;
   ultima_mensagem: string | null;
   ultima_mensagem_at: string | null;
   nao_lidas: number | null;
   status?: string | null;
   contatos: Contato;
+  agent_ia?: AgenteIA | null;
 }
 
 interface Mensagem {
@@ -264,7 +271,7 @@ export default function Conversas() {
     try {
       const { data, error } = await supabase
         .from('conversas')
-        .select(`*, contatos(*)`)
+        .select(`*, contatos(*), agent_ia:agente_ia_id(id, nome)`)
         .eq('conta_id', usuario!.conta_id)
         .eq('arquivada', false)
         .order('ultima_mensagem_at', { ascending: false });
@@ -975,11 +982,16 @@ export default function Conversas() {
                         ? 'bg-primary/20 text-primary'
                         : 'bg-orange-500/20 text-orange-500'
                     )}
+                    title={conversaSelecionada.agente_ia_ativo && conversaSelecionada.agent_ia?.nome 
+                      ? `Agente: ${conversaSelecionada.agent_ia.nome}` 
+                      : undefined}
                   >
                     {conversaSelecionada.agente_ia_ativo ? (
                       <>
                         <Bot className="h-4 w-4" />
-                        Agente IA
+                        <span className="max-w-[120px] truncate">
+                          {conversaSelecionada.agent_ia?.nome || 'Agente IA'}
+                        </span>
                       </>
                     ) : (
                       <>
