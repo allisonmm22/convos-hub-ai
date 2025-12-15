@@ -800,6 +800,68 @@ export type Database = {
           },
         ]
       }
+      negociacao_historico: {
+        Row: {
+          created_at: string
+          descricao: string | null
+          estagio_anterior_id: string | null
+          estagio_novo_id: string | null
+          id: string
+          negociacao_id: string
+          tipo: string
+          usuario_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string | null
+          estagio_anterior_id?: string | null
+          estagio_novo_id?: string | null
+          id?: string
+          negociacao_id: string
+          tipo?: string
+          usuario_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          descricao?: string | null
+          estagio_anterior_id?: string | null
+          estagio_novo_id?: string | null
+          id?: string
+          negociacao_id?: string
+          tipo?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "negociacao_historico_estagio_anterior_id_fkey"
+            columns: ["estagio_anterior_id"]
+            isOneToOne: false
+            referencedRelation: "estagios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "negociacao_historico_estagio_novo_id_fkey"
+            columns: ["estagio_novo_id"]
+            isOneToOne: false
+            referencedRelation: "estagios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "negociacao_historico_negociacao_id_fkey"
+            columns: ["negociacao_id"]
+            isOneToOne: false
+            referencedRelation: "negociacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "negociacao_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       negociacoes: {
         Row: {
           conta_id: string

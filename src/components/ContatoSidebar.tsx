@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { X, Phone, Edit2, Save, Briefcase, Mail, Tag, Plus, MoreVertical } from 'lucide-react';
+import { X, Phone, Edit2, Save, Briefcase, Mail, Tag, Plus, MoreVertical, History, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import {
   Select,
   SelectContent,
@@ -55,6 +57,16 @@ interface Negociacao {
   } | null;
 }
 
+interface HistoricoItem {
+  id: string;
+  tipo: string;
+  descricao: string | null;
+  created_at: string;
+  estagio_anterior?: { nome: string; cor: string | null } | null;
+  estagio_novo?: { nome: string; cor: string | null } | null;
+  usuario?: { nome: string } | null;
+}
+
 interface ContatoSidebarProps {
   contato: Contato;
   isOpen: boolean;
@@ -80,6 +92,8 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
   });
   const [negociacaoSelecionada, setNegociacaoSelecionada] = useState<Negociacao | null>(null);
   const [modalDetalheAberto, setModalDetalheAberto] = useState(false);
+  const [historicos, setHistoricos] = useState<Record<string, HistoricoItem[]>>({});
+  const [historicoExpandido, setHistoricoExpandido] = useState<string | null>(null);
 
   useEffect(() => {
     setTelefoneEdit(contato.telefone);
@@ -183,7 +197,7 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
     }
   };
 
-  const handleUpdateNegociacao = async (negociacaoId: string, updates: { estagio_id?: string; status?: 'aberto' | 'ganho' | 'perdido' }) => {
+  const handleUpdateNegociacao = async (negociacaoId: string, updates: { estagio_id?: string; status?: 'aberto' | 'ganho' | 'perdido' }, estagioAnteriorId?: string | null) => {
     try {
       const { error } = await supabase
         .from('negociacoes')
@@ -191,12 +205,70 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
         .eq('id', negociacaoId);
 
       if (error) throw error;
+
+      // Record stage change history
+      if (updates.estagio_id && estagioAnteriorId !== updates.estagio_id) {
+        await supabase.from('negociacao_historico').insert({
+          negociacao_id: negociacaoId,
+          estagio_anterior_id: estagioAnteriorId || null,
+          estagio_novo_id: updates.estagio_id,
+          usuario_id: usuario?.id,
+          tipo: 'mudanca_estagio',
+        });
+      }
       
       toast.success('Negociação atualizada');
       fetchNegociacoes();
+      if (historicoExpandido === negociacaoId) {
+        fetchHistorico(negociacaoId);
+      }
     } catch (error) {
       console.error('Erro ao atualizar negociação:', error);
       toast.error('Erro ao atualizar negociação');
+    }
+  };
+
+  const fetchHistorico = async (negociacaoId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('negociacao_historico')
+        .select(`
+          id,
+          tipo,
+          descricao,
+          created_at,
+          estagio_anterior:estagio_anterior_id(nome, cor),
+          estagio_novo:estagio_novo_id(nome, cor),
+          usuario:usuario_id(nome)
+        `)
+        .eq('negociacao_id', negociacaoId)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+
+      setHistoricos(prev => ({
+        ...prev,
+        [negociacaoId]: (data || []).map((h: any) => ({
+          ...h,
+          estagio_anterior: h.estagio_anterior,
+          estagio_novo: h.estagio_novo,
+          usuario: h.usuario,
+        }))
+      }));
+    } catch (error) {
+      console.error('Erro ao buscar histórico:', error);
+    }
+  };
+
+  const toggleHistorico = (negociacaoId: string) => {
+    if (historicoExpandido === negociacaoId) {
+      setHistoricoExpandido(null);
+    } else {
+      setHistoricoExpandido(negociacaoId);
+      if (!historicos[negociacaoId]) {
+        fetchHistorico(negociacaoId);
+      }
     }
   };
 
@@ -525,7 +597,7 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
                             if (novoFunil && novoFunil.estagios.length > 0) {
                               handleUpdateNegociacao(negociacao.id, { 
                                 estagio_id: novoFunil.estagios[0].id 
-                              });
+                              }, negociacao.estagio_id);
                             }
                           }}
                         >
@@ -544,7 +616,7 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
                         <Select
                           value={negociacao.estagio_id || ''}
                           onValueChange={(estagioId) => {
-                            handleUpdateNegociacao(negociacao.id, { estagio_id: estagioId });
+                            handleUpdateNegociacao(negociacao.id, { estagio_id: estagioId }, negociacao.estagio_id);
                           }}
                         >
                           <SelectTrigger className="h-7 text-xs">
@@ -584,6 +656,73 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
                           </SelectContent>
                         </Select>
                       </div>
+
+                      {/* Histórico Toggle */}
+                      <button
+                        onClick={() => toggleHistorico(negociacao.id)}
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+                      >
+                        <History className="h-3 w-3" />
+                        <span>Histórico</span>
+                        {historicoExpandido === negociacao.id ? (
+                          <ChevronUp className="h-3 w-3 ml-auto" />
+                        ) : (
+                          <ChevronDown className="h-3 w-3 ml-auto" />
+                        )}
+                      </button>
+
+                      {/* Histórico Content */}
+                      {historicoExpandido === negociacao.id && (
+                        <div className="border-t border-border pt-2 space-y-2">
+                          {!historicos[negociacao.id] ? (
+                            <div className="flex items-center justify-center py-2">
+                              <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            </div>
+                          ) : historicos[negociacao.id].length === 0 ? (
+                            <p className="text-xs text-muted-foreground text-center py-2">
+                              Nenhuma movimentação registrada
+                            </p>
+                          ) : (
+                            <div className="space-y-2 max-h-40 overflow-y-auto">
+                              {historicos[negociacao.id].map((item) => (
+                                <div key={item.id} className="text-xs space-y-0.5">
+                                  <div className="flex items-center gap-1 text-muted-foreground">
+                                    <span>{format(new Date(item.created_at), "dd/MM HH:mm", { locale: ptBR })}</span>
+                                    {item.usuario && (
+                                      <span className="text-foreground">• {item.usuario.nome}</span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    {item.estagio_anterior && (
+                                      <span 
+                                        className="px-1.5 py-0.5 rounded text-xs"
+                                        style={{ 
+                                          backgroundColor: `${item.estagio_anterior.cor}20`,
+                                          color: item.estagio_anterior.cor || undefined
+                                        }}
+                                      >
+                                        {item.estagio_anterior.nome}
+                                      </span>
+                                    )}
+                                    <span className="text-muted-foreground">→</span>
+                                    {item.estagio_novo && (
+                                      <span 
+                                        className="px-1.5 py-0.5 rounded text-xs"
+                                        style={{ 
+                                          backgroundColor: `${item.estagio_novo.cor}20`,
+                                          color: item.estagio_novo.cor || undefined
+                                        }}
+                                      >
+                                        {item.estagio_novo.nome}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
