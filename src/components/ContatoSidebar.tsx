@@ -69,12 +69,13 @@ interface HistoricoItem {
 
 interface ContatoSidebarProps {
   contato: Contato;
+  conversaId?: string;
   isOpen: boolean;
   onClose: () => void;
   onContatoUpdate?: (contato: Contato) => void;
 }
 
-export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: ContatoSidebarProps) {
+export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContatoUpdate }: ContatoSidebarProps) {
   const { usuario } = useAuth();
   const [editando, setEditando] = useState(false);
   const [telefoneEdit, setTelefoneEdit] = useState(contato.telefone);
@@ -231,6 +232,21 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
             titulo: `Negociação movida para ${estagioNovo.nome}`,
             mensagem: `${negociacao?.titulo || 'Negociação'} foi movida${estagioAnterior ? ` de "${estagioAnterior.nome}"` : ''} para "${estagioNovo.nome}"`,
             link: '/crm',
+          });
+        }
+
+        // Insert system message in conversation to track stage change
+        if (conversaId) {
+          const mensagemSistema = estagioAnterior 
+            ? `📊 ${usuario?.nome || 'Usuário'} moveu negociação de "${estagioAnterior.nome}" para "${estagioNovo?.nome}"`
+            : `📊 ${usuario?.nome || 'Usuário'} moveu negociação para "${estagioNovo?.nome}"`;
+          
+          await supabase.from('mensagens').insert({
+            conversa_id: conversaId,
+            conteudo: mensagemSistema,
+            direcao: 'saida',
+            tipo: 'sistema',
+            usuario_id: usuario?.id,
           });
         }
       }

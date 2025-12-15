@@ -1645,6 +1645,7 @@ export default function Conversas() {
         {conversaSelecionada && (
           <ContatoSidebar
             contato={conversaSelecionada.contatos}
+            conversaId={conversaSelecionada.id}
             isOpen={showContatoSidebar}
             onClose={() => setShowContatoSidebar(false)}
             onContatoUpdate={(contatoAtualizado) => {
