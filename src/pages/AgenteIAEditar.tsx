@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { 
   Bot, Save, Clock, Loader2, Sparkles, ArrowLeft, Pencil, Check, X,
-  FileText, MessageCircle, HelpCircle, Layers, Calendar, Zap, Bell, 
-  Volume2, Settings, ChevronDown, ChevronUp, Plus, GripVertical, Trash2
+  FileText, MessageCircle, HelpCircle, Zap, Layers, Calendar,
+  ChevronDown, ChevronUp, Plus, GripVertical, Trash2
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -169,15 +169,6 @@ export default function AgenteIAEditar() {
     { id: 'configuracao' as Tab, label: 'Modelo de IA', icon: Bot },
   ];
 
-  const sidebarItems = [
-    { icon: Layers, label: 'Modelos' },
-    { icon: Calendar, label: 'Agendamento' },
-    { icon: Zap, label: 'Funções Externas' },
-    { icon: Bell, label: 'Notificações' },
-    { icon: Volume2, label: 'Áudio e Voz' },
-    { icon: Clock, label: 'Horário de Funcionamento' },
-    { icon: Settings, label: 'Parâmetros Avançados' },
-  ];
 
   if (loading) {
     return (
@@ -283,26 +274,61 @@ export default function AgenteIAEditar() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-6 px-6 border-b border-border bg-background">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 py-4 border-b-2 transition-colors ${
-                activeTab === tab.id
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <tab.icon className="h-4 w-4" />
-              <span className="text-sm font-medium">{tab.label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Content */}
+        {/* Content with Sidebar */}
         <div className="flex flex-1 overflow-hidden">
+          {/* Sidebar Esquerda - Navegação */}
+          <div className="w-56 border-r border-border bg-card/30 flex flex-col">
+            {/* Contador de caracteres */}
+            <div className="p-4 border-b border-border">
+              <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+                Total de caracteres
+              </div>
+              <div className="text-lg font-semibold text-foreground">
+                {caracteresUsados.toLocaleString()} / {MAX_CARACTERES.toLocaleString()}
+              </div>
+              <div className="h-1.5 bg-muted rounded-full mt-2 overflow-hidden">
+                <div 
+                  className={`h-full rounded-full transition-all ${
+                    porcentagemUsada > 80 ? 'bg-destructive' : 'bg-primary'
+                  }`}
+                  style={{ width: `${Math.min(porcentagemUsada, 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {Math.round(porcentagemUsada)}% do limite
+              </p>
+            </div>
+
+            {/* Navegação das Tabs */}
+            <nav className="flex-1 p-2 space-y-1">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                    activeTab === tab.id 
+                      ? 'bg-primary/10 text-primary font-medium' 
+                      : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                  }`}
+                >
+                  <tab.icon className="h-4 w-4" />
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+
+            {/* Gatilho Info */}
+            <div className="p-3 m-3 rounded-lg bg-primary/10 border border-primary/20">
+              <div className="flex items-center gap-2 text-primary mb-1">
+                <Zap className="h-4 w-4" />
+                <span className="text-sm font-medium">Sem gatilho ativo</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                O agente responde na primeira mensagem recebida.
+              </p>
+            </div>
+          </div>
+
           {/* Main Content */}
           <div className="flex-1 overflow-auto p-6">
             {activeTab === 'regras' && (
@@ -346,52 +372,6 @@ export default function AgenteIAEditar() {
                 saving={saving}
               />
             )}
-          </div>
-
-          {/* Sidebar Direita */}
-          <div className="w-64 border-l border-border bg-card/30 overflow-auto">
-            <div className="p-4 border-b border-border">
-              <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                Total de caracteres
-              </div>
-              <div className="text-lg font-semibold text-foreground">
-                {caracteresUsados.toLocaleString()} / {MAX_CARACTERES.toLocaleString()}
-              </div>
-              <div className="h-1.5 bg-muted rounded-full mt-2 overflow-hidden">
-                <div 
-                  className={`h-full rounded-full transition-all ${
-                    porcentagemUsada > 80 ? 'bg-destructive' : 'bg-primary'
-                  }`}
-                  style={{ width: `${Math.min(porcentagemUsada, 100)}%` }}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {Math.round(porcentagemUsada)}% do limite recomendado
-              </p>
-            </div>
-
-            <div className="p-2 space-y-1">
-              {sidebarItems.map((item, index) => (
-                <button
-                  key={index}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
-                >
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Gatilho Info */}
-            <div className="mx-3 mt-4 p-3 rounded-lg bg-primary/10 border border-primary/20">
-              <div className="flex items-center gap-2 text-primary mb-1">
-                <Zap className="h-4 w-4" />
-                <span className="text-sm font-medium">Sem gatilho ativo</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                O agente responde na primeira mensagem recebida.
-              </p>
-            </div>
           </div>
         </div>
       </div>
