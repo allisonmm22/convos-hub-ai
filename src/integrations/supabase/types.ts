@@ -509,6 +509,129 @@ export type Database = {
           },
         ]
       }
+      followup_enviados: {
+        Row: {
+          conversa_id: string
+          enviado_em: string | null
+          id: string
+          mensagem_enviada: string | null
+          regra_id: string
+          respondido: boolean | null
+          respondido_em: string | null
+          tentativa: number
+        }
+        Insert: {
+          conversa_id: string
+          enviado_em?: string | null
+          id?: string
+          mensagem_enviada?: string | null
+          regra_id: string
+          respondido?: boolean | null
+          respondido_em?: string | null
+          tentativa?: number
+        }
+        Update: {
+          conversa_id?: string
+          enviado_em?: string | null
+          id?: string
+          mensagem_enviada?: string | null
+          regra_id?: string
+          respondido?: boolean | null
+          respondido_em?: string | null
+          tentativa?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "followup_enviados_conversa_id_fkey"
+            columns: ["conversa_id"]
+            isOneToOne: false
+            referencedRelation: "conversas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "followup_enviados_regra_id_fkey"
+            columns: ["regra_id"]
+            isOneToOne: false
+            referencedRelation: "followup_regras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      followup_regras: {
+        Row: {
+          agent_ia_id: string | null
+          aplicar_ia_ativa: boolean | null
+          aplicar_ia_pausada: boolean | null
+          ativo: boolean | null
+          conta_id: string
+          created_at: string | null
+          estagio_ids: string[] | null
+          horas_sem_resposta: number
+          id: string
+          intervalo_entre_tentativas: number | null
+          max_tentativas: number | null
+          mensagem_fixa: string | null
+          nome: string
+          prompt_followup: string | null
+          quantidade_mensagens_contexto: number | null
+          tipo: string
+          updated_at: string | null
+        }
+        Insert: {
+          agent_ia_id?: string | null
+          aplicar_ia_ativa?: boolean | null
+          aplicar_ia_pausada?: boolean | null
+          ativo?: boolean | null
+          conta_id: string
+          created_at?: string | null
+          estagio_ids?: string[] | null
+          horas_sem_resposta?: number
+          id?: string
+          intervalo_entre_tentativas?: number | null
+          max_tentativas?: number | null
+          mensagem_fixa?: string | null
+          nome: string
+          prompt_followup?: string | null
+          quantidade_mensagens_contexto?: number | null
+          tipo?: string
+          updated_at?: string | null
+        }
+        Update: {
+          agent_ia_id?: string | null
+          aplicar_ia_ativa?: boolean | null
+          aplicar_ia_pausada?: boolean | null
+          ativo?: boolean | null
+          conta_id?: string
+          created_at?: string | null
+          estagio_ids?: string[] | null
+          horas_sem_resposta?: number
+          id?: string
+          intervalo_entre_tentativas?: number | null
+          max_tentativas?: number | null
+          mensagem_fixa?: string | null
+          nome?: string
+          prompt_followup?: string | null
+          quantidade_mensagens_contexto?: number | null
+          tipo?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "followup_regras_agent_ia_id_fkey"
+            columns: ["agent_ia_id"]
+            isOneToOne: false
+            referencedRelation: "agent_ia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "followup_regras_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funis: {
         Row: {
           conta_id: string

@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, Key, Save, Eye, EyeOff } from 'lucide-react';
+import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, Key, Save, Eye, EyeOff, Trash2, Play } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { NovoAgenteModal } from '@/components/NovoAgenteModal';
+import { FollowUpRegraModal } from '@/components/FollowUpRegraModal';
 interface Agent {
   id: string;
   nome: string;
@@ -294,64 +295,233 @@ function AgentCard({
   );
 }
 
-// Página de Follow-up (placeholder)
+// Página de Follow-up
 function FollowUpPage() {
+  const { usuario } = useAuth();
+  const [regras, setRegras] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingRegra, setEditingRegra] = useState<any>(null);
+  const [executando, setExecutando] = useState(false);
+
+  useEffect(() => {
+    if (usuario?.conta_id) {
+      fetchRegras();
+    }
+  }, [usuario?.conta_id]);
+
+  const fetchRegras = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('followup_regras')
+        .select('*')
+        .eq('conta_id', usuario!.conta_id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setRegras(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar regras:', error);
+      toast.error('Erro ao carregar regras de follow-up');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleRegra = async (id: string, ativo: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('followup_regras')
+        .update({ ativo: !ativo })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setRegras(regras.map(r => r.id === id ? { ...r, ativo: !ativo } : r));
+      toast.success(ativo ? 'Regra desativada' : 'Regra ativada');
+    } catch (error) {
+      console.error('Erro ao atualizar regra:', error);
+      toast.error('Erro ao atualizar regra');
+    }
+  };
+
+  const deleteRegra = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta regra?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('followup_regras')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setRegras(regras.filter(r => r.id !== id));
+      toast.success('Regra excluída');
+    } catch (error) {
+      console.error('Erro ao excluir regra:', error);
+      toast.error('Erro ao excluir regra');
+    }
+  };
+
+  const executarFollowups = async () => {
+    setExecutando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('processar-followups');
+      
+      if (error) throw error;
+      
+      toast.success(`Processamento concluído! ${data?.followupsEnviados || 0} follow-ups enviados.`);
+    } catch (error) {
+      console.error('Erro ao processar follow-ups:', error);
+      toast.error('Erro ao processar follow-ups');
+    } finally {
+      setExecutando(false);
+    }
+  };
+
+  const openEdit = (regra: any) => {
+    setEditingRegra(regra);
+    setShowModal(true);
+  };
+
+  const openNew = () => {
+    setEditingRegra(null);
+    setShowModal(true);
+  };
+
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Follow-up Automático</h1>
-        <p className="text-muted-foreground mt-1">
-          Configure mensagens de acompanhamento para manter seus leads engajados
-        </p>
-      </div>
-
-      <div className="p-6 rounded-xl bg-card border border-border space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20">
-            <Clock className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h2 className="font-semibold text-foreground">Follow-up Automático</h2>
-            <p className="text-sm text-muted-foreground">Configure mensagens automáticas para reativar leads</p>
-          </div>
-        </div>
-
-        <button className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors">
-          <Plus className="h-4 w-4" />
-          Criar Novo Follow-up
-        </button>
-
-        <div className="p-4 rounded-lg bg-muted/30 border border-dashed border-border">
-          <p className="text-sm text-muted-foreground mb-2">
-            Selecione os estados de IA que receberão follow-up automático
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Follow-up Automático</h1>
+          <p className="text-muted-foreground mt-1">
+            Configure mensagens de acompanhamento para manter seus leads engajados
           </p>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" className="rounded border-border" />
-              <span>IA Ativa</span>
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" className="rounded border-border" />
-              <span>IA Pausada</span>
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" className="rounded border-border" />
-              <span>IA Desativada</span>
-            </label>
-          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={executarFollowups}
+            disabled={executando}
+            className="flex items-center gap-2 h-10 px-4 rounded-lg border border-border text-foreground font-medium hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            {executando ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
+            Executar Agora
+          </button>
+          <button
+            onClick={openNew}
+            className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Nova Regra
+          </button>
         </div>
       </div>
 
-      <div className="flex flex-col items-center justify-center p-12 rounded-xl bg-card border border-border">
-        <Clock className="h-12 w-12 text-muted-foreground/50 mb-4" />
-        <h3 className="font-medium text-foreground mb-1">Nenhum follow-up configurado</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Crie mensagens automáticas para reengajar seus leads
-        </p>
-        <button className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors">
-          <Plus className="h-4 w-4" />
-          Criar Primeiro Follow-up
-        </button>
+      <FollowUpRegraModal
+        open={showModal}
+        onOpenChange={setShowModal}
+        regra={editingRegra}
+        onSave={fetchRegras}
+      />
+
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : regras.length === 0 ? (
+        <div className="flex flex-col items-center justify-center p-12 rounded-xl bg-card border border-border">
+          <Clock className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h3 className="font-medium text-foreground mb-1">Nenhum follow-up configurado</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Crie mensagens automáticas para reengajar seus leads
+          </p>
+          <button
+            onClick={openNew}
+            className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Criar Primeiro Follow-up
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {regras.map((regra) => (
+            <div
+              key={regra.id}
+              className="group flex items-center justify-between p-4 rounded-lg bg-card border border-border hover:border-primary/30 transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+                  regra.tipo === 'contextual_ia' ? 'bg-primary/20' : 'bg-muted'
+                }`}>
+                  {regra.tipo === 'contextual_ia' ? (
+                    <Bot className="h-5 w-5 text-primary" />
+                  ) : (
+                    <Clock className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-foreground">{regra.nome}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      regra.tipo === 'contextual_ia' 
+                        ? 'bg-primary/10 text-primary' 
+                        : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {regra.tipo === 'contextual_ia' ? 'IA Contextual' : 'Texto Fixo'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Após {regra.horas_sem_resposta}h sem resposta • Máx {regra.max_tentativas} tentativas
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => openEdit(regra)}
+                  className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-muted transition-all"
+                >
+                  <Pencil className="h-4 w-4 text-muted-foreground" />
+                </button>
+                <button
+                  onClick={() => deleteRegra(regra.id)}
+                  className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-destructive/10 transition-all"
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </button>
+                <button
+                  onClick={() => toggleRegra(regra.id, regra.ativo)}
+                  className={`relative h-6 w-11 rounded-full transition-colors ${
+                    regra.ativo ? 'bg-primary' : 'bg-muted'
+                  }`}
+                >
+                  <div
+                    className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                      regra.ativo ? 'translate-x-5' : ''
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Info box */}
+      <div className="p-4 rounded-lg bg-muted/30 border border-dashed border-border">
+        <h4 className="font-medium text-foreground mb-2">Como funciona</h4>
+        <ul className="text-sm text-muted-foreground space-y-1">
+          <li>• <strong>Texto Fixo:</strong> Envia a mesma mensagem para todos os leads</li>
+          <li>• <strong>IA Contextual:</strong> A IA analisa a conversa e gera um follow-up personalizado</li>
+          <li>• O sistema verifica conversas sem resposta e envia o follow-up automaticamente</li>
+          <li>• Use "Executar Agora" para processar manualmente ou configure um cron job</li>
+        </ul>
       </div>
     </div>
   );
