@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { ArrowLeft, Plus, Trash2, Edit2, GripVertical, Loader2, ChevronDown, ChevronRight, Settings } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Edit2, GripVertical, Loader2, ChevronDown, ChevronRight, Settings, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -37,6 +37,13 @@ interface Funil {
   estagios: Estagio[];
 }
 
+interface TagItem {
+  id: string;
+  nome: string;
+  cor: string;
+  conta_id: string;
+}
+
 const CORES_PREDEFINIDAS = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', 
   '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'
@@ -48,6 +55,12 @@ export default function CRMConfiguracoes() {
   const [loading, setLoading] = useState(true);
   const [expandedFunil, setExpandedFunil] = useState<string | null>(null);
   const [permitirMultiplas, setPermitirMultiplas] = useState(true);
+  
+  // Tags state
+  const [tags, setTags] = useState<TagItem[]>([]);
+  const [tagModalOpen, setTagModalOpen] = useState(false);
+  const [editingTag, setEditingTag] = useState<TagItem | null>(null);
+  const [tagForm, setTagForm] = useState({ nome: '', cor: '#3b82f6' });
   
   // Modal states
   const [funilModalOpen, setFunilModalOpen] = useState(false);
@@ -65,6 +78,7 @@ export default function CRMConfiguracoes() {
     if (usuario?.conta_id) {
       fetchFunis();
       fetchContaConfig();
+      fetchTags();
     }
   }, [usuario]);
 
@@ -96,6 +110,99 @@ export default function CRMConfiguracoes() {
     } catch (error) {
       console.error('Erro ao atualizar config:', error);
       toast.error('Erro ao atualizar configuração');
+    }
+  };
+
+  // Tags handlers
+  const fetchTags = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tags')
+        .select('*')
+        .eq('conta_id', usuario!.conta_id)
+        .order('nome');
+      
+      if (error) throw error;
+      setTags(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar tags:', error);
+    }
+  };
+
+  const openTagModal = (tag?: TagItem) => {
+    if (tag) {
+      setEditingTag(tag);
+      setTagForm({ nome: tag.nome, cor: tag.cor });
+    } else {
+      setEditingTag(null);
+      setTagForm({ nome: '', cor: '#3b82f6' });
+    }
+    setTagModalOpen(true);
+  };
+
+  const saveTag = async () => {
+    if (!tagForm.nome.trim()) {
+      toast.error('Nome da tag é obrigatório');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (editingTag) {
+        const { error } = await supabase
+          .from('tags')
+          .update({
+            nome: tagForm.nome,
+            cor: tagForm.cor,
+          })
+          .eq('id', editingTag.id);
+
+        if (error) throw error;
+        toast.success('Tag atualizada!');
+      } else {
+        const { error } = await supabase
+          .from('tags')
+          .insert({
+            conta_id: usuario!.conta_id,
+            nome: tagForm.nome,
+            cor: tagForm.cor,
+          });
+
+        if (error) {
+          if (error.code === '23505') {
+            toast.error('Já existe uma tag com este nome');
+            setSaving(false);
+            return;
+          }
+          throw error;
+        }
+        toast.success('Tag criada!');
+      }
+
+      setTagModalOpen(false);
+      fetchTags();
+    } catch (error) {
+      console.error('Erro ao salvar tag:', error);
+      toast.error('Erro ao salvar tag');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteTag = async (tagId: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta tag?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('tags').delete().eq('id', tagId);
+      if (error) throw error;
+
+      toast.success('Tag excluída!');
+      fetchTags();
+    } catch (error) {
+      console.error('Erro ao excluir tag:', error);
+      toast.error('Erro ao excluir tag');
     }
   };
 
@@ -371,6 +478,61 @@ export default function CRMConfiguracoes() {
           </div>
         </div>
 
+        {/* Gerenciamento de Tags */}
+        <div className="border border-border rounded-xl bg-card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Tag className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-foreground">Gerenciamento de Tags</h2>
+            </div>
+            <Button size="sm" onClick={() => openTagModal()} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Nova Tag
+            </Button>
+          </div>
+          
+          {tags.length === 0 ? (
+            <div className="text-center py-8 border border-dashed border-border rounded-lg">
+              <Tag className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+              <p className="text-muted-foreground mb-2">Nenhuma tag cadastrada</p>
+              <p className="text-sm text-muted-foreground">
+                Tags ajudam a organizar e categorizar seus contatos
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {tags.map((tag) => (
+                <div 
+                  key={tag.id} 
+                  className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border"
+                >
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="h-4 w-4 rounded-full shrink-0" 
+                      style={{ backgroundColor: tag.cor }}
+                    />
+                    <span className="font-medium text-foreground truncate">{tag.nome}</span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => openTagModal(tag)}
+                      className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                    >
+                      <Edit2 className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                    <button
+                      onClick={() => deleteTag(tag.id)}
+                      className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Lista de Funis */}
         <div className="space-y-4">
           {funis.length === 0 ? (
@@ -606,6 +768,65 @@ export default function CRMConfiguracoes() {
             </Button>
             <Button onClick={saveEstagio} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingEstagio ? 'Salvar' : 'Criar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Tag */}
+      <Dialog open={tagModalOpen} onOpenChange={setTagModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {editingTag ? 'Editar Tag' : 'Nova Tag'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="tag-nome">Nome</Label>
+              <Input
+                id="tag-nome"
+                value={tagForm.nome}
+                onChange={(e) => setTagForm({ ...tagForm, nome: e.target.value })}
+                placeholder="Ex: Lead Quente"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Cor</Label>
+              <div className="flex flex-wrap gap-2">
+                {CORES_PREDEFINIDAS.map((cor) => (
+                  <button
+                    key={cor}
+                    type="button"
+                    onClick={() => setTagForm({ ...tagForm, cor })}
+                    className={cn(
+                      "h-8 w-8 rounded-full transition-all",
+                      tagForm.cor === cor && "ring-2 ring-offset-2 ring-primary"
+                    )}
+                    style={{ backgroundColor: cor }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Preview</Label>
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
+                <span 
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium text-white"
+                  style={{ backgroundColor: tagForm.cor }}
+                >
+                  <Tag className="h-3 w-3" />
+                  {tagForm.nome || 'Nome da tag'}
+                </span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTagModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={saveTag} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingTag ? 'Salvar' : 'Criar'}
             </Button>
           </DialogFooter>
         </DialogContent>

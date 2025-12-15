@@ -1145,6 +1145,41 @@ export type Database = {
           },
         ]
       }
+      tags: {
+        Row: {
+          conta_id: string
+          cor: string
+          created_at: string
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          conta_id: string
+          cor?: string
+          created_at?: string
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          conta_id?: string
+          cor?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tags_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transferencias_atendimento: {
         Row: {
           conversa_id: string
