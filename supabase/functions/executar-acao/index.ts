@@ -556,7 +556,6 @@ serve(async (req) => {
       default:
         resultado = { sucesso: false, mensagem: 'Tipo de ação não reconhecido' };
     }
-    }
 
     // Registrar mensagem de sistema para rastreamento interno
     if (resultado.sucesso) {
