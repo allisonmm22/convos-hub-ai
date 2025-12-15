@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, Users, MessageSquare, TrendingUp, Phone, Power, Save, KeyRound, Coins, AlertTriangle, Calendar } from 'lucide-react';
+import { ArrowLeft, Building2, Users, MessageSquare, TrendingUp, Phone, Power, Save, KeyRound, Coins, AlertTriangle, Calendar, Bot, GitBranch, Smartphone, CreditCard } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -28,11 +29,29 @@ import {
 import { toast } from 'sonner';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
+interface Plano {
+  id: string;
+  nome: string;
+  limite_usuarios: number;
+  limite_agentes: number;
+  limite_funis: number;
+  limite_conexoes_whatsapp: number;
+  preco_mensal: number;
+}
+
 interface Conta {
   id: string;
   nome: string;
   ativo: boolean;
   created_at: string;
+  plano_id: string | null;
+}
+
+interface UsoRecursos {
+  usuarios: number;
+  agentes: number;
+  funis: number;
+  conexoes: number;
 }
 
 interface Usuario {
@@ -100,9 +119,18 @@ export default function AdminContaDetalhe() {
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [periodoTokens, setPeriodoTokens] = useState('30');
   const [tipoLogFiltro, setTipoLogFiltro] = useState('todos');
+  
+  // Estados para planos
+  const [planos, setPlanos] = useState<Plano[]>([]);
+  const [usoRecursos, setUsoRecursos] = useState<UsoRecursos>({ usuarios: 0, agentes: 0, funis: 0, conexoes: 0 });
+  const [savingPlano, setSavingPlano] = useState(false);
 
   useEffect(() => {
-    if (id) fetchContaData();
+    if (id) {
+      fetchContaData();
+      fetchPlanos();
+      fetchUsoRecursos();
+    }
   }, [id]);
 
   const fetchContaData = async () => {
@@ -117,7 +145,11 @@ export default function AdminContaDetalhe() {
         .single();
 
       if (contaError) throw contaError;
-      setConta({ ...contaData, ativo: (contaData as any).ativo ?? true });
+      setConta({ 
+        ...contaData, 
+        ativo: (contaData as any).ativo ?? true,
+        plano_id: (contaData as any).plano_id ?? null
+      });
       setEditNome(contaData.nome);
 
       // Buscar usuários
@@ -160,6 +192,63 @@ export default function AdminContaDetalhe() {
       toast.error('Erro ao carregar dados da conta');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPlanos = async () => {
+    try {
+      const { data } = await supabase
+        .from('planos')
+        .select('*')
+        .eq('ativo', true)
+        .order('preco_mensal', { ascending: true });
+      setPlanos(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar planos:', error);
+    }
+  };
+
+  const fetchUsoRecursos = async () => {
+    if (!id) return;
+    try {
+      const [
+        { count: agentesCount },
+        { count: funisCount },
+        { count: conexoesCount },
+        { count: usuariosCount },
+      ] = await Promise.all([
+        supabase.from('agent_ia').select('*', { count: 'exact', head: true }).eq('conta_id', id),
+        supabase.from('funis').select('*', { count: 'exact', head: true }).eq('conta_id', id),
+        supabase.from('conexoes_whatsapp').select('*', { count: 'exact', head: true }).eq('conta_id', id),
+        supabase.from('usuarios').select('*', { count: 'exact', head: true }).eq('conta_id', id),
+      ]);
+      setUsoRecursos({
+        usuarios: usuariosCount || 0,
+        agentes: agentesCount || 0,
+        funis: funisCount || 0,
+        conexoes: conexoesCount || 0,
+      });
+    } catch (error) {
+      console.error('Erro ao buscar uso de recursos:', error);
+    }
+  };
+
+  const handlePlanoChange = async (planoId: string) => {
+    if (!conta) return;
+    setSavingPlano(true);
+    try {
+      const { error } = await supabase
+        .from('contas')
+        .update({ plano_id: planoId === 'none' ? null : planoId } as any)
+        .eq('id', conta.id);
+      if (error) throw error;
+      setConta({ ...conta, plano_id: planoId === 'none' ? null : planoId });
+      toast.success('Plano atualizado');
+    } catch (error) {
+      console.error('Erro ao atualizar plano:', error);
+      toast.error('Erro ao atualizar plano');
+    } finally {
+      setSavingPlano(false);
     }
   };
 
@@ -438,45 +527,147 @@ export default function AdminContaDetalhe() {
 
           {/* Tab Info */}
           <TabsContent value="info">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5" />
-                  Informações da Conta
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Nome da Conta</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={editNome}
-                      onChange={(e) => setEditNome(e.target.value)}
-                    />
-                    <Button
-                      onClick={handleSaveNome}
-                      disabled={saving || editNome === conta.nome}
-                    >
-                      <Save className="h-4 w-4" />
-                    </Button>
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Building2 className="h-5 w-5" />
+                    Informações da Conta
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Nome da Conta</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={editNome}
+                        onChange={(e) => setEditNome(e.target.value)}
+                      />
+                      <Button
+                        onClick={handleSaveNome}
+                        disabled={saving || editNome === conta.nome}
+                      >
+                        <Save className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Criada em</Label>
-                  <p className="text-muted-foreground">{formatDate(conta.created_at)}</p>
-                </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Plano</Label>
+                    <Select
+                      value={conta.plano_id || 'none'}
+                      onValueChange={handlePlanoChange}
+                      disabled={savingPlano}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um plano" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover z-50">
+                        <SelectItem value="none">Sem plano</SelectItem>
+                        {planos.map((plano) => (
+                          <SelectItem key={plano.id} value={plano.id}>
+                            {plano.nome} - R$ {plano.preco_mensal.toFixed(2)}/mês
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Criada em</Label>
+                    <p className="text-muted-foreground">{formatDate(conta.created_at)}</p>
+                  </div>
 
-                <Button
-                  variant={conta.ativo ? 'destructive' : 'default'}
-                  className="w-full"
-                  onClick={toggleContaStatus}
-                >
-                  <Power className="h-4 w-4 mr-2" />
-                  {conta.ativo ? 'Desativar Conta' : 'Ativar Conta'}
-                </Button>
-              </CardContent>
-            </Card>
+                  <Button
+                    variant={conta.ativo ? 'destructive' : 'default'}
+                    className="w-full"
+                    onClick={toggleContaStatus}
+                  >
+                    <Power className="h-4 w-4 mr-2" />
+                    {conta.ativo ? 'Desativar Conta' : 'Ativar Conta'}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Card de Uso de Recursos */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" />
+                    Uso de Recursos
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {(() => {
+                    const planoAtual = planos.find(p => p.id === conta.plano_id);
+                    if (!planoAtual) {
+                      return (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          Selecione um plano para ver os limites
+                        </p>
+                      );
+                    }
+                    
+                    const recursos = [
+                      { 
+                        label: 'Usuários', 
+                        icon: Users, 
+                        uso: usoRecursos.usuarios, 
+                        limite: planoAtual.limite_usuarios,
+                        color: 'bg-blue-500'
+                      },
+                      { 
+                        label: 'Agentes IA', 
+                        icon: Bot, 
+                        uso: usoRecursos.agentes, 
+                        limite: planoAtual.limite_agentes,
+                        color: 'bg-purple-500'
+                      },
+                      { 
+                        label: 'Funis CRM', 
+                        icon: GitBranch, 
+                        uso: usoRecursos.funis, 
+                        limite: planoAtual.limite_funis,
+                        color: 'bg-green-500'
+                      },
+                      { 
+                        label: 'Conexões WhatsApp', 
+                        icon: Smartphone, 
+                        uso: usoRecursos.conexoes, 
+                        limite: planoAtual.limite_conexoes_whatsapp,
+                        color: 'bg-orange-500'
+                      },
+                    ];
+                    
+                    return recursos.map((recurso) => {
+                      const percentual = recurso.limite >= 999 
+                        ? 0 
+                        : Math.min((recurso.uso / recurso.limite) * 100, 100);
+                      const isAtLimit = recurso.uso >= recurso.limite && recurso.limite < 999;
+                      
+                      return (
+                        <div key={recurso.label} className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <recurso.icon className="h-4 w-4 text-muted-foreground" />
+                              <span>{recurso.label}</span>
+                            </div>
+                            <span className={isAtLimit ? 'text-destructive font-medium' : ''}>
+                              {recurso.uso}/{recurso.limite >= 999 ? '∞' : recurso.limite}
+                              {isAtLimit && ' ⚠️'}
+                            </span>
+                          </div>
+                          <Progress 
+                            value={recurso.limite >= 999 ? 0 : percentual} 
+                            className={`h-2 ${isAtLimit ? '[&>div]:bg-destructive' : ''}`}
+                          />
+                        </div>
+                      );
+                    });
+                  })()}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Tab Usuários */}
