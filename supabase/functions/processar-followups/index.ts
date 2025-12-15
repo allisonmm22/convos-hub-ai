@@ -70,9 +70,10 @@ serve(async (req) => {
     for (const regra of regras as FollowupRegra[]) {
       console.log(`[processar-followups] Processando regra: ${regra.nome}`);
 
-      // Calcular timestamp limite (agora - horas_sem_resposta)
-      const horasAtras = new Date();
-      horasAtras.setHours(horasAtras.getHours() - regra.horas_sem_resposta);
+      // Calcular timestamp limite (agora - minutos_sem_resposta)
+      // O campo horas_sem_resposta agora armazena MINUTOS
+      const minutosAtras = new Date();
+      minutosAtras.setMinutes(minutosAtras.getMinutes() - regra.horas_sem_resposta);
 
       // Buscar conversas elegíveis para esta regra
       let query = supabase
@@ -80,7 +81,7 @@ serve(async (req) => {
         .select('id, conta_id, contato_id, conexao_id, agente_ia_ativo, ultima_mensagem_at, status')
         .eq('conta_id', regra.conta_id)
         .eq('status', 'em_atendimento')
-        .lt('ultima_mensagem_at', horasAtras.toISOString());
+        .lt('ultima_mensagem_at', minutosAtras.toISOString());
 
       // Aplicar filtros de estado da IA
       const iaFilters: boolean[] = [];
@@ -132,10 +133,10 @@ serve(async (req) => {
           continue;
         }
 
-        // Verificar intervalo entre tentativas
+        // Verificar intervalo entre tentativas (intervalo agora em MINUTOS)
         if (ultimoFollowup) {
           const ultimoEnvio = new Date(ultimoFollowup.enviado_em);
-          const intervaloMs = regra.intervalo_entre_tentativas * 60 * 60 * 1000;
+          const intervaloMs = regra.intervalo_entre_tentativas * 60 * 1000; // minutos → ms
           if (Date.now() - ultimoEnvio.getTime() < intervaloMs) {
             continue;
           }
