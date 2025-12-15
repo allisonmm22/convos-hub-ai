@@ -6,6 +6,52 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const EVOLUTION_API_URL = 'https://evolution.cognityx.com.br';
+
+// Função para buscar foto de perfil do WhatsApp
+async function fetchProfilePicture(
+  instanceName: string,
+  telefone: string,
+  evolutionApiKey: string
+): Promise<string | null> {
+  try {
+    console.log('Buscando foto de perfil para:', telefone);
+    
+    const response = await fetch(
+      `${EVOLUTION_API_URL}/chat/fetchProfilePictureUrl/${instanceName}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': evolutionApiKey,
+        },
+        body: JSON.stringify({
+          number: telefone,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      console.log('Não foi possível buscar foto de perfil:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    const pictureUrl = data.profilePictureUrl || data.picture || data.url || null;
+    
+    if (pictureUrl) {
+      console.log('Foto de perfil encontrada:', pictureUrl.substring(0, 50) + '...');
+    } else {
+      console.log('Nenhuma foto de perfil disponível');
+    }
+    
+    return pictureUrl;
+  } catch (error) {
+    console.error('Erro ao buscar foto de perfil:', error);
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -229,22 +275,37 @@ serve(async (req) => {
 
       console.log('Conexão encontrada:', conexao.id, 'Conta:', conexao.conta_id);
 
+      // Buscar token da conexão para usar na API Evolution
+      const { data: conexaoCompleta } = await supabase
+        .from('conexoes_whatsapp')
+        .select('token, instance_name')
+        .eq('id', conexao.id)
+        .single();
+
       // Buscar ou criar contato
       let { data: contato } = await supabase
         .from('contatos')
-        .select('id')
+        .select('id, avatar_url')
         .eq('conta_id', conexao.conta_id)
         .eq('telefone', telefone)
         .single();
 
       if (!contato) {
         console.log('Criando novo contato...');
+        
+        // Buscar foto de perfil antes de criar o contato
+        let avatarUrl: string | null = null;
+        if (conexaoCompleta?.token) {
+          avatarUrl = await fetchProfilePicture(instance, telefone, conexaoCompleta.token);
+        }
+        
         const { data: novoContato, error: contatoError } = await supabase
           .from('contatos')
           .insert({
             conta_id: conexao.conta_id,
             nome: pushName || telefone,
             telefone,
+            avatar_url: avatarUrl,
           })
           .select()
           .single();
@@ -254,7 +315,19 @@ serve(async (req) => {
           throw contatoError;
         }
         contato = novoContato;
-        console.log('Contato criado:', contato?.id);
+        console.log('Contato criado:', contato?.id, 'Avatar:', avatarUrl ? 'sim' : 'não');
+      } else if (!contato.avatar_url && conexaoCompleta?.token) {
+        // Contato existe mas não tem foto, tentar buscar
+        console.log('Contato sem foto, buscando...');
+        const avatarUrl = await fetchProfilePicture(instance, telefone, conexaoCompleta.token);
+        
+        if (avatarUrl) {
+          await supabase
+            .from('contatos')
+            .update({ avatar_url: avatarUrl })
+            .eq('id', contato.id);
+          console.log('Foto de perfil atualizada para contato existente');
+        }
       }
 
       // Buscar conversa existente usando SQL direto para evitar cache do PostgREST
