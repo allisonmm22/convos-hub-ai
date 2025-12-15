@@ -3,8 +3,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { 
   Bot, Save, Clock, Loader2, Sparkles, ArrowLeft, Pencil, Check, X,
   FileText, MessageCircle, HelpCircle, Layers, Calendar, Zap, Bell, 
-  Volume2, Settings, ChevronDown, ChevronUp, Plus, GripVertical, Trash2,
-  Key, Eye, EyeOff
+  Volume2, Settings, ChevronDown, ChevronUp, Plus, GripVertical, Trash2
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -165,7 +164,7 @@ export default function AgenteIAEditar() {
     { id: 'etapas' as Tab, label: 'Etapas de Atendimento', icon: MessageCircle },
     { id: 'perguntas' as Tab, label: 'Perguntas Frequentes', icon: HelpCircle },
     { id: 'horario' as Tab, label: 'Horário de Funcionamento', icon: Clock },
-    { id: 'configuracao' as Tab, label: 'Configuração API', icon: Key },
+    { id: 'configuracao' as Tab, label: 'Modelo de IA', icon: Bot },
   ];
 
   const sidebarItems = [
@@ -1276,7 +1275,7 @@ function HorarioFuncionamentoTab({
   );
 }
 
-// Tab: Configuração API
+// Tab: Modelo de IA (anteriormente Configuração API)
 function ConfiguracaoAPITab({ 
   config, 
   setConfig, 
@@ -1288,131 +1287,8 @@ function ConfiguracaoAPITab({
   onSave: () => void;
   saving: boolean;
 }) {
-  const { usuario } = useAuth();
-  const [apiKey, setApiKey] = useState('');
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [loadingApiKey, setLoadingApiKey] = useState(true);
-  const [savingApiKey, setSavingApiKey] = useState(false);
-
-  useEffect(() => {
-    fetchApiKey();
-  }, [usuario?.conta_id]);
-
-  const fetchApiKey = async () => {
-    if (!usuario?.conta_id) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('contas')
-        .select('openai_api_key')
-        .eq('id', usuario.conta_id)
-        .single();
-
-      if (error) throw error;
-      
-      if (data?.openai_api_key) {
-        setApiKey(data.openai_api_key);
-      }
-    } catch (error) {
-      console.error('Erro ao buscar API key:', error);
-    } finally {
-      setLoadingApiKey(false);
-    }
-  };
-
-  const saveApiKey = async () => {
-    if (!usuario?.conta_id) return;
-
-    setSavingApiKey(true);
-    try {
-      const { error } = await supabase
-        .from('contas')
-        .update({ openai_api_key: apiKey })
-        .eq('id', usuario.conta_id);
-
-      if (error) throw error;
-      toast.success('API Key salva com sucesso!');
-    } catch (error) {
-      console.error('Erro ao salvar API key:', error);
-      toast.error('Erro ao salvar API Key');
-    } finally {
-      setSavingApiKey(false);
-    }
-  };
-
-  const maskedApiKey = apiKey ? `sk-...${apiKey.slice(-8)}` : '';
-
   return (
-    <div className="space-y-8 max-w-2xl">
-      {/* API Key Section */}
-      <div className="rounded-xl bg-card border border-border p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <Key className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">API Key da OpenAI</h2>
-            <p className="text-sm text-muted-foreground">
-              Configure sua chave de API para habilitar o agente de IA
-            </p>
-          </div>
-        </div>
-
-        {loadingApiKey ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                OpenAI API Key
-              </label>
-              <div className="relative">
-                <input
-                  type={showApiKey ? 'text' : 'password'}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-..."
-                  className="w-full h-11 px-4 pr-12 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-mono text-sm"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showApiKey ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Obtenha sua chave em{' '}
-                <a 
-                  href="https://platform.openai.com/api-keys" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  platform.openai.com/api-keys
-                </a>
-              </p>
-            </div>
-
-            <button
-              onClick={saveApiKey}
-              disabled={savingApiKey || !apiKey}
-              className="flex items-center gap-2 h-10 px-6 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              {savingApiKey ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              Salvar API Key
-            </button>
-          </div>
-        )}
-      </div>
-
+    <div className="space-y-6 max-w-2xl">
       {/* Model Selection */}
       <div className="rounded-xl bg-card border border-border p-6">
         <div className="flex items-center gap-3 mb-4">
@@ -1422,7 +1298,7 @@ function ConfiguracaoAPITab({
           <div>
             <h2 className="text-lg font-semibold text-foreground">Modelo de IA</h2>
             <p className="text-sm text-muted-foreground">
-              Escolha o modelo que será usado para gerar as respostas
+              Escolha o modelo que será usado para gerar as respostas deste agente
             </p>
           </div>
         </div>
@@ -1497,14 +1373,13 @@ function ConfiguracaoAPITab({
         </div>
       </div>
 
-      {/* Status Info */}
-      <div className={`rounded-xl border p-4 ${apiKey ? 'bg-primary/5 border-primary/20' : 'bg-destructive/5 border-destructive/20'}`}>
-        <div className="flex items-center gap-3">
-          <div className={`h-3 w-3 rounded-full ${apiKey ? 'bg-primary animate-pulse' : 'bg-destructive'}`} />
-          <span className={`text-sm font-medium ${apiKey ? 'text-primary' : 'text-destructive'}`}>
-            {apiKey ? 'API Key configurada - Agente pronto para uso' : 'API Key não configurada - Configure para habilitar o agente'}
-          </span>
-        </div>
+      {/* Info sobre API Key */}
+      <div className="rounded-xl border border-border bg-muted/30 p-4">
+        <p className="text-sm text-muted-foreground">
+          A API Key da OpenAI é configurada na seção{' '}
+          <span className="font-medium text-foreground">Configuração</span>{' '}
+          do menu lateral e é compartilhada entre todos os agentes da conta.
+        </p>
       </div>
     </div>
   );

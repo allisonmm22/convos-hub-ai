@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, ChevronRight } from 'lucide-react';
+import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, Key, Save, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -15,7 +15,7 @@ interface Agent {
   descricao: string | null;
 }
 
-type SubPage = 'agentes' | 'followup' | 'sessoes';
+type SubPage = 'agentes' | 'followup' | 'sessoes' | 'configuracao';
 
 export default function AgenteIA() {
   const { usuario } = useAuth();
@@ -109,6 +109,7 @@ export default function AgenteIA() {
     { id: 'agentes' as SubPage, label: 'Agentes', icon: Bot },
     { id: 'followup' as SubPage, label: 'Follow-up', icon: Clock },
     { id: 'sessoes' as SubPage, label: 'Sessões', icon: Users },
+    { id: 'configuracao' as SubPage, label: 'Configuração', icon: Key },
   ];
 
   return (
@@ -233,6 +234,10 @@ export default function AgenteIA() {
 
           {subPage === 'sessoes' && (
             <SessoesPage />
+          )}
+
+          {subPage === 'configuracao' && (
+            <ConfiguracaoPage />
           )}
         </div>
       </div>
@@ -362,6 +367,150 @@ function SessoesPage() {
         <p className="text-sm text-muted-foreground">
           As sessões de atendimento aparecerão aqui
         </p>
+      </div>
+    </div>
+  );
+}
+
+// Página de Configuração (API Key)
+function ConfiguracaoPage() {
+  const { usuario } = useAuth();
+  const [apiKey, setApiKey] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (usuario?.conta_id) {
+      fetchApiKey();
+    }
+  }, [usuario?.conta_id]);
+
+  const fetchApiKey = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('contas')
+        .select('openai_api_key')
+        .eq('id', usuario!.conta_id)
+        .single();
+
+      if (error) throw error;
+      
+      if (data?.openai_api_key) {
+        setApiKey(data.openai_api_key);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar API key:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveApiKey = async () => {
+    if (!usuario?.conta_id) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('contas')
+        .update({ openai_api_key: apiKey })
+        .eq('id', usuario.conta_id);
+
+      if (error) throw error;
+      toast.success('API Key salva com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar API key:', error);
+      toast.error('Erro ao salvar API Key');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Configuração</h1>
+        <p className="text-muted-foreground mt-1">
+          Configure sua chave de API para habilitar os agentes de IA
+        </p>
+      </div>
+
+      <div className="max-w-2xl rounded-xl bg-card border border-border p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <Key className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">API Key da OpenAI</h2>
+            <p className="text-sm text-muted-foreground">
+              Esta chave será usada por todos os agentes da sua conta
+            </p>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                OpenAI API Key
+              </label>
+              <div className="relative">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk-..."
+                  className="w-full h-11 px-4 pr-12 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-mono text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showApiKey ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Obtenha sua chave em{' '}
+                <a 
+                  href="https://platform.openai.com/api-keys" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  platform.openai.com/api-keys
+                </a>
+              </p>
+            </div>
+
+            <button
+              onClick={saveApiKey}
+              disabled={saving || !apiKey}
+              className="flex items-center gap-2 h-10 px-6 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              Salvar API Key
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Status Info */}
+      <div className={`max-w-2xl rounded-xl border p-4 ${apiKey ? 'bg-primary/5 border-primary/20' : 'bg-destructive/5 border-destructive/20'}`}>
+        <div className="flex items-center gap-3">
+          <div className={`h-3 w-3 rounded-full ${apiKey ? 'bg-primary animate-pulse' : 'bg-destructive'}`} />
+          <span className={`text-sm font-medium ${apiKey ? 'text-primary' : 'text-destructive'}`}>
+            {apiKey ? 'API Key configurada - Agentes prontos para uso' : 'API Key não configurada - Configure para habilitar os agentes'}
+          </span>
+        </div>
       </div>
     </div>
   );
