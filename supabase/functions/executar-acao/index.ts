@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface Acao {
-  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome';
+  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao';
   valor?: string;
 }
 
@@ -34,6 +34,8 @@ function gerarMensagemSistema(tipo: string, valor: string | undefined, resultado
       return `🔒 Conversa encerrada pelo agente IA`;
     case 'nome':
       return `✏️ Nome do contato alterado para "${valor}"`;
+    case 'negociacao':
+      return `💼 Nova negociação criada: ${valor || 'Lead'}`;
     default:
       return `⚙️ Ação executada: ${tipo}`;
   }
@@ -490,8 +492,70 @@ serve(async (req) => {
         break;
       }
 
+      case 'negociacao': {
+        // Criar nova negociação no CRM
+        // Formato: "funil/estagio" ou "funil/estagio:valor"
+        const valorCompleto = acaoObj.valor || '';
+        const [estagioRef, valorStr] = valorCompleto.split(':').length > 1 && !valorCompleto.includes('/') 
+          ? [valorCompleto, undefined]
+          : valorCompleto.includes(':') 
+            ? [valorCompleto.substring(0, valorCompleto.lastIndexOf(':')), valorCompleto.substring(valorCompleto.lastIndexOf(':') + 1)]
+            : [valorCompleto, undefined];
+        
+        const valorNumerico = valorStr ? parseFloat(valorStr) : 0;
+        
+        console.log(`Criando negociação: estagioRef="${estagioRef}", valor=${valorNumerico}`);
+        
+        // Mapear estágio
+        const estagioId = await mapearEtapaPorNome(supabase, conta_id, estagioRef);
+        
+        if (!estagioId) {
+          resultado = { sucesso: false, mensagem: `Estágio "${estagioRef}" não encontrado no CRM` };
+          break;
+        }
+        
+        // Buscar dados do contato
+        const { data: contato } = await supabase
+          .from('contatos')
+          .select('nome, telefone, email')
+          .eq('id', contato_id)
+          .single();
+        
+        // Verificar se já existe negociação aberta para este contato no mesmo estágio
+        const { data: negociacaoExistente } = await supabase
+          .from('negociacoes')
+          .select('id')
+          .eq('contato_id', contato_id)
+          .eq('estagio_id', estagioId)
+          .eq('status', 'aberto')
+          .maybeSingle();
+        
+        if (negociacaoExistente) {
+          resultado = { sucesso: true, mensagem: 'Já existe uma negociação aberta para este contato neste estágio' };
+          break;
+        }
+        
+        // Criar negociação
+        const { error } = await supabase
+          .from('negociacoes')
+          .insert({
+            conta_id,
+            contato_id,
+            estagio_id: estagioId,
+            titulo: `Negociação - ${contato?.nome || 'Lead'}`,
+            valor: valorNumerico,
+            status: 'aberto',
+            probabilidade: 50,
+          });
+
+        if (error) throw error;
+        resultado = { sucesso: true, mensagem: `Nova negociação criada: ${contato?.nome || 'Lead'}` };
+        break;
+      }
+
       default:
         resultado = { sucesso: false, mensagem: 'Tipo de ação não reconhecido' };
+    }
     }
 
     // Registrar mensagem de sistema para rastreamento interno
