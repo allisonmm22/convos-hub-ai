@@ -100,6 +100,7 @@ export type Database = {
           mensagem_fora_horario: string | null
           modelo: string | null
           nome: string | null
+          permitir_multiplas_negociacoes: boolean | null
           prompt_sistema: string | null
           temperatura: number | null
           tempo_espera_segundos: number | null
@@ -121,6 +122,7 @@ export type Database = {
           mensagem_fora_horario?: string | null
           modelo?: string | null
           nome?: string | null
+          permitir_multiplas_negociacoes?: boolean | null
           prompt_sistema?: string | null
           temperatura?: number | null
           tempo_espera_segundos?: number | null
@@ -142,6 +144,7 @@ export type Database = {
           mensagem_fora_horario?: string | null
           modelo?: string | null
           nome?: string | null
+          permitir_multiplas_negociacoes?: boolean | null
           prompt_sistema?: string | null
           temperatura?: number | null
           tempo_espera_segundos?: number | null

@@ -29,6 +29,7 @@ interface AgentConfig {
   descricao: string | null;
   atender_24h: boolean;
   tempo_espera_segundos: number;
+  permitir_multiplas_negociacoes: boolean;
 }
 
 type Tab = 'regras' | 'etapas' | 'perguntas' | 'horario' | 'configuracao';
@@ -121,6 +122,7 @@ export default function AgenteIAEditar() {
           tipo: (data.tipo === 'secundario' ? 'secundario' : 'principal') as 'principal' | 'secundario',
           atender_24h: data.atender_24h ?? false,
           tempo_espera_segundos: data.tempo_espera_segundos ?? 5,
+          permitir_multiplas_negociacoes: data.permitir_multiplas_negociacoes ?? true,
         });
         setTempName(data.nome || '');
         
@@ -163,6 +165,7 @@ export default function AgenteIAEditar() {
           descricao: config.descricao,
           atender_24h: config.atender_24h,
           tempo_espera_segundos: config.tempo_espera_segundos,
+          permitir_multiplas_negociacoes: config.permitir_multiplas_negociacoes,
         })
         .eq('id', config.id);
 
@@ -1466,6 +1469,40 @@ function ConfiguracaoAPITab({
               <Save className="h-4 w-4" />
             )}
             Salvar Configurações
+          </button>
+        </div>
+      </div>
+
+      {/* Configurações de CRM */}
+      <div className="rounded-xl bg-card border border-border p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10">
+            <Layers className="h-5 w-5 text-emerald-500" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Configurações de CRM</h2>
+            <p className="text-sm text-muted-foreground">
+              Controle como o agente interage com negociações
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+          <div className="space-y-1">
+            <p className="font-medium text-foreground">Permitir múltiplas negociações</p>
+            <p className="text-sm text-muted-foreground">
+              Se desativado, bloqueia criação de nova negociação quando o lead já possuir uma aberta
+            </p>
+          </div>
+          <button
+            onClick={() => setConfig({ ...config, permitir_multiplas_negociacoes: !config.permitir_multiplas_negociacoes })}
+            className={`relative h-6 w-11 rounded-full transition-colors ${
+              config.permitir_multiplas_negociacoes ? 'bg-primary' : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              config.permitir_multiplas_negociacoes ? 'translate-x-6' : 'translate-x-1'
+            }`} />
           </button>
         </div>
       </div>
