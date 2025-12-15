@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   X, Tag, UserRound, Bot, Globe, Layers, Bell, Package, StopCircle,
-  Check, AlertCircle, Loader2
+  Check, AlertCircle, Loader2, UserPen
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -109,6 +109,14 @@ const tiposDecisao: DecisaoTipo[] = [
     color: 'hsl(var(--destructive))',
     bgColor: 'hsl(var(--destructive) / 0.1)',
   },
+  {
+    id: 'nome',
+    label: 'Alterar Nome',
+    description: 'Altera o nome do contato',
+    icon: UserPen,
+    color: 'hsl(var(--chart-3))',
+    bgColor: 'hsl(var(--chart-3) / 0.1)',
+  },
 ];
 
 export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoInteligenteModalProps) {
@@ -131,6 +139,7 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
   const [fonteValue, setFonteValue] = useState('');
   const [notificacaoValue, setNotificacaoValue] = useState('');
   const [produtoValue, setProdutoValue] = useState('');
+  const [nomeValue, setNomeValue] = useState('');
 
   // Reset ao fechar
   useEffect(() => {
@@ -144,6 +153,7 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
       setFonteValue('');
       setNotificacaoValue('');
       setProdutoValue('');
+      setNomeValue('');
     }
   }, [isOpen]);
 
@@ -217,6 +227,8 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
         return produtoValue.trim().length > 0;
       case 'finalizar':
         return true;
+      case 'nome':
+        return nomeValue.trim().length > 0;
       default:
         return false;
     }
@@ -247,6 +259,8 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
         return `@produto:${produtoValue.toLowerCase().replace(/\s+/g, '-')}`;
       case 'finalizar':
         return '@finalizar';
+      case 'nome':
+        return `@nome:${nomeValue.trim()}`;
       default:
         return '';
     }
@@ -517,6 +531,25 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
                     <p className="text-sm text-muted-foreground">
                       O agente irá encerrar a conversa automaticamente quando esta condição for atendida.
                       O status da conversa será alterado para "Encerrado".
+                    </p>
+                  </div>
+                )}
+
+                {/* Alterar Nome */}
+                {tipoSelecionado === 'nome' && (
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Nome do Contato
+                    </label>
+                    <input
+                      type="text"
+                      value={nomeValue}
+                      onChange={(e) => setNomeValue(e.target.value)}
+                      placeholder="Ex: {nome_do_cliente}"
+                      className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <p className="text-xs text-muted-foreground mt-2">
+                      💡 O agente IA usará esta ação para renomear o contato quando identificar o nome do cliente
                     </p>
                   </div>
                 )}
