@@ -1211,22 +1211,41 @@ export default function Conversas() {
                       <p className="font-semibold text-foreground truncate">
                         {conversa.contatos.nome}
                       </p>
-                      <div className="flex items-center gap-2">
-                        <span className={cn('h-2 w-2 rounded-full', getStatusColor(conversa.status))} />
-                        {conversa.ultima_mensagem_at && (
-                          <span className="text-xs text-muted-foreground">
-                            {formatRelativeTime(conversa.ultima_mensagem_at)}
-                          </span>
-                        )}
-                      </div>
+                      {conversa.ultima_mensagem_at && (
+                        <span className="text-xs text-muted-foreground">
+                          {formatRelativeTime(conversa.ultima_mensagem_at)}
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 mb-1">
                       {getMediaPreviewIcon(conversa.ultima_mensagem) && (
                         <span className="text-xs">{getMediaPreviewIcon(conversa.ultima_mensagem)}</span>
                       )}
                       <p className="text-sm text-muted-foreground truncate">
                         {conversa.ultima_mensagem || 'Sem mensagens'}
                       </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {/* Badge de Status */}
+                      <span className={cn(
+                        'text-[10px] font-medium px-1.5 py-0.5 rounded-full',
+                        conversa.status === 'em_atendimento' && 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400',
+                        conversa.status === 'aguardando_cliente' && 'bg-amber-500/20 text-amber-600 dark:text-amber-400',
+                        conversa.status === 'encerrado' && 'bg-muted text-muted-foreground'
+                      )}>
+                        {conversa.status === 'em_atendimento' ? 'Em Atend.' : 
+                         conversa.status === 'aguardando_cliente' ? 'Aguardando' : 'Encerrado'}
+                      </span>
+                      {/* Badge IA/Humano */}
+                      {conversa.agente_ia_ativo ? (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-primary/20 text-primary flex items-center gap-0.5">
+                          <Bot className="h-2.5 w-2.5" /> IA
+                        </span>
+                      ) : conversa.atendente_id ? (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 flex items-center gap-0.5">
+                          <User className="h-2.5 w-2.5" /> Humano
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   {(conversa.nao_lidas || 0) > 0 && (
