@@ -35,7 +35,7 @@ import { cn } from '@/lib/utils';
 import { AudioRecorder } from '@/components/AudioRecorder';
 import { AudioPlayer } from '@/components/AudioPlayer';
 import { ContatoSidebar } from '@/components/ContatoSidebar';
-import { playNotificationSound } from '@/lib/notificationSound';
+import { notifyNewMessage, requestNotificationPermission } from '@/lib/notificationSound';
 
 interface Contato {
   id: string;
@@ -213,6 +213,9 @@ export default function Conversas() {
       fetchConexao();
       const cleanup = setupRealtimeSubscription();
       
+      // Solicitar permissão de notificação
+      requestNotificationPermission();
+      
       // Verificar status da conexão periodicamente
       const statusInterval = setInterval(fetchConexao, 30000);
       
@@ -283,11 +286,15 @@ export default function Conversas() {
             setMensagens((prev) => [...prev, novaMensagem]);
           }
           
-          // Notificação sonora para mensagens de entrada em conversas atendidas por humano
+          // Notificação sonora + browser para mensagens de entrada em conversas atendidas por humano
           if (novaMensagem.direcao === 'entrada') {
             const conversaDaMensagem = conversas.find(c => c.id === novaMensagem.conversa_id);
             if (conversaDaMensagem && conversaDaMensagem.agente_ia_ativo === false) {
-              playNotificationSound();
+              notifyNewMessage(
+                conversaDaMensagem.contatos.nome,
+                novaMensagem.conteudo,
+                () => setConversaSelecionada(conversaDaMensagem)
+              );
             }
           }
           

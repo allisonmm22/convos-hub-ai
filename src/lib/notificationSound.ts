@@ -57,3 +57,62 @@ export const playNotificationSound = () => {
     console.error('Error playing notification sound:', error);
   }
 };
+
+// Request notification permission
+export const requestNotificationPermission = async (): Promise<boolean> => {
+  if (!('Notification' in window)) {
+    console.log('This browser does not support notifications');
+    return false;
+  }
+
+  if (Notification.permission === 'granted') {
+    return true;
+  }
+
+  if (Notification.permission !== 'denied') {
+    const permission = await Notification.requestPermission();
+    return permission === 'granted';
+  }
+
+  return false;
+};
+
+// Show browser notification
+export const showBrowserNotification = (title: string, body: string, onClick?: () => void) => {
+  if (!('Notification' in window) || Notification.permission !== 'granted') {
+    return;
+  }
+
+  try {
+    const notification = new Notification(title, {
+      body,
+      icon: '/favicon.ico',
+      badge: '/favicon.ico',
+      tag: 'new-message', // Prevents duplicate notifications
+      requireInteraction: false,
+    });
+
+    if (onClick) {
+      notification.onclick = () => {
+        window.focus();
+        onClick();
+        notification.close();
+      };
+    }
+
+    // Auto close after 5 seconds
+    setTimeout(() => notification.close(), 5000);
+  } catch (error) {
+    console.error('Error showing notification:', error);
+  }
+};
+
+// Combined notification (sound + browser)
+export const notifyNewMessage = (contactName: string, messagePreview: string, onClick?: () => void) => {
+  playNotificationSound();
+  showBrowserNotification(
+    `Nova mensagem de ${contactName}`,
+    messagePreview.length > 50 ? messagePreview.substring(0, 50) + '...' : messagePreview,
+    onClick
+  );
+};
