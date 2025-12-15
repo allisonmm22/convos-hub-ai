@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { validarEExibirErro } from '@/hooks/useValidarLimitePlano';
 import {
   Dialog,
   DialogContent,
@@ -155,6 +156,13 @@ export default function CRMConfiguracoes() {
         if (error) throw error;
         toast.success('Funil atualizado!');
       } else {
+        // Validar limite do plano para criação
+        const permitido = await validarEExibirErro(usuario!.conta_id, 'funis');
+        if (!permitido) {
+          setSaving(false);
+          return;
+        }
+
         const maxOrdem = funis.length > 0 ? Math.max(...funis.map(f => f.ordem || 0)) + 1 : 0;
         
         const { error } = await supabase

@@ -4,6 +4,7 @@ import { Plug, PlugZap, RefreshCw, Check, Loader2, QrCode, Power, Plus, Smartpho
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { validarEExibirErro } from '@/hooks/useValidarLimitePlano';
 
 interface Conexao {
   id: string;
@@ -80,6 +81,13 @@ export default function Conexao() {
 
     setCreating(true);
     try {
+      // Validar limite do plano
+      const permitido = await validarEExibirErro(usuario!.conta_id, 'conexoes');
+      if (!permitido) {
+        setCreating(false);
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('evolution-create-instance', {
         body: {
           nome: instanceName.trim(),
