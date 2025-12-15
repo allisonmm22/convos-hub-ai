@@ -1,0 +1,1 @@
+ALTER TABLE public.agent_ia DROP CONSTRAINT agent_ia_conta_id_key;
