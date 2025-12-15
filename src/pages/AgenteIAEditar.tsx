@@ -463,6 +463,7 @@ interface ConfirmDeleteEtapa {
 interface ModalDecisaoState {
   isOpen: boolean;
   etapaId: string;
+  cursorPosition: number;
 }
 
 function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
@@ -473,6 +474,7 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
   const [modalDecisao, setModalDecisao] = useState<ModalDecisaoState>({
     isOpen: false,
     etapaId: '',
+    cursorPosition: 0,
   });
 
   useEffect(() => {
@@ -552,21 +554,27 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
     ));
   };
 
-  // Handler para inserir ação do modal no texto
+  // Handler para inserir ação do modal no texto NA POSIÇÃO DO CURSOR
   const handleDecisaoInsert = (action: string) => {
     const etapa = etapas.find(e => e.id === modalDecisao.etapaId);
     if (!etapa) return;
 
-    // Adicionar ação ao final do texto ou na posição adequada
-    const novaDescricao = etapa.descricao 
-      ? etapa.descricao + ' ' + action
-      : action;
+    // Inserir na posição guardada do cursor
+    const pos = modalDecisao.cursorPosition;
+    const before = etapa.descricao.substring(0, pos);
+    const after = etapa.descricao.substring(pos);
+    const needsSpaceBefore = before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n');
+    const needsSpaceAfter = after.length > 0 && !after.startsWith(' ') && !after.startsWith('\n');
+    
+    const novaDescricao = before + (needsSpaceBefore ? ' ' : '') + action + (needsSpaceAfter ? ' ' : '') + after;
     updateEtapa(modalDecisao.etapaId, 'descricao', novaDescricao);
   };
 
-  // Abrir modal de decisão
-  const abrirModalDecisao = (etapaId: string) => {
-    setModalDecisao({ isOpen: true, etapaId });
+  // Abrir modal de decisão com posição do cursor
+  const abrirModalDecisao = (etapaId: string, cursorPosition?: number) => {
+    const etapa = etapas.find(e => e.id === etapaId);
+    const pos = cursorPosition ?? (etapa?.descricao.length ?? 0);
+    setModalDecisao({ isOpen: true, etapaId, cursorPosition: pos });
   };
 
   const saveEtapa = async (id: string) => {
@@ -757,7 +765,7 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
                       value={etapa.descricao}
                       onChange={(value) => updateEtapa(etapa.id, 'descricao', value)}
                       placeholder="Descreva o comportamento desta etapa..."
-                      onDecisaoClick={() => abrirModalDecisao(etapa.id)}
+                      onDecisaoClick={(cursorPos) => abrirModalDecisao(etapa.id, cursorPos)}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
                       💡 Clique em <span className="text-primary font-medium">@ Decisão</span> ou digite <span className="text-primary font-medium">@</span> para inserir ações como mover para estágio do CRM, adicionar tag, transferir, etc.
