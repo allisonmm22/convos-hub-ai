@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Calendar, Plus, Clock, Check, Loader2, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Calendar, Plus, Clock, Check, Loader2, ChevronLeft, ChevronRight, X, Pencil, Trash2, Video } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -14,6 +14,8 @@ interface Agendamento {
   data_fim: string | null;
   concluido: boolean;
   contato_id: string | null;
+  google_event_id: string | null;
+  google_meet_link: string | null;
   contatos: {
     nome: string;
   } | null;
@@ -34,6 +36,21 @@ export default function Agendamentos() {
     data_inicio: '',
     hora_inicio: '',
   });
+
+  // Estados para edição
+  const [editingAgendamento, setEditingAgendamento] = useState<Agendamento | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    titulo: '',
+    descricao: '',
+    data_inicio: '',
+    hora_inicio: '',
+  });
+
+  // Estados para exclusão
+  const [deletingAgendamento, setDeletingAgendamento] = useState<Agendamento | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -91,6 +108,142 @@ export default function Agendamentos() {
       fetchAgendamentos();
     } catch (error) {
       toast.error('Erro ao criar agendamento');
+    }
+  };
+
+  const openEditModal = (agendamento: Agendamento) => {
+    const dataInicio = new Date(agendamento.data_inicio);
+    setEditingAgendamento(agendamento);
+    setEditFormData({
+      titulo: agendamento.titulo,
+      descricao: agendamento.descricao || '',
+      data_inicio: dataInicio.toISOString().split('T')[0],
+      hora_inicio: dataInicio.toTimeString().slice(0, 5),
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdateAgendamento = async () => {
+    if (!editingAgendamento || !editFormData.titulo || !editFormData.data_inicio || !editFormData.hora_inicio) {
+      toast.error('Preencha título, data e hora');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const novaDataInicio = new Date(`${editFormData.data_inicio}T${editFormData.hora_inicio}`);
+      const novaDataFim = new Date(novaDataInicio.getTime() + 60 * 60 * 1000); // +1 hora
+
+      // Atualizar no banco local
+      const { error } = await supabase
+        .from('agendamentos')
+        .update({
+          titulo: editFormData.titulo,
+          descricao: editFormData.descricao || null,
+          data_inicio: novaDataInicio.toISOString(),
+          data_fim: novaDataFim.toISOString(),
+        })
+        .eq('id', editingAgendamento.id);
+
+      if (error) throw error;
+
+      // Se tem google_event_id, sincronizar com Google Calendar
+      if (editingAgendamento.google_event_id) {
+        try {
+          // Buscar calendário associado
+          const { data: calendarios } = await supabase
+            .from('calendarios_google')
+            .select('id')
+            .eq('conta_id', usuario!.conta_id)
+            .eq('ativo', true)
+            .limit(1);
+
+          if (calendarios && calendarios.length > 0) {
+            await supabase.functions.invoke('google-calendar-actions', {
+              body: {
+                operacao: 'reagendar',
+                calendario_id: calendarios[0].id,
+                dados: {
+                  evento_id: editingAgendamento.google_event_id,
+                  nova_data_inicio: novaDataInicio.toISOString(),
+                  nova_data_fim: novaDataFim.toISOString(),
+                }
+              }
+            });
+          }
+        } catch (calendarError) {
+          console.error('Erro ao sincronizar com Google Calendar:', calendarError);
+          // Não falhar a operação por causa do Google Calendar
+        }
+      }
+
+      toast.success('Agendamento atualizado!');
+      setShowEditModal(false);
+      setEditingAgendamento(null);
+      fetchAgendamentos();
+    } catch (error) {
+      console.error('Erro ao atualizar:', error);
+      toast.error('Erro ao atualizar agendamento');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const confirmDelete = (agendamento: Agendamento) => {
+    setDeletingAgendamento(agendamento);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteAgendamento = async () => {
+    if (!deletingAgendamento) return;
+
+    setActionLoading(true);
+    try {
+      // Se tem google_event_id, deletar do Google Calendar primeiro
+      if (deletingAgendamento.google_event_id) {
+        try {
+          // Buscar calendário associado
+          const { data: calendarios } = await supabase
+            .from('calendarios_google')
+            .select('id')
+            .eq('conta_id', usuario!.conta_id)
+            .eq('ativo', true)
+            .limit(1);
+
+          if (calendarios && calendarios.length > 0) {
+            await supabase.functions.invoke('google-calendar-actions', {
+              body: {
+                operacao: 'deletar',
+                calendario_id: calendarios[0].id,
+                dados: {
+                  evento_id: deletingAgendamento.google_event_id
+                }
+              }
+            });
+          }
+        } catch (calendarError) {
+          console.error('Erro ao deletar do Google Calendar:', calendarError);
+          // Não falhar a operação por causa do Google Calendar
+        }
+      }
+
+      // Deletar do banco local
+      const { error } = await supabase
+        .from('agendamentos')
+        .delete()
+        .eq('id', deletingAgendamento.id);
+
+      if (error) throw error;
+
+      toast.success('Agendamento excluído!');
+      setShowDeleteConfirm(false);
+      setDeletingAgendamento(null);
+      fetchAgendamentos();
+    } catch (error) {
+      console.error('Erro ao deletar:', error);
+      toast.error('Erro ao excluir agendamento');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -424,6 +577,40 @@ export default function Agendamentos() {
                                   </span>
                                 )}
                               </div>
+                              {agendamento.google_meet_link && (
+                                <a
+                                  href={agendamento.google_meet_link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-xs text-blue-500 hover:underline mt-1"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Video className="h-3 w-3" />
+                                  Google Meet
+                                </a>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEditModal(agendamento);
+                                }}
+                                className="p-1.5 rounded hover:bg-muted transition-colors"
+                                title="Editar"
+                              >
+                                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  confirmDelete(agendamento);
+                                }}
+                                className="p-1.5 rounded hover:bg-destructive/10 transition-colors"
+                                title="Excluir"
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -450,7 +637,7 @@ export default function Agendamentos() {
           </div>
         </div>
 
-        {/* Modal */}
+        {/* Modal de Criar */}
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="w-full max-w-md bg-card rounded-2xl border border-border p-6 animate-scale-in">
@@ -518,6 +705,145 @@ export default function Agendamentos() {
                   className="flex-1 h-11 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
                 >
                   Criar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Editar */}
+        {showEditModal && editingAgendamento && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-full max-w-md bg-card rounded-2xl border border-border p-6 animate-scale-in">
+              <h2 className="text-xl font-semibold text-foreground mb-6">Editar Agendamento</h2>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Título *</label>
+                  <input
+                    type="text"
+                    value={editFormData.titulo}
+                    onChange={(e) => setEditFormData({ ...editFormData, titulo: e.target.value })}
+                    className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="Ex: Reunião com cliente"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Descrição
+                  </label>
+                  <textarea
+                    value={editFormData.descricao}
+                    onChange={(e) => setEditFormData({ ...editFormData, descricao: e.target.value })}
+                    rows={3}
+                    className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                    placeholder="Detalhes do agendamento..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">Data *</label>
+                    <input
+                      type="date"
+                      value={editFormData.data_inicio}
+                      onChange={(e) => setEditFormData({ ...editFormData, data_inicio: e.target.value })}
+                      className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">Hora *</label>
+                    <input
+                      type="time"
+                      value={editFormData.hora_inicio}
+                      onChange={(e) => setEditFormData({ ...editFormData, hora_inicio: e.target.value })}
+                      className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+
+                {editingAgendamento.google_meet_link && (
+                  <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                    <div className="flex items-center gap-2 text-sm text-blue-500">
+                      <Video className="h-4 w-4" />
+                      <span className="font-medium">Google Meet</span>
+                    </div>
+                    <a
+                      href={editingAgendamento.google_meet_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-400 hover:underline mt-1 block truncate"
+                    >
+                      {editingAgendamento.google_meet_link}
+                    </a>
+                  </div>
+                )}
+
+                {editingAgendamento.google_event_id && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    Sincronizado com Google Calendar
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingAgendamento(null);
+                  }}
+                  disabled={actionLoading}
+                  className="flex-1 h-11 rounded-lg bg-muted text-foreground font-medium hover:bg-muted/80 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleUpdateAgendamento}
+                  disabled={actionLoading}
+                  className="flex-1 h-11 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Confirmação de Exclusão */}
+        {showDeleteConfirm && deletingAgendamento && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-full max-w-sm bg-card rounded-2xl border border-border p-6 animate-scale-in">
+              <h2 className="text-lg font-semibold text-foreground mb-2">Excluir agendamento?</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                "{deletingAgendamento.titulo}" será removido permanentemente.
+                {deletingAgendamento.google_event_id && (
+                  <span className="block mt-1 text-orange-500">
+                    Este evento também será removido do Google Calendar.
+                  </span>
+                )}
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    setDeletingAgendamento(null);
+                  }}
+                  disabled={actionLoading}
+                  className="flex-1 h-10 rounded-lg bg-muted text-foreground font-medium hover:bg-muted/80 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteAgendamento}
+                  disabled={actionLoading}
+                  className="flex-1 h-10 rounded-lg bg-destructive text-destructive-foreground font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Excluir
                 </button>
               </div>
             </div>
