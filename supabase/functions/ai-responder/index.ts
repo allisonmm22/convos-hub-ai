@@ -183,10 +183,19 @@ async function executarAgendaLocal(
           if (horarioCheck <= agora) continue;
           
           // Verificar se está ocupado
+          // IMPORTANTE: Um evento das 14h-15h NÃO ocupa o slot das 15h
+          // porque 15h >= 15h (fim) é verdade, então horarioCheck < eventoFim é FALSE
           const ocupado = horariosOcupados.some((e: any) => {
             const eventoInicio = new Date(e.inicio);
             const eventoFim = new Date(e.fim);
-            return horarioCheck >= eventoInicio && horarioCheck < eventoFim;
+            const estaOcupado = horarioCheck >= eventoInicio && horarioCheck < eventoFim;
+            
+            // Log de debug para horários específicos
+            if (hora >= 14 && hora <= 16) {
+              console.log(`🔍 [DEBUG] Verificando ${hora}h: evento "${e.titulo}" (${eventoInicio.toISOString()} - ${eventoFim.toISOString()}), check: ${horarioCheck.toISOString()}, ocupado: ${estaOcupado}`);
+            }
+            
+            return estaOcupado;
           });
           
           if (!ocupado) {
@@ -1013,9 +1022,9 @@ serve(async (req) => {
       console.log('Executando', result.acoes.length, 'ações...');
       
       for (const acao of result.acoes) {
-        // Pular ações de agenda:consultar que já foram executadas durante o tool-calling
-        if (acao.tipo === 'agenda' && acao.valor?.startsWith('consultar')) {
-          console.log('Pulando ação agenda:consultar (já executada durante tool-calling)');
+        // Pular TODAS as ações de agenda (consultar E criar) - já foram executadas durante o tool-calling
+        if (acao.tipo === 'agenda') {
+          console.log('Pulando ação de agenda (já executada durante tool-calling):', acao.valor);
           continue;
         }
         
