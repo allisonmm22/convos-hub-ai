@@ -49,7 +49,11 @@ serve(async (req) => {
     
     console.log('Criando instância na Evolution API:', instanceKey, 'Nome:', nome);
 
-    // Criar instância na Evolution API
+    // Construir URL do webhook
+    const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-webhook`;
+    console.log('Webhook URL:', webhookUrl);
+
+    // Criar instância na Evolution API COM webhook configurado na mesma chamada
     const createResponse = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
       method: 'POST',
       headers: {
@@ -60,6 +64,16 @@ serve(async (req) => {
         instanceName: instanceKey,
         qrcode: true,
         integration: 'WHATSAPP-BAILEYS',
+        webhook: {
+          url: webhookUrl,
+          byEvents: false,
+          base64: true,
+          events: [
+            'MESSAGES_UPSERT',
+            'CONNECTION_UPDATE',
+            'QRCODE_UPDATED',
+          ],
+        },
       }),
     });
 
@@ -75,31 +89,8 @@ serve(async (req) => {
       });
     }
 
-    // Configurar webhook com formato correto da API v2 (sem wrapper object)
-    const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-webhook`;
-    console.log('Configurando webhook:', webhookUrl);
-
-    const webhookResponse = await fetch(`${EVOLUTION_API_URL}/webhook/set/${instanceKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': evolutionApiKey,
-      },
-      body: JSON.stringify({
-        url: webhookUrl,
-        enabled: true,
-        webhookByEvents: false,
-        webhookBase64: true,
-        events: [
-          'MESSAGES_UPSERT',
-          'CONNECTION_UPDATE',
-          'QRCODE_UPDATED',
-        ],
-      }),
-    });
-
-    const webhookResult = await webhookResponse.json();
-    console.log('Resposta do webhook:', JSON.stringify(webhookResult));
+    // Webhook já configurado na criação da instância
+    console.log('Webhook configurado na criação da instância');
 
     // Salvar conexão no banco de dados
     const { data: conexao, error: insertError } = await supabase
@@ -129,7 +120,6 @@ serve(async (req) => {
       success: true, 
       conexao,
       evolution: createResult,
-      webhook: webhookResult,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
