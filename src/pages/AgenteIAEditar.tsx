@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { 
   Bot, Save, Clock, Loader2, Sparkles, ArrowLeft, Pencil, Check, X,
@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { DecisaoInteligenteModal } from '@/components/DecisaoInteligenteModal';
-import { DecisaoChip, extrairDecisoes, combinarDecisoesComTexto } from '@/components/DecisaoChip';
+import { DescricaoEditor } from '@/components/DescricaoEditor';
 import { useNavigate, useParams } from 'react-router-dom';
 
 interface AgentConfig {
@@ -451,7 +451,6 @@ interface Etapa {
   tipo: 'INICIO' | 'FINAL' | null;
   nome: string;
   descricao: string;
-  decisoes: string[];
   expandido: boolean;
 }
 
@@ -475,7 +474,6 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
     isOpen: false,
     etapaId: '',
   });
-  const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   useEffect(() => {
     fetchEtapas();
@@ -491,18 +489,14 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
 
       if (error) throw error;
 
-      setEtapas((data || []).map(e => {
-        const { decisoes, textoLimpo } = extrairDecisoes(e.descricao || '');
-        return {
-          id: e.id,
-          numero: e.numero,
-          tipo: e.tipo as 'INICIO' | 'FINAL' | null,
-          nome: e.nome,
-          descricao: textoLimpo,
-          decisoes,
-          expandido: false,
-        };
-      }));
+      setEtapas((data || []).map(e => ({
+        id: e.id,
+        numero: e.numero,
+        tipo: e.tipo as 'INICIO' | 'FINAL' | null,
+        nome: e.nome,
+        descricao: e.descricao || '',
+        expandido: false,
+      })));
     } catch (error) {
       console.error('Erro ao buscar etapas:', error);
     } finally {
@@ -523,7 +517,6 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
       tipo: null,
       nome: `Nova Etapa ${etapas.length + 1}`,
       descricao: '',
-      decisoes: [],
       expandido: true,
     };
     setEtapas([...etapas, novaEtapa]);
@@ -536,7 +529,6 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
   const confirmDeleteEtapa = async () => {
     if (confirmDelete) {
       try {
-        // Tentar excluir do banco (pode falhar se for nova etapa não salva)
         await supabase
           .from('agent_ia_etapas')
           .delete()
@@ -554,29 +546,22 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
     }
   };
 
-  const updateEtapa = (id: string, field: keyof Etapa, value: string | string[]) => {
+  const updateEtapa = (id: string, field: keyof Etapa, value: string) => {
     setEtapas(etapas.map(e => 
       e.id === id ? { ...e, [field]: value } : e
     ));
   };
 
-  // Handler para inserir ação selecionada do modal - agora adiciona como chip
+  // Handler para inserir ação do modal no texto
   const handleDecisaoInsert = (action: string) => {
     const etapa = etapas.find(e => e.id === modalDecisao.etapaId);
     if (!etapa) return;
 
-    // Adicionar decisão ao array de decisões
-    const novasDecisoes = [...etapa.decisoes, action];
-    updateEtapa(modalDecisao.etapaId, 'decisoes', novasDecisoes);
-  };
-
-  // Remover uma decisão específica
-  const removerDecisao = (etapaId: string, decisaoIndex: number) => {
-    const etapa = etapas.find(e => e.id === etapaId);
-    if (!etapa) return;
-
-    const novasDecisoes = etapa.decisoes.filter((_, i) => i !== decisaoIndex);
-    updateEtapa(etapaId, 'decisoes', novasDecisoes);
+    // Adicionar ação ao final do texto ou na posição adequada
+    const novaDescricao = etapa.descricao 
+      ? etapa.descricao + ' ' + action
+      : action;
+    updateEtapa(modalDecisao.etapaId, 'descricao', novaDescricao);
   };
 
   // Abrir modal de decisão
@@ -590,9 +575,6 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
 
     setSaving(true);
     try {
-      // Combinar decisões com texto para salvar
-      const descricaoCompleta = combinarDecisoesComTexto(etapa.decisoes, etapa.descricao);
-      
       const { error } = await supabase
         .from('agent_ia_etapas')
         .upsert({
@@ -601,7 +583,7 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
           numero: etapa.numero,
           tipo: etapa.tipo === 'INICIO' ? 'INICIO' : etapa.tipo === 'FINAL' ? 'FINAL' : null,
           nome: etapa.nome,
-          descricao: descricaoCompleta,
+          descricao: etapa.descricao,
         });
 
       if (error) throw error;
@@ -770,29 +752,15 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
                       </button>
                     </div>
                     
-                    {/* Chips de decisões */}
-                    {etapa.decisoes.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-3 p-3 rounded-lg bg-muted/30 border border-border">
-                        {etapa.decisoes.map((decisao, index) => (
-                          <DecisaoChip
-                            key={`${decisao}-${index}`}
-                            acao={decisao}
-                            onRemove={() => removerDecisao(etapa.id, index)}
-                          />
-                        ))}
-                      </div>
-                    )}
-                    
-                    <textarea
-                      ref={(el) => { textareaRefs.current[etapa.id] = el; }}
-                      rows={4}
+                    {/* Editor rico com chips inline */}
+                    <DescricaoEditor
                       value={etapa.descricao}
-                      onChange={(e) => updateEtapa(etapa.id, 'descricao', e.target.value)}
-                      className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm"
-                      placeholder="Descreva o comportamento desta etapa (instruções gerais)..."
+                      onChange={(value) => updateEtapa(etapa.id, 'descricao', value)}
+                      placeholder="Descreva o comportamento desta etapa..."
+                      onDecisaoClick={() => abrirModalDecisao(etapa.id)}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      💡 Clique em <span className="text-primary font-medium">@ Decisão</span> para adicionar ações automáticas como mover para etapa do CRM, adicionar tag, transferir, etc.
+                      💡 Clique em <span className="text-primary font-medium">@ Decisão</span> ou digite <span className="text-primary font-medium">@</span> para inserir ações como mover para estágio do CRM, adicionar tag, transferir, etc.
                     </p>
                   </div>
 
