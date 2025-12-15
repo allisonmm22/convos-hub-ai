@@ -162,7 +162,7 @@ function ActionChip({ action, onRemove }: { action: string; onRemove?: () => voi
             e.stopPropagation();
             onRemove();
           }}
-          className="flex-shrink-0 hover:opacity-70 text-current"
+          className="flex-shrink-0 hover:opacity-70 text-current pointer-events-auto"
         >
           <X className="h-3 w-3" />
         </button>
@@ -286,6 +286,7 @@ export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: D
     <div 
       ref={containerRef}
       className="relative w-full"
+      onClick={() => textareaRef.current?.focus()}
     >
       {/* Overlay com chips visuais - fica por cima, mas não captura eventos */}
       <div
@@ -300,7 +301,7 @@ export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: D
         }}
         aria-hidden="true"
       >
-        <div className="pointer-events-auto">
+        <div>
           {renderTextWithChips(value, handleRemoveAction)}
         </div>
       </div>
