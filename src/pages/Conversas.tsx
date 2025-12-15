@@ -32,7 +32,7 @@ import {
   Clock,
   CheckCircle2,
   Trash2,
-  Pencil,
+  Ban,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -126,6 +126,10 @@ interface Mensagem {
   tipo: 'texto' | 'imagem' | 'audio' | 'video' | 'documento' | 'sticker' | 'sistema' | null;
   media_url: string | null;
   metadata?: MensagemMetadata | null;
+  deletada?: boolean;
+  deletada_por?: string;
+  deletada_em?: string;
+  usuario_deletou?: { nome: string } | null;
 }
 
 interface Conexao {
@@ -165,8 +169,6 @@ export default function Conversas() {
   const [showContatoSidebar, setShowContatoSidebar] = useState(false);
   const [agentesDisponiveis, setAgentesDisponiveis] = useState<AgenteIA[]>([]);
   const [mensagemParaDeletar, setMensagemParaDeletar] = useState<string | null>(null);
-  const [mensagemParaEditar, setMensagemParaEditar] = useState<Mensagem | null>(null);
-  const [conteudoEditado, setConteudoEditado] = useState('');
   
   // Ref para manter a conversa selecionada atualizada no realtime
   const conversaSelecionadaRef = useRef<Conversa | null>(null);
@@ -427,7 +429,7 @@ export default function Conversas() {
     try {
       const { data, error } = await supabase
         .from('mensagens')
-        .select('*')
+        .select('*, usuario_deletou:deletada_por(nome)')
         .eq('conversa_id', conversaId)
         .order('created_at', { ascending: true });
 
@@ -886,22 +888,36 @@ export default function Conversas() {
   };
 
   const handleDeletarMensagem = async () => {
-    if (!mensagemParaDeletar) return;
+    if (!mensagemParaDeletar || !usuario) return;
     
     try {
       const { data, error } = await supabase.functions.invoke('deletar-mensagem', {
-        body: { mensagem_id: mensagemParaDeletar },
+        body: { 
+          mensagem_id: mensagemParaDeletar,
+          usuario_id: usuario.id,
+        },
       });
 
       if (error) {
         console.error('Erro ao deletar mensagem:', error);
         toast.error('Erro ao deletar mensagem');
       } else {
-        setMensagens(prev => prev.filter(m => m.id !== mensagemParaDeletar));
+        // Marcar como deletada no estado local (não remover da lista)
+        setMensagens(prev => prev.map(m => 
+          m.id === mensagemParaDeletar 
+            ? { 
+                ...m, 
+                deletada: true, 
+                deletada_por: usuario.id, 
+                deletada_em: new Date().toISOString(),
+                usuario_deletou: { nome: usuario.nome }
+              } 
+            : m
+        ));
         if (data?.whatsapp_deleted) {
-          toast.success('Mensagem deletada do WhatsApp e CRM');
+          toast.success('Mensagem apagada do WhatsApp e CRM');
         } else {
-          toast.success('Mensagem deletada do CRM');
+          toast.success('Mensagem apagada do CRM');
         }
       }
     } catch (error) {
@@ -909,33 +925,6 @@ export default function Conversas() {
       toast.error('Erro ao deletar mensagem');
     }
     setMensagemParaDeletar(null);
-  };
-
-  const handleEditarMensagem = async () => {
-    if (!mensagemParaEditar || !conteudoEditado.trim()) return;
-    
-    const { error } = await supabase
-      .from('mensagens')
-      .update({ conteudo: conteudoEditado })
-      .eq('id', mensagemParaEditar.id);
-      
-    if (error) {
-      toast.error('Erro ao editar mensagem');
-    } else {
-      toast.success('Mensagem editada');
-      setMensagens(prev => prev.map(m => 
-        m.id === mensagemParaEditar.id 
-          ? { ...m, conteudo: conteudoEditado } 
-          : m
-      ));
-    }
-    setMensagemParaEditar(null);
-    setConteudoEditado('');
-  };
-
-  const iniciarEdicao = (msg: Mensagem) => {
-    setMensagemParaEditar(msg);
-    setConteudoEditado(msg.conteudo);
   };
 
   const filteredConversas = conversas.filter((c) => {
@@ -958,6 +947,41 @@ export default function Conversas() {
   const renderMensagem = (msg: Mensagem, index: number) => {
     const prevMsg = index > 0 ? mensagens[index - 1] : null;
     const showDateSeparator = shouldShowDateSeparator(msg, prevMsg);
+
+    // Mensagem deletada
+    if (msg.deletada) {
+      const nomeQuemApagou = msg.usuario_deletou?.nome || 'Desconhecido';
+      return (
+        <div key={msg.id} className="animate-message-in">
+          {showDateSeparator && (
+            <div className="date-separator">
+              <span>{formatDateSeparator(msg.created_at)}</span>
+            </div>
+          )}
+          <div className={cn(
+            'flex mb-1',
+            msg.direcao === 'saida' ? 'justify-end' : 'justify-start'
+          )}>
+            <div className={cn(
+              'max-w-[70%] rounded-2xl px-4 py-2.5 flex items-center gap-2',
+              msg.direcao === 'saida' 
+                ? 'bg-muted/50 border border-dashed border-border rounded-br-md' 
+                : 'bg-muted/30 border border-dashed border-border rounded-bl-md'
+            )}>
+              <Ban className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-sm text-muted-foreground italic">
+                  Mensagem apagada por {nomeQuemApagou}
+                </span>
+                <span className="text-xs text-muted-foreground/60">
+                  {msg.deletada_em ? formatTime(msg.deletada_em) : formatTime(msg.created_at)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     // Mensagem de sistema (rastreamento interno)
     if (msg.tipo === 'sistema') {
@@ -1032,19 +1056,12 @@ export default function Conversas() {
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="bg-popover">
-                    {/* Editar - apenas para mensagens de texto */}
-                    {(!msg.tipo || msg.tipo === 'texto') && (
-                      <DropdownMenuItem onClick={() => iniciarEdicao(msg)}>
-                        <Pencil className="h-4 w-4 mr-2" />
-                        Editar
-                      </DropdownMenuItem>
-                    )}
                     <DropdownMenuItem 
                       onClick={() => setMensagemParaDeletar(msg.id)}
                       className="text-destructive focus:text-destructive"
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
-                      Deletar
+                      Apagar
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -1921,35 +1938,6 @@ export default function Conversas() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Modal de Edição de Mensagem */}
-        <Dialog open={!!mensagemParaEditar} onOpenChange={() => { setMensagemParaEditar(null); setConteudoEditado(''); }}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Editar mensagem</DialogTitle>
-            </DialogHeader>
-            <textarea
-              value={conteudoEditado}
-              onChange={(e) => setConteudoEditado(e.target.value)}
-              className="w-full min-h-[120px] p-3 rounded-lg border border-border bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Digite a mensagem..."
-            />
-            <DialogFooter>
-              <button
-                onClick={() => { setMensagemParaEditar(null); setConteudoEditado(''); }}
-                className="px-4 py-2 rounded-lg border border-border hover:bg-muted transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleEditarMensagem}
-                disabled={!conteudoEditado.trim()}
-                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-              >
-                Salvar
-              </button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </MainLayout>
   );

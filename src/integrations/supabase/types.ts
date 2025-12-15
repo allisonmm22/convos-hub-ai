@@ -801,6 +801,9 @@ export type Database = {
           conteudo: string
           conversa_id: string
           created_at: string
+          deletada: boolean | null
+          deletada_em: string | null
+          deletada_por: string | null
           direcao: Database["public"]["Enums"]["direcao_mensagem"]
           enviada_por_dispositivo: boolean | null
           enviada_por_ia: boolean | null
@@ -816,6 +819,9 @@ export type Database = {
           conteudo: string
           conversa_id: string
           created_at?: string
+          deletada?: boolean | null
+          deletada_em?: string | null
+          deletada_por?: string | null
           direcao: Database["public"]["Enums"]["direcao_mensagem"]
           enviada_por_dispositivo?: boolean | null
           enviada_por_ia?: boolean | null
@@ -831,6 +837,9 @@ export type Database = {
           conteudo?: string
           conversa_id?: string
           created_at?: string
+          deletada?: boolean | null
+          deletada_em?: string | null
+          deletada_por?: string | null
           direcao?: Database["public"]["Enums"]["direcao_mensagem"]
           enviada_por_dispositivo?: boolean | null
           enviada_por_ia?: boolean | null
@@ -854,6 +863,13 @@ export type Database = {
             columns: ["conversa_id"]
             isOneToOne: false
             referencedRelation: "conversas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensagens_deletada_por_fkey"
+            columns: ["deletada_por"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
             referencedColumns: ["id"]
           },
           {
