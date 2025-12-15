@@ -407,7 +407,8 @@ export default function Conversas() {
         .update({ 
           status: 'encerrado', 
           arquivada: false,
-          agente_ia_ativo: false 
+          agente_ia_ativo: false,
+          memoria_limpa_em: new Date().toISOString()
         })
         .eq('id', conversaSelecionada.id);
 
