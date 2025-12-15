@@ -206,7 +206,7 @@ serve(async (req) => {
           // Desativar agente IA na conversa
           const { error } = await supabase
             .from('conversas')
-            .update({ agente_ia_ativo: false })
+            .update({ agente_ia_ativo: false, agente_ia_id: null })
             .eq('id', conversa_id);
 
           if (error) throw error;
@@ -222,10 +222,10 @@ serve(async (req) => {
 
           resultado = { sucesso: true, mensagem: 'Conversa transferida para atendente humano' };
         } else if (para === 'ia') {
-          // Ativar agente IA na conversa
+          // Ativar agente IA principal na conversa
           const { error } = await supabase
             .from('conversas')
-            .update({ agente_ia_ativo: true })
+            .update({ agente_ia_ativo: true, agente_ia_id: null })
             .eq('id', conversa_id);
 
           if (error) throw error;
@@ -236,10 +236,58 @@ serve(async (req) => {
             .insert({
               conversa_id,
               para_agente_ia: true,
-              motivo: 'Transferência automática de volta para agente IA',
+              motivo: 'Transferência automática de volta para agente IA principal',
             });
 
-          resultado = { sucesso: true, mensagem: 'Conversa retornada para agente IA' };
+          resultado = { sucesso: true, mensagem: 'Conversa retornada para agente IA principal' };
+        } else if (para?.startsWith('agente:')) {
+          // Transferir para agente específico pelo nome ou ID
+          const agenteRef = para.replace('agente:', '').replace(/-/g, ' ').trim();
+          
+          // Verificar se é UUID
+          let agenteId: string | null = null;
+          
+          if (isValidUUID(agenteRef)) {
+            agenteId = agenteRef;
+          } else {
+            // Buscar agente pelo nome
+            const { data: agentes } = await supabase
+              .from('agent_ia')
+              .select('id, nome')
+              .eq('conta_id', conta_id)
+              .eq('ativo', true);
+            
+            const agenteEncontrado = agentes?.find((a: any) =>
+              a.nome.toLowerCase().replace(/\s+/g, '-') === agenteRef.toLowerCase().replace(/\s+/g, '-') ||
+              a.nome.toLowerCase() === agenteRef.toLowerCase()
+            );
+            
+            if (agenteEncontrado) {
+              agenteId = agenteEncontrado.id;
+            }
+          }
+
+          if (agenteId) {
+            const { error } = await supabase
+              .from('conversas')
+              .update({ agente_ia_ativo: true, agente_ia_id: agenteId })
+              .eq('id', conversa_id);
+
+            if (error) throw error;
+
+            // Registrar transferência
+            await supabase
+              .from('transferencias_atendimento')
+              .insert({
+                conversa_id,
+                para_agente_ia: true,
+                motivo: `Transferência automática para outro agente IA: ${agenteRef}`,
+              });
+
+            resultado = { sucesso: true, mensagem: `Conversa transferida para agente IA: ${agenteRef}` };
+          } else {
+            resultado = { sucesso: false, mensagem: `Agente "${agenteRef}" não encontrado` };
+          }
         }
         break;
       }

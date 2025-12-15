@@ -246,8 +246,8 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
         return `@transferir:usuario:${user?.nome.toLowerCase().replace(/\s+/g, '-') || usuarioSelecionado}`;
       case 'transferir-agente':
         if (agenteSelecionado === 'ia') return '@transferir:ia';
-        const agente = agentes.find(a => a.id === agenteSelecionado);
-        return `@transferir:agente:${agente?.nome.toLowerCase().replace(/\s+/g, '-') || agenteSelecionado}`;
+        // Usar o ID do agente para garantir precisão na transferência
+        return `@transferir:agente:${agenteSelecionado}`;
       case 'fonte':
         return `@fonte:${fonteValue.toLowerCase().replace(/\s+/g, '-')}`;
       case 'notificar':
