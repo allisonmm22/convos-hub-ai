@@ -120,7 +120,7 @@ export default function Conversas() {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('abertos');
   const [atendenteFilter, setAtendenteFilter] = useState<AtendenteFilter>('todos');
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferType, setTransferType] = useState<'choice' | 'humano' | 'agente'>('choice');
