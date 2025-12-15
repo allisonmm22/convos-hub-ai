@@ -1121,8 +1121,9 @@ export default function Conversas() {
                   );
                 } else if (assinaturaNome) {
                   return (
-                    <div className="text-xs opacity-80 mb-1 font-medium">
-                      {assinaturaNome}
+                    <div className="flex items-center gap-1.5 text-xs opacity-80 mb-1 font-medium">
+                      <User className="h-3.5 w-3.5" />
+                      <span>{assinaturaNome}</span>
                     </div>
                   );
                 }
