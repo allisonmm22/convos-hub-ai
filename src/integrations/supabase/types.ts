@@ -143,7 +143,7 @@ export type Database = {
           {
             foreignKeyName: "agent_ia_conta_id_fkey"
             columns: ["conta_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "contas"
             referencedColumns: ["id"]
           },
