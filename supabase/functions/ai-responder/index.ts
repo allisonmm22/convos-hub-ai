@@ -39,9 +39,11 @@ function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: A
   
   for (const match of matches) {
     acoes.push(match[0]);
+    // Remover pontuação final do valor (. , ; ! ?)
+    const valorLimpo = match[2]?.replace(/[.,;!?]+$/, '') || undefined;
     acoesParseadas.push({
       tipo: match[1].toLowerCase() as Acao['tipo'],
-      valor: match[2] || undefined,
+      valor: valorLimpo,
     });
   }
   
@@ -50,8 +52,12 @@ function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: A
 
 // Mapear nome de etapa para ID
 async function mapearEtapaNome(supabase: any, contaId: string, nomeEtapa: string): Promise<string | null> {
-  // Normalizar nome (remover hífens, lowercase)
-  const nomeNormalizado = nomeEtapa.toLowerCase().replace(/-/g, ' ');
+  // Normalizar nome (remover hífens, pontuação final, lowercase)
+  const nomeNormalizado = nomeEtapa.toLowerCase()
+    .replace(/-/g, ' ')
+    .replace(/[.,;!?]+$/, ''); // Remover pontuação final
+  
+  console.log('Mapeando etapa:', nomeEtapa, '-> normalizado:', nomeNormalizado);
   
   // Buscar estágios da conta
   const { data: funis } = await supabase
@@ -59,20 +65,30 @@ async function mapearEtapaNome(supabase: any, contaId: string, nomeEtapa: string
     .select('id')
     .eq('conta_id', contaId);
     
-  if (!funis || funis.length === 0) return null;
+  if (!funis || funis.length === 0) {
+    console.log('Nenhum funil encontrado para conta:', contaId);
+    return null;
+  }
   
   const { data: estagios } = await supabase
     .from('estagios')
     .select('id, nome')
     .in('funil_id', funis.map((f: any) => f.id));
     
-  if (!estagios) return null;
+  if (!estagios) {
+    console.log('Nenhum estágio encontrado');
+    return null;
+  }
+  
+  console.log('Estágios disponíveis:', estagios.map((e: any) => e.nome));
   
   // Encontrar estágio por nome (case insensitive, com/sem hífen)
   const estagio = estagios.find((e: any) => 
     e.nome.toLowerCase() === nomeNormalizado ||
-    e.nome.toLowerCase().replace(/\s+/g, '-') === nomeEtapa.toLowerCase()
+    e.nome.toLowerCase().replace(/\s+/g, '-') === nomeNormalizado
   );
+  
+  console.log('Estágio encontrado:', estagio?.id || 'nenhum');
   
   return estagio?.id || null;
 }
