@@ -8,16 +8,24 @@ const corsHeaders = {
 
 const EVOLUTION_API_URL = 'https://evolution.cognityx.com.br';
 
+// Gera uma instance_key única
+function generateInstanceKey(contaId: string): string {
+  const prefix = contaId.slice(0, 8);
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).slice(2, 6);
+  return `inst_${prefix}_${timestamp}${random}`;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { instance_name, conta_id } = await req.json();
+    const { nome, conta_id } = await req.json();
     
-    if (!instance_name || !conta_id) {
-      return new Response(JSON.stringify({ error: 'instance_name e conta_id são obrigatórios' }), {
+    if (!nome || !conta_id) {
+      return new Response(JSON.stringify({ error: 'nome e conta_id são obrigatórios' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -36,22 +44,10 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Verificar se já existe uma conexão com esse nome
-    const { data: existingConexao } = await supabase
-      .from('conexoes_whatsapp')
-      .select('id')
-      .eq('conta_id', conta_id)
-      .eq('instance_name', instance_name)
-      .maybeSingle();
-
-    if (existingConexao) {
-      return new Response(JSON.stringify({ error: 'Já existe uma instância com esse nome' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    console.log('Criando instância na Evolution API:', instance_name);
+    // Gerar instance_key única
+    const instanceKey = generateInstanceKey(conta_id);
+    
+    console.log('Criando instância na Evolution API:', instanceKey, 'Nome:', nome);
 
     // Criar instância na Evolution API
     const createResponse = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
@@ -61,7 +57,7 @@ serve(async (req) => {
         'apikey': evolutionApiKey,
       },
       body: JSON.stringify({
-        instanceName: instance_name,
+        instanceName: instanceKey,
         qrcode: true,
         integration: 'WHATSAPP-BAILEYS',
       }),
@@ -83,7 +79,7 @@ serve(async (req) => {
     const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-webhook`;
     console.log('Configurando webhook:', webhookUrl);
 
-    const webhookResponse = await fetch(`${EVOLUTION_API_URL}/webhook/set/${instance_name}`, {
+    const webhookResponse = await fetch(`${EVOLUTION_API_URL}/webhook/set/${instanceKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -116,11 +112,11 @@ serve(async (req) => {
       .from('conexoes_whatsapp')
       .insert({
         conta_id,
-        instance_name,
-        token: evolutionApiKey, // Usando a API key global
+        instance_name: instanceKey,
+        token: evolutionApiKey,
         webhook_url: webhookUrl,
         status: 'desconectado',
-        nome: instance_name,
+        nome: nome,
       })
       .select()
       .single();

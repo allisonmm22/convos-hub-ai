@@ -74,7 +74,7 @@ export default function Conexao() {
 
   const handleCreateInstance = async () => {
     if (!instanceName.trim()) {
-      toast.error('Digite o nome da instância');
+      toast.error('Digite o nome da conexão');
       return;
     }
 
@@ -82,7 +82,7 @@ export default function Conexao() {
     try {
       const { data, error } = await supabase.functions.invoke('evolution-create-instance', {
         body: {
-          instance_name: instanceName.trim().toLowerCase().replace(/\s+/g, '-'),
+          nome: instanceName.trim(),
           conta_id: usuario!.conta_id,
         },
       });
@@ -94,12 +94,12 @@ export default function Conexao() {
         return;
       }
 
-      toast.success('Instância criada com sucesso!');
+      toast.success('Conexão criada com sucesso!');
       setInstanceName('');
       await fetchConexao();
     } catch (error) {
-      console.error('Erro ao criar instância:', error);
-      toast.error('Erro ao criar instância');
+      console.error('Erro ao criar conexão:', error);
+      toast.error('Erro ao criar conexão');
     } finally {
       setCreating(false);
     }
@@ -314,8 +314,8 @@ export default function Conexao() {
             <div className="flex-1">
               <p className="text-sm text-muted-foreground">Status da Conexão</p>
               <p className={`text-xl font-semibold ${getStatusColor()}`}>{getStatusText()}</p>
-              {conexao?.instance_name && (
-                <p className="text-sm text-muted-foreground">Instância: {conexao.instance_name}</p>
+              {conexao?.nome && (
+                <p className="text-sm text-muted-foreground">{conexao.nome}</p>
               )}
               {conexao?.numero && (
                 <p className="text-sm text-muted-foreground flex items-center gap-1">
@@ -340,17 +340,17 @@ export default function Conexao() {
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Nome da Instância
+                Nome da Conexão
               </label>
               <input
                 type="text"
                 value={instanceName}
                 onChange={(e) => setInstanceName(e.target.value)}
-                placeholder="minha-empresa"
+                placeholder="Ex: WhatsApp Vendas, Suporte, etc."
                 className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Use apenas letras, números e hífens. Exemplo: minha-empresa
+                Nome para identificar esta conexão no sistema.
               </p>
             </div>
 
@@ -491,7 +491,7 @@ export default function Conexao() {
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
                 1
               </span>
-              <span>Digite um nome único para sua instância e clique em "Criar Instância"</span>
+              <span>Digite um nome para sua conexão e clique em "Criar Instância"</span>
             </li>
             <li className="flex gap-3">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
