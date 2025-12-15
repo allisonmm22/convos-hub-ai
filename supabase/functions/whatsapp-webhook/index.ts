@@ -415,7 +415,7 @@ serve(async (req) => {
       
       // Usar fetch direto para a API REST do Supabase com header para ignorar cache
       const conversaResponse = await fetch(
-        `${supabaseUrl}/rest/v1/conversas?conta_id=eq.${conexao.conta_id}&contato_id=eq.${contato!.id}&arquivada=eq.false&select=id,agente_ia_ativo,nao_lidas`,
+        `${supabaseUrl}/rest/v1/conversas?conta_id=eq.${conexao.conta_id}&contato_id=eq.${contato!.id}&arquivada=eq.false&select=id,agente_ia_ativo,nao_lidas,agente_ia_id`,
         {
           headers: {
             'apikey': supabaseKey,
@@ -427,7 +427,7 @@ serve(async (req) => {
         }
       );
 
-      let conversa: { id: string; agente_ia_ativo: boolean; nao_lidas: number } | null = null;
+      let conversa: { id: string; agente_ia_ativo: boolean; nao_lidas: number; agente_ia_id: string | null } | null = null;
       
       if (conversaResponse.ok) {
         const conversaData = await conversaResponse.json();
@@ -555,91 +555,93 @@ serve(async (req) => {
 
       console.log('Conversa atualizada com sucesso');
 
-      // Chamar ai-responder diretamente se IA ativa e não for mensagem de saída
+      // Sistema de debounce: agendar resposta com tempo_espera_segundos
       if (conversa?.agente_ia_ativo && !fromMe) {
-        console.log('=== CHAMANDO AI-RESPONDER DIRETAMENTE ===');
+        console.log('=== AGENDANDO RESPOSTA IA COM DEBOUNCE ===');
         
         try {
-          console.log('Iniciando chamada ao ai-responder para conversa:', conversa.id);
+          // Buscar tempo de espera do agente
+          let tempoEspera = 5; // default 5 segundos
           
-          const aiResponse = await fetch(
-            `${supabaseUrl}/functions/v1/ai-responder`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${supabaseKey}`,
-              },
-              body: JSON.stringify({
-                conversa_id: conversa.id,
-              }),
-            }
-          );
-
-          if (!aiResponse.ok) {
-            const errorText = await aiResponse.text();
-            console.error('Erro ao chamar ai-responder:', aiResponse.status, errorText);
-          } else {
-            const aiData = await aiResponse.json();
-            console.log('AI-responder executado com sucesso:', aiData?.resposta?.substring(0, 100) || 'sem resposta');
+          if (conversa.agente_ia_id) {
+            const { data: agenteConfig } = await supabase
+              .from('agent_ia')
+              .select('tempo_espera_segundos')
+              .eq('id', conversa.agente_ia_id)
+              .single();
             
-            // Enviar resposta para o WhatsApp e salvar no banco
-            if (aiData.should_respond && aiData.resposta) {
-              try {
-                console.log('Enviando resposta IA para:', telefone);
-                
-                // Enviar via Evolution API
-                const sendResponse = await fetch(
-                  `${EVOLUTION_API_URL}/message/sendText/${conexao.instance_name}`,
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'apikey': conexao.token,
-                    },
-                    body: JSON.stringify({
-                      number: telefone,
-                      text: aiData.resposta,
-                    }),
-                  }
-                );
-                
-                if (sendResponse.ok) {
-                  console.log('Resposta IA enviada com sucesso');
-                  
-                  // Salvar mensagem da IA no banco
-                  const { error: msgError } = await supabase.from('mensagens').insert({
-                    conversa_id: conversa.id,
-                    contato_id: contato?.id || null,
-                    conteudo: aiData.resposta,
-                    direcao: 'saida',
-                    tipo: 'texto',
-                    enviada_por_ia: true,
-                  });
-                  
-                  if (msgError) {
-                    console.error('Erro ao salvar mensagem IA:', msgError);
-                  }
-                  
-                  // Atualizar conversa
-                  await supabase.from('conversas').update({
-                    ultima_mensagem: aiData.resposta,
-                    ultima_mensagem_at: new Date().toISOString(),
-                    status: 'aguardando_cliente',
-                  }).eq('id', conversa.id);
-                  
-                  console.log('Mensagem IA salva e conversa atualizada');
-                } else {
-                  const sendError = await sendResponse.text();
-                  console.error('Erro ao enviar resposta IA:', sendResponse.status, sendError);
-                }
-              } catch (sendError) {
-                console.error('Erro ao processar envio da resposta IA:', sendError);
-              }
+            if (agenteConfig?.tempo_espera_segundos) {
+              tempoEspera = agenteConfig.tempo_espera_segundos;
             }
           }
-        } catch (aiError) {
-          console.error('Erro ao executar ai-responder:', aiError);
+          
+          console.log('Tempo de espera configurado:', tempoEspera, 'segundos');
+          
+          // Calcular quando responder (agora + tempo_espera)
+          const responderEm = new Date(Date.now() + tempoEspera * 1000).toISOString();
+          
+          // Upsert na tabela respostas_pendentes (atualiza se já existir)
+          const { error: upsertError } = await supabase
+            .from('respostas_pendentes')
+            .upsert({
+              conversa_id: conversa.id,
+              responder_em: responderEm,
+            }, { 
+              onConflict: 'conversa_id',
+            });
+          
+          if (upsertError) {
+            console.error('Erro ao agendar resposta:', upsertError);
+          } else {
+            console.log('Resposta agendada para:', responderEm);
+            
+            // Usar EdgeRuntime.waitUntil para agendar processamento após delay
+            // @ts-ignore - EdgeRuntime é disponível no ambiente Deno/Supabase
+            if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+              // @ts-ignore
+              EdgeRuntime.waitUntil(
+                new Promise<void>((resolve) => {
+                  setTimeout(async () => {
+                    try {
+                      console.log('Executando processamento agendado para conversa:', conversa.id);
+                      
+                      await fetch(
+                        `${supabaseUrl}/functions/v1/processar-resposta-agora`,
+                        {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${supabaseKey}`,
+                          },
+                          body: JSON.stringify({ conversa_id: conversa.id }),
+                        }
+                      );
+                    } catch (err) {
+                      console.error('Erro ao chamar processador:', err);
+                    }
+                    resolve();
+                  }, tempoEspera * 1000);
+                })
+              );
+              console.log('Processamento agendado via EdgeRuntime.waitUntil');
+            } else {
+              // Fallback: chamar imediatamente (sem delay)
+              console.log('EdgeRuntime.waitUntil não disponível, chamando imediatamente');
+              fetch(
+                `${supabaseUrl}/functions/v1/processar-resposta-agora`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${supabaseKey}`,
+                  },
+                  body: JSON.stringify({ conversa_id: conversa.id }),
+                }
+              ).catch(err => console.error('Erro no fallback:', err));
+            }
+          }
+        } catch (debounceError) {
+          console.error('Erro no sistema de debounce:', debounceError);
         }
       }
 
