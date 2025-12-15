@@ -14,9 +14,9 @@ serve(async (req) => {
   }
 
   try {
-    const { conexao_id, telefone, mensagem, tipo = 'texto', media_url, media_base64, grupo_jid } = await req.json();
+    const { conexao_id, telefone, mensagem, tipo = 'texto', media_url, media_base64, grupo_jid, mensagem_id } = await req.json();
 
-    console.log('Enviando mensagem:', { conexao_id, telefone, tipo, hasBase64: !!media_base64, grupo_jid });
+    console.log('Enviando mensagem:', { conexao_id, telefone, tipo, hasBase64: !!media_base64, grupo_jid, mensagem_id });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -173,7 +173,23 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ success: true, result }), {
+    // Salvar evolution_msg_id no metadata da mensagem para permitir deletar do WhatsApp
+    const evolutionMsgId = result?.key?.id;
+    if (mensagem_id && evolutionMsgId) {
+      console.log('Salvando evolution_msg_id:', evolutionMsgId, 'para mensagem_id:', mensagem_id);
+      const { error: updateError } = await supabase
+        .from('mensagens')
+        .update({ 
+          metadata: { evolution_msg_id: evolutionMsgId }
+        })
+        .eq('id', mensagem_id);
+      
+      if (updateError) {
+        console.error('Erro ao salvar evolution_msg_id:', updateError);
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, result, evolution_msg_id: evolutionMsgId }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: unknown) {
