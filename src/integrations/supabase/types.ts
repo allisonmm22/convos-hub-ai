@@ -366,6 +366,7 @@ export type Database = {
       }
       contas: {
         Row: {
+          ativo: boolean | null
           created_at: string
           id: string
           nome: string
@@ -374,6 +375,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ativo?: boolean | null
           created_at?: string
           id?: string
           nome: string
@@ -382,6 +384,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ativo?: boolean | null
           created_at?: string
           id?: string
           nome?: string

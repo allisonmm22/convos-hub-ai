@@ -11,6 +11,14 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { z } from 'zod';
+
+const formSchema = z.object({
+  nomeEmpresa: z.string().min(2, 'Nome da empresa deve ter no mínimo 2 caracteres').max(100),
+  nomeUsuario: z.string().min(2, 'Nome do administrador deve ter no mínimo 2 caracteres').max(100),
+  email: z.string().email('Email inválido'),
+  senha: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
+});
 
 interface NovaContaAdminModalProps {
   open: boolean;
@@ -30,101 +38,46 @@ export default function NovaContaAdminModal({ open, onClose, onSuccess }: NovaCo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.nomeEmpresa || !formData.nomeUsuario || !formData.email || !formData.senha) {
-      toast.error('Preencha todos os campos');
-      return;
-    }
-
-    if (formData.senha.length < 6) {
-      toast.error('Senha deve ter no mínimo 6 caracteres');
+    // Validar com Zod
+    const validation = formSchema.safeParse(formData);
+    if (!validation.success) {
+      toast.error(validation.error.errors[0].message);
       return;
     }
 
     setLoading(true);
     try {
-      // 1. Criar usuário no auth
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: formData.email,
-        password: formData.senha,
-        email_confirm: true,
+      const { data, error } = await supabase.functions.invoke('criar-conta-admin', {
+        body: {
+          nomeEmpresa: formData.nomeEmpresa.trim(),
+          nomeUsuario: formData.nomeUsuario.trim(),
+          email: formData.email.trim().toLowerCase(),
+          senha: formData.senha,
+        },
       });
 
-      // Se não tiver permissão de admin, usar signUp normal
-      if (authError && authError.message.includes('not authorized')) {
-        // Usar Edge Function para criar conta
-        const { data, error } = await supabase.functions.invoke('criar-conta-admin', {
-          body: {
-            nomeEmpresa: formData.nomeEmpresa,
-            nomeUsuario: formData.nomeUsuario,
-            email: formData.email,
-            senha: formData.senha,
-          },
-        });
-
-        if (error) throw error;
-        
-        toast.success('Conta criada com sucesso');
-        setFormData({ nomeEmpresa: '', nomeUsuario: '', email: '', senha: '' });
-        onSuccess();
-        return;
+      if (error) {
+        throw new Error(error.message || 'Erro ao criar conta');
       }
 
-      if (authError) throw authError;
-
-      // 2. Criar conta
-      const { data: contaData, error: contaError } = await supabase
-        .from('contas')
-        .insert({ nome: formData.nomeEmpresa })
-        .select()
-        .single();
-
-      if (contaError) throw contaError;
-
-      // 3. Criar usuário
-      const { error: usuarioError } = await supabase
-        .from('usuarios')
-        .insert({
-          user_id: authData.user!.id,
-          conta_id: contaData.id,
-          nome: formData.nomeUsuario,
-          email: formData.email,
-          is_admin: true,
-        });
-
-      if (usuarioError) throw usuarioError;
-
-      // 4. Criar role admin
-      await supabase.from('user_roles').insert({
-        user_id: authData.user!.id,
-        role: 'admin',
-      });
-
-      // 5. Criar agente IA padrão
-      await supabase.from('agent_ia').insert({ conta_id: contaData.id });
-
-      // 6. Criar funil padrão
-      const { data: funilData } = await supabase
-        .from('funis')
-        .insert({ conta_id: contaData.id, nome: 'Vendas', ordem: 0 })
-        .select()
-        .single();
-
-      if (funilData) {
-        await supabase.from('estagios').insert([
-          { funil_id: funilData.id, nome: 'Novo Lead', ordem: 0, cor: '#3b82f6' },
-          { funil_id: funilData.id, nome: 'Em Contato', ordem: 1, cor: '#f59e0b' },
-          { funil_id: funilData.id, nome: 'Proposta Enviada', ordem: 2, cor: '#8b5cf6' },
-          { funil_id: funilData.id, nome: 'Negociação', ordem: 3, cor: '#ec4899' },
-          { funil_id: funilData.id, nome: 'Fechado', ordem: 4, cor: '#10b981' },
-        ]);
+      if (data?.error) {
+        throw new Error(data.error);
       }
-
-      toast.success('Conta criada com sucesso');
+      
+      toast.success('Conta criada com sucesso! O administrador pode fazer login agora.');
       setFormData({ nomeEmpresa: '', nomeUsuario: '', email: '', senha: '' });
       onSuccess();
     } catch (error: any) {
       console.error('Erro ao criar conta:', error);
-      toast.error(error.message || 'Erro ao criar conta');
+      
+      // Tratar erros específicos
+      if (error.message?.includes('already registered') || error.message?.includes('já existe')) {
+        toast.error('Este email já está cadastrado no sistema');
+      } else if (error.message?.includes('Invalid email')) {
+        toast.error('Email inválido');
+      } else {
+        toast.error(error.message || 'Erro ao criar conta');
+      }
     } finally {
       setLoading(false);
     }
