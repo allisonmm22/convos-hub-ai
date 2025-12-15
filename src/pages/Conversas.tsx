@@ -439,7 +439,7 @@ export default function Conversas() {
     try {
       // Aplicar assinatura se ativada
       const mensagemFinal = usuario?.assinatura_ativa !== false
-        ? `${novaMensagem}\n\n— ${usuario?.nome}`
+        ? `${usuario?.nome}:\n${novaMensagem}`
         : novaMensagem;
 
       // Salvar no banco
