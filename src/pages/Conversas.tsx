@@ -24,6 +24,8 @@ import {
   WifiOff,
   RefreshCw,
   User,
+  ArrowLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -109,6 +111,7 @@ export default function Conversas() {
   const [enviando, setEnviando] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferType, setTransferType] = useState<'choice' | 'humano' | 'agente'>('choice');
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -1193,75 +1196,136 @@ export default function Conversas() {
         {showTransferModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-foreground">Transferir Atendimento</h3>
-                <button onClick={() => setShowTransferModal(false)}>
-                  <X className="h-5 w-5 text-muted-foreground" />
-                </button>
-              </div>
-
-              <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
-                {/* Agente IA Principal */}
-                <button
-                  onClick={() => transferirAtendimento(null, true)}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted transition-colors"
-                >
-                  <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-                    <Bot className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-medium text-foreground">Agente IA Principal</p>
-                    <p className="text-sm text-muted-foreground">Transferir para atendimento automático</p>
-                  </div>
-                </button>
-
-                {/* Outros Agentes IA */}
-                {agentesDisponiveis
-                  .filter((a) => a.ativo)
-                  .map((agente) => (
-                    <button
-                      key={agente.id}
-                      onClick={() => transferirAtendimento(null, true, agente.id)}
-                      className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted transition-colors"
-                    >
-                      <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-                        <Bot className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className="text-left">
-                        <p className="font-medium text-foreground">{agente.nome}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Agente IA {agente.tipo === 'principal' ? '(Principal)' : '(Secundário)'}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
-
-                {/* Separador */}
-                {usuarios.filter((u) => u.id !== usuario?.id).length > 0 && (
-                  <div className="border-t border-border my-2 pt-2">
-                    <p className="text-xs text-muted-foreground mb-2 px-1">Atendentes Humanos</p>
-                  </div>
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                {transferType !== 'choice' ? (
+                  <button 
+                    onClick={() => setTransferType('choice')}
+                    className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    <span className="text-sm">Voltar</span>
+                  </button>
+                ) : (
+                  <div />
                 )}
-
-                {/* Usuários Humanos */}
-                {usuarios
-                  .filter((u) => u.id !== usuario?.id)
-                  .map((u) => (
-                    <button
-                      key={u.id}
-                      onClick={() => transferirAtendimento(u.id, false)}
-                      className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted transition-colors"
-                    >
-                      <div className="h-10 w-10 rounded-full bg-orange-500/20 flex items-center justify-center">
-                        <UserCheck className="h-5 w-5 text-orange-500" />
-                      </div>
-                      <div className="text-left">
-                        <p className="font-medium text-foreground">{u.nome}</p>
-                        <p className="text-sm text-muted-foreground">{u.email}</p>
-                      </div>
-                    </button>
-                  ))}
+                
+                <h3 className="text-lg font-semibold text-foreground">
+                  {transferType === 'choice' && 'Transferir Atendimento'}
+                  {transferType === 'humano' && 'Atendentes Humanos'}
+                  {transferType === 'agente' && 'Agentes IA'}
+                </h3>
+                
+                <button onClick={() => {
+                  setShowTransferModal(false);
+                  setTransferType('choice');
+                }}>
+                  <X className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
+                </button>
               </div>
+
+              {/* Conteúdo baseado no estado */}
+              {transferType === 'choice' && (
+                <div className="space-y-3">
+                  <button
+                    onClick={() => setTransferType('humano')}
+                    className="w-full flex items-center gap-4 p-4 rounded-xl border border-border hover:bg-muted hover:border-primary/50 transition-all group"
+                  >
+                    <div className="h-12 w-12 rounded-full bg-orange-500/20 flex items-center justify-center">
+                      <User className="h-6 w-6 text-orange-500" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="font-medium text-foreground">Transferir para Humano</p>
+                      <p className="text-sm text-muted-foreground">Ver todos os atendentes</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </button>
+                  
+                  <button
+                    onClick={() => setTransferType('agente')}
+                    className="w-full flex items-center gap-4 p-4 rounded-xl border border-border hover:bg-muted hover:border-primary/50 transition-all group"
+                  >
+                    <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center">
+                      <Bot className="h-6 w-6 text-primary" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="font-medium text-foreground">Transferir para Agente IA</p>
+                      <p className="text-sm text-muted-foreground">Ver todos os agentes</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </button>
+                </div>
+              )}
+
+              {transferType === 'humano' && (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {usuarios.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <User className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                      <p>Nenhum atendente encontrado</p>
+                    </div>
+                  ) : (
+                    usuarios.map((u) => (
+                      <button
+                        key={u.id}
+                        onClick={() => {
+                          transferirAtendimento(u.id, false);
+                          setTransferType('choice');
+                        }}
+                        className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted hover:border-orange-500/50 transition-all"
+                      >
+                        <div className="h-10 w-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+                          <UserCheck className="h-5 w-5 text-orange-500" />
+                        </div>
+                        <div className="text-left flex-1">
+                          <p className="font-medium text-foreground">{u.nome}</p>
+                          <p className="text-sm text-muted-foreground">{u.email}</p>
+                        </div>
+                        {u.id === usuario?.id && (
+                          <span className="text-xs bg-muted px-2 py-1 rounded text-muted-foreground">Você</span>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {transferType === 'agente' && (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {agentesDisponiveis.filter((a) => a.ativo).length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Bot className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                      <p>Nenhum agente IA ativo</p>
+                    </div>
+                  ) : (
+                    agentesDisponiveis
+                      .filter((a) => a.ativo)
+                      .map((agente) => (
+                        <button
+                          key={agente.id}
+                          onClick={() => {
+                            transferirAtendimento(null, true, agente.id);
+                            setTransferType('choice');
+                          }}
+                          className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted hover:border-primary/50 transition-all"
+                        >
+                          <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
+                            <Bot className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="text-left flex-1">
+                            <p className="font-medium text-foreground">{agente.nome || 'Agente IA'}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {agente.tipo === 'principal' ? 'Agente Principal' : 'Agente Secundário'}
+                            </p>
+                          </div>
+                          {agente.tipo === 'principal' && (
+                            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">Principal</span>
+                          )}
+                        </button>
+                      ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
