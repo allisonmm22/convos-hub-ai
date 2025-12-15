@@ -29,6 +29,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AudioRecorder } from '@/components/AudioRecorder';
 import { AudioPlayer } from '@/components/AudioPlayer';
+import { ContatoSidebar } from '@/components/ContatoSidebar';
 
 interface Contato {
   id: string;
@@ -95,6 +96,7 @@ export default function Conversas() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileType, setFileType] = useState<'imagem' | 'documento' | 'audio'>('imagem');
   const [imagemExpandida, setImagemExpandida] = useState<string | null>(null);
+  const [showContatoSidebar, setShowContatoSidebar] = useState(false);
   
   // Ref para manter a conversa selecionada atualizada no realtime
   const conversaSelecionadaRef = useRef<Conversa | null>(null);
@@ -910,7 +912,12 @@ export default function Conversas() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="font-medium text-foreground">{conversaSelecionada.contatos.nome}</p>
+                    <button
+                      onClick={() => setShowContatoSidebar(true)}
+                      className="font-medium text-foreground hover:text-primary hover:underline transition-colors cursor-pointer"
+                    >
+                      {conversaSelecionada.contatos.nome}
+                    </button>
                     <span className={cn(
                       'px-2 py-0.5 rounded-full text-xs font-medium text-white',
                       getStatusColor(conversaSelecionada.status)
@@ -1146,6 +1153,22 @@ export default function Conversas() {
               onClick={(e) => e.stopPropagation()}
             />
           </div>
+        )}
+
+        {/* Sidebar do Contato */}
+        {conversaSelecionada && (
+          <ContatoSidebar
+            contato={conversaSelecionada.contatos}
+            isOpen={showContatoSidebar}
+            onClose={() => setShowContatoSidebar(false)}
+            onContatoUpdate={(contatoAtualizado) => {
+              setConversaSelecionada({
+                ...conversaSelecionada,
+                contatos: contatoAtualizado
+              });
+              fetchConversas();
+            }}
+          />
         )}
       </div>
     </MainLayout>
