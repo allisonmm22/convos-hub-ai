@@ -33,6 +33,7 @@ import {
   CheckCircle2,
   Trash2,
   Ban,
+  Tag,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -75,6 +76,13 @@ interface Contato {
   avatar_url: string | null;
   is_grupo?: boolean | null;
   grupo_jid?: string | null;
+  tags?: string[] | null;
+}
+
+interface TagItem {
+  id: string;
+  nome: string;
+  cor: string;
 }
 
 interface Usuario {
@@ -154,7 +162,7 @@ const getInitialFilters = () => {
   } catch (e) {
     console.error('Erro ao ler filtros do localStorage:', e);
   }
-  return { status: 'abertos', atendente: 'todos', tipo: 'todos' };
+  return { status: 'abertos', atendente: 'todos', tipo: 'todos', tags: [] as string[] };
 };
 
 export default function Conversas() {
@@ -173,6 +181,8 @@ export default function Conversas() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialFilters.status);
   const [atendenteFilter, setAtendenteFilter] = useState<AtendenteFilter>(initialFilters.atendente);
   const [tipoFilter, setTipoFilter] = useState<TipoFilter>(initialFilters.tipo);
+  const [tagsFilter, setTagsFilter] = useState<string[]>(initialFilters.tags || []);
+  const [tagsDisponiveis, setTagsDisponiveis] = useState<TagItem[]>([]);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferType, setTransferType] = useState<'choice' | 'humano' | 'agente'>('choice');
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -203,10 +213,11 @@ export default function Conversas() {
     const filters = {
       status: statusFilter,
       atendente: atendenteFilter,
-      tipo: tipoFilter
+      tipo: tipoFilter,
+      tags: tagsFilter
     };
     localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
-  }, [statusFilter, atendenteFilter, tipoFilter]);
+  }, [statusFilter, atendenteFilter, tipoFilter, tagsFilter]);
 
   // Buscar conexão WhatsApp
   const fetchConexao = useCallback(async () => {
@@ -283,6 +294,7 @@ export default function Conversas() {
       fetchUsuarios();
       fetchAgentes();
       fetchConexao();
+      fetchTagsDisponiveis();
       const cleanup = setupRealtimeSubscription();
       
       // Solicitar permissão de notificação
@@ -449,6 +461,33 @@ export default function Conversas() {
     } catch (error) {
       console.error('Erro ao buscar agentes:', error);
     }
+  };
+
+  const fetchTagsDisponiveis = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tags')
+        .select('id, nome, cor')
+        .order('nome');
+      
+      if (error) throw error;
+      setTagsDisponiveis(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar tags:', error);
+    }
+  };
+
+  const toggleTagFilter = (tagNome: string) => {
+    setTagsFilter(prev => 
+      prev.includes(tagNome)
+        ? prev.filter(t => t !== tagNome)
+        : [...prev, tagNome]
+    );
+  };
+
+  const getTagColor = (tagNome: string) => {
+    const tag = tagsDisponiveis.find(t => t.nome === tagNome);
+    return tag?.cor || '#3b82f6';
   };
 
   const fetchMensagens = async (conversaId: string) => {
@@ -967,7 +1006,10 @@ export default function Conversas() {
       tipoFilter === 'todos' ||
       (tipoFilter === 'grupo' && c.contatos.is_grupo === true) ||
       (tipoFilter === 'individual' && !c.contatos.is_grupo);
-    return matchesSearch && matchesStatus && matchesAtendente && matchesTipo;
+    const matchesTags = 
+      tagsFilter.length === 0 ||
+      tagsFilter.some(tag => c.contatos.tags?.includes(tag));
+    return matchesSearch && matchesStatus && matchesAtendente && matchesTipo && matchesTags;
   });
 
   const renderMensagem = (msg: Mensagem, index: number) => {
@@ -1267,16 +1309,16 @@ export default function Conversas() {
                     <button
                       className={cn(
                         'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 border',
-                        (atendenteFilter !== 'todos' || tipoFilter !== 'todos')
+                        (atendenteFilter !== 'todos' || tipoFilter !== 'todos' || tagsFilter.length > 0)
                           ? 'bg-primary/20 text-primary border-primary/30'
                           : 'bg-muted/50 text-muted-foreground border-border/50 hover:bg-muted hover:text-foreground'
                       )}
                     >
                       <SlidersHorizontal className="h-3.5 w-3.5" />
                       Filtros
-                      {(atendenteFilter !== 'todos' || tipoFilter !== 'todos') && (
+                      {(atendenteFilter !== 'todos' || tipoFilter !== 'todos' || tagsFilter.length > 0) && (
                         <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">
-                          {(atendenteFilter !== 'todos' ? 1 : 0) + (tipoFilter !== 'todos' ? 1 : 0)}
+                          {(atendenteFilter !== 'todos' ? 1 : 0) + (tipoFilter !== 'todos' ? 1 : 0) + (tagsFilter.length > 0 ? 1 : 0)}
                         </span>
                       )}
                     </button>
@@ -1375,11 +1417,50 @@ export default function Conversas() {
                         </div>
                       </div>
 
+                      {/* Tags */}
+                      {tagsDisponiveis.length > 0 && (
+                        <>
+                          <div className="h-px bg-border/50" />
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 px-2">
+                              Tags
+                            </span>
+                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                              {tagsDisponiveis.map((tag) => {
+                                const isSelected = tagsFilter.includes(tag.nome);
+                                return (
+                                  <button
+                                    key={tag.id}
+                                    onClick={() => toggleTagFilter(tag.nome)}
+                                    className={cn(
+                                      'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                                      isSelected
+                                        ? 'text-white'
+                                        : 'text-foreground hover:bg-muted'
+                                    )}
+                                    style={isSelected ? { backgroundColor: tag.cor } : undefined}
+                                  >
+                                    {!isSelected && (
+                                      <div 
+                                        className="h-3 w-3 rounded-full shrink-0"
+                                        style={{ backgroundColor: tag.cor }}
+                                      />
+                                    )}
+                                    <Tag className="h-4 w-4" />
+                                    {tag.nome}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </>
+                      )}
+
                       <div className="h-px bg-border/50" />
 
                       {/* Limpar Filtros */}
                       <button
-                        onClick={() => { setAtendenteFilter('todos'); setTipoFilter('todos'); }}
+                        onClick={() => { setAtendenteFilter('todos'); setTipoFilter('todos'); setTagsFilter([]); }}
                         className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
                       >
                         <X className="h-4 w-4" />
