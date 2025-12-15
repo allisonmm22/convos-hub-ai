@@ -243,7 +243,7 @@ serve(async (req) => {
 
       console.log('Conexão encontrada:', conexao.id, 'Conta:', conexao.conta_id);
 
-      // Buscar chave OpenAI da conta para transcrição
+      // Buscar chave OpenAI da conta para transcrição/análise de imagem
       let openaiApiKey: string | null = null;
       const { data: contaData } = await supabase
         .from('contas')
@@ -254,6 +254,8 @@ serve(async (req) => {
 
       // Se é mídia, fazer download e salvar no Storage
       let transcricaoAudio: string | null = null;
+      let descricaoImagem: string | null = null;
+      
       if (needsMediaDownload && messageId) {
         console.log('Baixando mídia:', messageType, messageId);
         try {
@@ -309,6 +311,40 @@ serve(async (req) => {
                 }
               } catch (transcribeError) {
                 console.error('Erro ao chamar transcrever-audio:', transcribeError);
+              }
+            }
+
+            // Se for imagem e tiver chave OpenAI, analisar
+            if (messageType === 'imagem' && openaiApiKey && downloadData.base64) {
+              console.log('=== ANALISANDO IMAGEM ===');
+              try {
+                const analiseResponse = await fetch(
+                  `${supabaseUrl}/functions/v1/analisar-imagem`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${supabaseKey}`,
+                    },
+                    body: JSON.stringify({
+                      imagem_base64: downloadData.base64,
+                      mime_type: downloadData.mimeType,
+                      openai_api_key: openaiApiKey,
+                    }),
+                  }
+                );
+
+                if (analiseResponse.ok) {
+                  const analiseData = await analiseResponse.json();
+                  if (analiseData.sucesso && analiseData.descricao) {
+                    descricaoImagem = analiseData.descricao;
+                    console.log('Descrição da imagem obtida:', descricaoImagem?.substring(0, 100));
+                  }
+                } else {
+                  console.error('Erro na análise de imagem:', await analiseResponse.text());
+                }
+              } catch (analiseError) {
+                console.error('Erro ao chamar analisar-imagem:', analiseError);
               }
             }
           } else {
@@ -463,7 +499,7 @@ serve(async (req) => {
         }
       }
 
-      // Inserir mensagem com evolution_msg_id e transcrição nos metadados
+      // Inserir mensagem com evolution_msg_id, transcrição e descrição de imagem nos metadados
       // Se fromMe = true (veio do dispositivo físico via webhook), marcar como enviada_por_dispositivo
       const messageMetadata: Record<string, any> = {};
       if (messageId) {
@@ -471,6 +507,9 @@ serve(async (req) => {
       }
       if (transcricaoAudio) {
         messageMetadata.transcricao = transcricaoAudio;
+      }
+      if (descricaoImagem) {
+        messageMetadata.descricao_imagem = descricaoImagem;
       }
       
       const { error: msgError } = await supabase.from('mensagens').insert({
@@ -535,6 +574,7 @@ serve(async (req) => {
                 conta_id: conexao.conta_id,
                 mensagem_tipo: messageType,
                 transcricao: transcricaoAudio,
+                descricao_imagem: descricaoImagem,
               }),
             }
           );

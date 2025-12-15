@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.transcrever-audio]
 verify_jwt = false
+
+[functions.analisar-imagem]
+verify_jwt = false
