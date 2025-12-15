@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.transferir-atendimento]
 verify_jwt = false
+
+[functions.resumir-conversa]
+verify_jwt = false

@@ -22,12 +22,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { NegociacaoDetalheModal } from '@/components/NegociacaoDetalheModal';
 
 interface Estagio {
   id: string;
   nome: string;
   cor: string;
   ordem: number;
+  funil_id?: string;
 }
 
 interface Negociacao {
@@ -36,6 +38,10 @@ interface Negociacao {
   valor: number;
   estagio_id: string;
   contato_id: string;
+  status?: string;
+  probabilidade?: number;
+  notas?: string;
+  data_fechamento?: string;
   contatos: {
     nome: string;
     telefone: string;
@@ -72,6 +78,10 @@ export default function CRM() {
   const [novoValor, setNovoValor] = useState('');
   const [novoEstagioId, setNovoEstagioId] = useState('');
   const [criando, setCriando] = useState(false);
+
+  // Detalhe modal state
+  const [negociacaoSelecionada, setNegociacaoSelecionada] = useState<Negociacao | null>(null);
+  const [detalheModalOpen, setDetalheModalOpen] = useState(false);
 
   const selectedFunil = funis.find(f => f.id === selectedFunilId) || null;
 
@@ -227,6 +237,22 @@ export default function CRM() {
     } catch (error) {
       toast.error('Erro ao mover negociação');
     }
+  };
+
+  const handleAbrirDetalhes = (negociacao: Negociacao) => {
+    setNegociacaoSelecionada(negociacao);
+    setDetalheModalOpen(true);
+  };
+
+  const handleAtualizarNegociacao = (negociacaoAtualizada: Negociacao) => {
+    setNegociacoes((prev) =>
+      prev.map((n) => (n.id === negociacaoAtualizada.id ? negociacaoAtualizada : n))
+    );
+    setNegociacaoSelecionada(negociacaoAtualizada);
+  };
+
+  const handleExcluirNegociacao = (negociacaoId: string) => {
+    setNegociacoes((prev) => prev.filter((n) => n.id !== negociacaoId));
   };
 
   const formatCurrency = (value: number) => {
@@ -432,15 +458,16 @@ export default function CRM() {
                       key={negociacao.id}
                       draggable
                       onDragStart={(e) => handleDragStart(e, negociacao.id)}
+                      onClick={() => handleAbrirDetalhes(negociacao)}
                       className={cn(
-                        'p-4 rounded-xl bg-card border border-border cursor-grab active:cursor-grabbing transition-all',
+                        'p-4 rounded-xl bg-card border border-border cursor-pointer transition-all',
                         'hover:border-primary/50 hover:shadow-md',
-                        dragging === negociacao.id && 'opacity-50'
+                        dragging === negociacao.id && 'opacity-50 cursor-grabbing'
                       )}
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <GripVertical className="h-4 w-4 text-muted-foreground" />
+                          <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
                           <h4 className="font-medium text-foreground">{negociacao.titulo}</h4>
                         </div>
                       </div>
@@ -477,6 +504,20 @@ export default function CRM() {
             <p>Nenhum funil configurado</p>
           </div>
         )}
+
+        {/* Modal de Detalhes da Negociação */}
+        <NegociacaoDetalheModal
+          negociacao={negociacaoSelecionada}
+          isOpen={detalheModalOpen}
+          onClose={() => {
+            setDetalheModalOpen(false);
+            setNegociacaoSelecionada(null);
+          }}
+          onUpdate={handleAtualizarNegociacao}
+          onDelete={handleExcluirNegociacao}
+          estagios={selectedFunil?.estagios || []}
+          funis={funis}
+        />
       </div>
     </MainLayout>
   );
