@@ -40,20 +40,34 @@ function gerarMensagemSistema(tipo: string, valor: string | undefined, resultado
 }
 
 // Função para mapear nome de etapa para UUID
+// Suporta formato: "nome-estagio" ou "nome-funil/nome-estagio"
 async function mapearEtapaPorNome(
   supabase: any,
   contaId: string,
   nomeEtapa: string
 ): Promise<string | null> {
-  // Normalizar o nome (minúsculo, sem pontuação final)
-  const nomeNormalizado = nomeEtapa.toLowerCase().replace(/[.,;!?]+$/, '').trim();
+  // Verificar se tem formato funil/etapa
+  const partes = nomeEtapa.split('/');
+  let nomeFunil: string | null = null;
+  let nomeEtapaReal: string;
   
-  console.log(`Buscando etapa "${nomeNormalizado}" para conta ${contaId}`);
+  if (partes.length === 2) {
+    // Formato: funil/etapa
+    nomeFunil = partes[0].toLowerCase().replace(/[.,;!?]+$/, '').replace(/-/g, ' ').trim();
+    nomeEtapaReal = partes[1].toLowerCase().replace(/[.,;!?]+$/, '').replace(/-/g, ' ').trim();
+    console.log(`Formato funil/etapa detectado: funil="${nomeFunil}", etapa="${nomeEtapaReal}"`);
+  } else {
+    // Formato antigo: apenas etapa
+    nomeEtapaReal = nomeEtapa.toLowerCase().replace(/[.,;!?]+$/, '').replace(/-/g, ' ').trim();
+    console.log(`Formato simples: etapa="${nomeEtapaReal}"`);
+  }
+  
+  console.log(`Buscando etapa para conta ${contaId}`);
 
-  // Buscar todos os funis da conta
+  // Buscar todos os funis da conta (com nome para filtrar se necessário)
   const { data: funis, error: funisError } = await supabase
     .from('funis')
-    .select('id')
+    .select('id, nome')
     .eq('conta_id', contaId);
 
   if (funisError || !funis?.length) {
@@ -61,10 +75,28 @@ async function mapearEtapaPorNome(
     return null;
   }
 
-  const funilIds = funis.map((f: any) => f.id);
-  console.log(`Funis encontrados: ${funilIds.length}`);
+  console.log(`Funis encontrados: ${funis.map((f: any) => f.nome).join(', ')}`);
 
-  // Buscar todos os estágios desses funis
+  // Se especificou funil, filtrar apenas IDs desse funil
+  let funilIds = funis.map((f: any) => f.id);
+  
+  if (nomeFunil) {
+    const funilEncontrado = funis.find((f: any) => {
+      const nomeNormalizado = f.nome.toLowerCase().replace(/-/g, ' ').trim();
+      return nomeNormalizado === nomeFunil || 
+             nomeNormalizado.includes(nomeFunil) ||
+             nomeFunil.includes(nomeNormalizado);
+    });
+    
+    if (funilEncontrado) {
+      funilIds = [funilEncontrado.id];
+      console.log(`Funil filtrado: ${funilEncontrado.nome} (${funilEncontrado.id})`);
+    } else {
+      console.log(`Funil "${nomeFunil}" não encontrado, buscando em todos os funis`);
+    }
+  }
+
+  // Buscar estágios dos funis filtrados
   const { data: estagios, error: estagiosError } = await supabase
     .from('estagios')
     .select('id, nome, funil_id')
@@ -78,9 +110,10 @@ async function mapearEtapaPorNome(
   console.log(`Estágios disponíveis: ${estagios.map((e: any) => e.nome).join(', ')}`);
 
   // Procurar correspondência exata (case-insensitive)
-  const estagioExato = estagios.find((e: any) =>
-    e.nome.toLowerCase().trim() === nomeNormalizado
-  );
+  const estagioExato = estagios.find((e: any) => {
+    const nomeNormalizado = e.nome.toLowerCase().replace(/-/g, ' ').trim();
+    return nomeNormalizado === nomeEtapaReal;
+  });
 
   if (estagioExato) {
     console.log(`Etapa encontrada: ${estagioExato.nome} (${estagioExato.id})`);
@@ -88,10 +121,11 @@ async function mapearEtapaPorNome(
   }
 
   // Procurar correspondência parcial
-  const estagioParcial = estagios.find((e: any) =>
-    e.nome.toLowerCase().includes(nomeNormalizado) ||
-    nomeNormalizado.includes(e.nome.toLowerCase())
-  );
+  const estagioParcial = estagios.find((e: any) => {
+    const nomeNormalizado = e.nome.toLowerCase().replace(/-/g, ' ').trim();
+    return nomeNormalizado.includes(nomeEtapaReal) ||
+           nomeEtapaReal.includes(nomeNormalizado);
+  });
 
   if (estagioParcial) {
     console.log(`Etapa encontrada (parcial): ${estagioParcial.nome} (${estagioParcial.id})`);
