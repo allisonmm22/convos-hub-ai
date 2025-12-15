@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.executar-acao]
 verify_jwt = false
+
+[functions.transferir-atendimento]
+verify_jwt = false
