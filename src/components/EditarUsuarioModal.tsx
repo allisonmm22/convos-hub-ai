@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, MessageSquare, Eye } from 'lucide-react';
+import { Shield, MessageSquare, Eye, Lock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 
 interface UsuarioComRole {
@@ -37,12 +38,15 @@ export function EditarUsuarioModal({ user, onClose, onSuccess }: EditarUsuarioMo
   const [nome, setNome] = useState('');
   const [role, setRole] = useState<'admin' | 'atendente'>('atendente');
   const [verTodasConversas, setVerTodasConversas] = useState(false);
+  const [novaSenha, setNovaSenha] = useState('');
+  const [loadingPassword, setLoadingPassword] = useState(false);
 
   useEffect(() => {
     if (user) {
       setNome(user.nome);
       setRole(user.role);
       setVerTodasConversas(user.ver_todas_conversas);
+      setNovaSenha('');
     }
   }, [user]);
 
@@ -129,6 +133,39 @@ export function EditarUsuarioModal({ user, onClose, onSuccess }: EditarUsuarioMo
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!user || !novaSenha.trim()) {
+      toast.error('Digite a nova senha');
+      return;
+    }
+
+    if (novaSenha.length < 6) {
+      toast.error('A senha deve ter no mínimo 6 caracteres');
+      return;
+    }
+
+    setLoadingPassword(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reset-user-password', {
+        body: {
+          user_id: user.user_id,
+          new_password: novaSenha
+        }
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success('Senha redefinida com sucesso');
+      setNovaSenha('');
+    } catch (error: any) {
+      console.error('Erro ao redefinir senha:', error);
+      toast.error(error.message || 'Erro ao redefinir senha');
+    } finally {
+      setLoadingPassword(false);
+    }
+  };
+
   if (!user) return null;
 
   const isCurrentUser = user.user_id === currentUser?.user_id;
@@ -212,6 +249,32 @@ export function EditarUsuarioModal({ user, onClose, onSuccess }: EditarUsuarioMo
               </p>
             </div>
           )}
+
+          <Separator className="my-4" />
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Lock className="h-4 w-4 text-muted-foreground" />
+              <Label className="font-medium">Redefinir Senha</Label>
+            </div>
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                value={novaSenha}
+                onChange={(e) => setNovaSenha(e.target.value)}
+                placeholder="Nova senha (mín. 6 caracteres)"
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleResetPassword}
+                disabled={loadingPassword || !novaSenha.trim()}
+              >
+                {loadingPassword ? 'Redefinindo...' : 'Redefinir'}
+              </Button>
+            </div>
+          </div>
 
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
