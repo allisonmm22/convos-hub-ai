@@ -68,6 +68,34 @@ export default function AgenteIAEditar() {
   const [etapasCaracteres, setEtapasCaracteres] = useState(0);
   const [perguntasCaracteres, setPerguntasCaracteres] = useState(0);
 
+  const carregarCaracteresEtapas = async (agentId: string) => {
+    const { data: etapas } = await supabase
+      .from('agent_ia_etapas')
+      .select('nome, descricao')
+      .eq('agent_ia_id', agentId);
+    
+    if (etapas) {
+      const total = etapas.reduce((acc, e) => {
+        return acc + (e.nome?.length || 0) + (e.descricao?.length || 0);
+      }, 0);
+      setEtapasCaracteres(total);
+    }
+  };
+
+  const carregarCaracteresPerguntas = async (agentId: string) => {
+    const { data: perguntas } = await supabase
+      .from('agent_ia_perguntas')
+      .select('pergunta, resposta')
+      .eq('agent_ia_id', agentId);
+    
+    if (perguntas) {
+      const total = perguntas.reduce((acc, p) => {
+        return acc + (p.pergunta?.length || 0) + (p.resposta?.length || 0);
+      }, 0);
+      setPerguntasCaracteres(total);
+    }
+  };
+
   useEffect(() => {
     if (usuario?.conta_id && id) {
       fetchConfig();
@@ -93,6 +121,10 @@ export default function AgenteIAEditar() {
           atender_24h: data.atender_24h ?? false,
         });
         setTempName(data.nome || '');
+        
+        // Carregar caracteres das etapas e perguntas imediatamente
+        carregarCaracteresEtapas(data.id);
+        carregarCaracteresPerguntas(data.id);
       } else {
         toast.error('Agente não encontrado');
         navigate('/agente-ia');
