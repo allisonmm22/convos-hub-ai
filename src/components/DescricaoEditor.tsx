@@ -322,14 +322,19 @@ export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick, onC
     setIsFocused(true);
   }, []);
 
-  // Handler de blur - renderiza chips imediatamente
+  // Handler de blur - salva posição do cursor ANTES de perder foco, depois renderiza chips
   const handleBlur = useCallback(() => {
+    // IMPORTANTE: Salvar posição do cursor ANTES de perder o foco
+    const pos = getCurrentCursorPosition();
+    lastCursorPositionRef.current = pos;
+    onCursorChange?.(pos);
+    
     setIsFocused(false);
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
     renderChips();
-  }, [renderChips]);
+  }, [renderChips, getCurrentCursorPosition, onCursorChange]);
 
   // Handler para remover chips
   const handleClick = useCallback((e: React.MouseEvent) => {
