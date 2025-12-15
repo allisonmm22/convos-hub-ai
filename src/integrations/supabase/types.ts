@@ -780,6 +780,7 @@ export type Database = {
         | "video"
         | "documento"
         | "sticker"
+        | "sistema"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -918,6 +919,7 @@ export const Constants = {
         "video",
         "documento",
         "sticker",
+        "sistema",
       ],
     },
   },
