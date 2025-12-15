@@ -650,11 +650,11 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { conversa_id, mensagem, conta_id, mensagem_tipo, transcricao, descricao_imagem } = await req.json();
+    const { conversa_id, mensagem, conta_id: contaIdParam, mensagem_tipo, transcricao, descricao_imagem } = await req.json();
 
     console.log('=== AI RESPONDER ===');
     console.log('Conversa ID:', conversa_id);
-    console.log('Conta ID:', conta_id);
+    console.log('Conta ID (param):', contaIdParam);
     console.log('Mensagem recebida:', mensagem);
     console.log('Tipo de mensagem:', mensagem_tipo || 'texto');
     if (transcricao) {
@@ -662,6 +662,28 @@ serve(async (req) => {
     }
     if (descricao_imagem) {
       console.log('Descrição de imagem:', descricao_imagem.substring(0, 100));
+    }
+
+    // Fallback: buscar conta_id da conversa se não foi passado
+    let conta_id = contaIdParam;
+    if (!conta_id && conversa_id) {
+      console.log('conta_id não fornecido, buscando da conversa...');
+      const { data: conversaInfo } = await supabase
+        .from('conversas')
+        .select('conta_id')
+        .eq('id', conversa_id)
+        .single();
+      
+      conta_id = conversaInfo?.conta_id;
+      console.log('conta_id obtido da conversa:', conta_id);
+    }
+
+    if (!conta_id) {
+      console.error('Erro: conta_id não encontrado');
+      return new Response(
+        JSON.stringify({ error: 'conta_id obrigatório', should_respond: false }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // 1. Buscar API Key da OpenAI da conta (opcional agora)
