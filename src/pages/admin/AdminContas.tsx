@@ -46,7 +46,7 @@ export default function AdminContas() {
 
   const fetchContas = async () => {
     try {
-      // Buscar contas
+      // Buscar contas com campo ativo
       const { data: contasData, error: contasError } = await supabase
         .from('contas')
         .select('id, nome, created_at')
@@ -57,21 +57,15 @@ export default function AdminContas() {
       // Buscar métricas para cada conta
       const contasComMetricas = await Promise.all(
         (contasData || []).map(async (conta) => {
-          const [{ count: usuariosCount }, { count: conversasCount }] = await Promise.all([
+          const [{ count: usuariosCount }, { count: conversasCount }, { data: contaFull }] = await Promise.all([
             supabase.from('usuarios').select('*', { count: 'exact', head: true }).eq('conta_id', conta.id),
             supabase.from('conversas').select('*', { count: 'exact', head: true }).eq('conta_id', conta.id),
+            supabase.from('contas').select('*').eq('id', conta.id).single(),
           ]);
-
-          // Buscar status ativo via query separada (campo pode não estar no tipo)
-          const { data: contaAtivo } = await supabase
-            .from('contas')
-            .select('*')
-            .eq('id', conta.id)
-            .single();
 
           return {
             ...conta,
-            ativo: (contaAtivo as any)?.ativo ?? true,
+            ativo: (contaFull as any)?.ativo ?? true,
             usuarios_count: usuariosCount || 0,
             conversas_count: conversasCount || 0,
           };
