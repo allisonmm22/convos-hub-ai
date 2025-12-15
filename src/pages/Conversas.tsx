@@ -1038,7 +1038,7 @@ export default function Conversas() {
                     {conversaSelecionada.agente_ia_ativo ? (
                       <>
                         <Bot className="h-4 w-4" />
-                        Agente IA
+                        {conversaSelecionada.agent_ia?.nome || 'Agente IA'}
                       </>
                     ) : (
                       <>
