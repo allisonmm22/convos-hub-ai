@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen, Handshake, X, CalendarSearch, CalendarPlus } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface DescricaoEditorProps {
   value: string;
@@ -197,26 +198,35 @@ function ActionChip({ action, onRemove }: { action: string; onRemove?: () => voi
   const Icon = config.icon;
   
   return (
-    <span 
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs font-medium whitespace-nowrap ${config.bgClass} ${config.colorClass}`}
-      style={{ verticalAlign: 'middle' }}
-    >
-      <Icon className="h-3 w-3 flex-shrink-0" />
-      <span>{config.label}</span>
-      {onRemove && (
-        <button 
-          type="button" 
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onRemove();
-          }}
-          className="flex-shrink-0 hover:opacity-70 text-current pointer-events-auto"
-        >
-          <X className="h-3 w-3" />
-        </button>
-      )}
-    </span>
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span 
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs font-medium whitespace-nowrap cursor-default ${config.bgClass} ${config.colorClass}`}
+            style={{ verticalAlign: 'middle' }}
+          >
+            <Icon className="h-3 w-3 flex-shrink-0" />
+            <span>{config.label}</span>
+            {onRemove && (
+              <button 
+                type="button" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onRemove();
+                }}
+                className="flex-shrink-0 hover:opacity-70 text-current pointer-events-auto"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          <p className="font-mono">{action}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
