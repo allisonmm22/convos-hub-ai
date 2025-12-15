@@ -186,13 +186,17 @@ function renderTextWithChips(
   
   let match;
   while ((match = ACTION_REGEX.exec(text)) !== null) {
-    // Texto antes da ação
+    // Texto antes da ação - TRANSPARENTE para não sobrepor o textarea
     if (match.index > lastIndex) {
       const textBefore = text.slice(lastIndex, match.index);
-      parts.push(<span key={`text-${lastIndex}`}>{textBefore}</span>);
+      parts.push(
+        <span key={`text-${lastIndex}`} style={{ color: 'transparent' }}>
+          {textBefore}
+        </span>
+      );
     }
     
-    // Ação como chip
+    // Ação como chip - VISÍVEL
     const matchStart = match.index;
     const matchEnd = match.index + match[0].length;
     parts.push(
@@ -206,9 +210,13 @@ function renderTextWithChips(
     lastIndex = matchEnd;
   }
   
-  // Texto restante
+  // Texto restante - TRANSPARENTE
   if (lastIndex < text.length) {
-    parts.push(<span key={`text-${lastIndex}`}>{text.slice(lastIndex)}</span>);
+    parts.push(
+      <span key={`text-${lastIndex}`} style={{ color: 'transparent' }}>
+        {text.slice(lastIndex)}
+      </span>
+    );
   }
   
   return parts;
