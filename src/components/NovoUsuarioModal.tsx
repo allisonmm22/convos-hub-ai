@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { validarEExibirErro } from '@/hooks/useValidarLimitePlano';
 
 interface NovoUsuarioModalProps {
   open: boolean;
@@ -44,6 +45,13 @@ export function NovoUsuarioModal({ open, onClose, onSuccess }: NovoUsuarioModalP
 
     setLoading(true);
     try {
+      // Validar limite do plano
+      const permitido = await validarEExibirErro(usuario!.conta_id, 'usuarios');
+      if (!permitido) {
+        setLoading(false);
+        return;
+      }
+
       // Criar usuário no auth usando função de signup
       // Nota: Em produção, seria melhor usar um Edge Function com service_role key
       const { data: authData, error: authError } = await supabase.auth.signUp({

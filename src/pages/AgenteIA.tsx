@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { NovoAgenteModal } from '@/components/NovoAgenteModal';
 import { FollowUpRegraModal } from '@/components/FollowUpRegraModal';
+import { validarEExibirErro } from '@/hooks/useValidarLimitePlano';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -91,6 +92,10 @@ export default function AgenteIA() {
 
   const criarNovoAgente = async (nome: string, tipo: 'principal' | 'secundario') => {
     try {
+      // Validar limite do plano
+      const permitido = await validarEExibirErro(usuario!.conta_id, 'agentes');
+      if (!permitido) return;
+
       const { data, error } = await supabase
         .from('agent_ia')
         .insert({

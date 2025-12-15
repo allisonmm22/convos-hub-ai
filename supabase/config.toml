@@ -77,3 +77,6 @@ verify_jwt = false
 
 [functions.registrar-log]
 verify_jwt = false
+
+[functions.validar-limite-plano]
+verify_jwt = false
