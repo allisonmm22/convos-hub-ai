@@ -155,6 +155,63 @@ async function callOpenAI(
         }
       }
     }
+    
+    // Se há ações mas sem resposta textual, fazer segunda chamada para obter resposta
+    if (!resposta && acoes.length > 0) {
+      console.log('Tool call sem resposta textual, fazendo segunda chamada...');
+      
+      // Montar mensagens com o resultado do tool call
+      const toolResultMessages: any[] = [
+        ...messages,
+        message, // Mensagem original com tool_calls
+      ];
+      
+      // Adicionar resultado de cada tool call
+      for (const toolCall of toolCalls) {
+        toolResultMessages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ sucesso: true, mensagem: 'Ação será executada automaticamente' }),
+        });
+      }
+      
+      // Segunda chamada sem tools para obter resposta textual
+      const continuationBody: any = {
+        model: modelo,
+        messages: toolResultMessages,
+      };
+      
+      if (isModeloNovo) {
+        continuationBody.max_completion_tokens = maxTokens;
+      } else {
+        continuationBody.max_tokens = maxTokens;
+        continuationBody.temperature = temperatura;
+      }
+      
+      try {
+        const continuationResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(continuationBody),
+        });
+        
+        if (continuationResponse.ok) {
+          const continuationData = await continuationResponse.json();
+          resposta = continuationData.choices?.[0]?.message?.content || '';
+          console.log('Resposta da continuação:', resposta.substring(0, 100));
+        }
+      } catch (e) {
+        console.error('Erro na segunda chamada OpenAI:', e);
+      }
+      
+      // Fallback se ainda não houver resposta
+      if (!resposta) {
+        resposta = 'Entendido! Estou processando sua solicitação.';
+      }
+    }
   }
 
   if (!resposta && acoes.length === 0) {
@@ -222,6 +279,56 @@ async function callLovableAI(
         } catch (e) {
           console.error('Erro ao parsear argumentos da ação:', e);
         }
+      }
+    }
+    
+    // Se há ações mas sem resposta textual, fazer segunda chamada para obter resposta
+    if (!resposta && acoes.length > 0) {
+      console.log('Tool call sem resposta textual (Lovable AI), fazendo segunda chamada...');
+      
+      // Montar mensagens com o resultado do tool call
+      const toolResultMessages: any[] = [
+        ...messages,
+        message, // Mensagem original com tool_calls
+      ];
+      
+      // Adicionar resultado de cada tool call
+      for (const toolCall of toolCalls) {
+        toolResultMessages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ sucesso: true, mensagem: 'Ação será executada automaticamente' }),
+        });
+      }
+      
+      // Segunda chamada sem tools para obter resposta textual
+      const continuationBody: any = {
+        model: lovableModel,
+        messages: toolResultMessages,
+      };
+      
+      try {
+        const continuationResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(continuationBody),
+        });
+        
+        if (continuationResponse.ok) {
+          const continuationData = await continuationResponse.json();
+          resposta = continuationData.choices?.[0]?.message?.content || '';
+          console.log('Resposta da continuação (Lovable):', resposta.substring(0, 100));
+        }
+      } catch (e) {
+        console.error('Erro na segunda chamada Lovable AI:', e);
+      }
+      
+      // Fallback se ainda não houver resposta
+      if (!resposta) {
+        resposta = 'Entendido! Estou processando sua solicitação.';
       }
     }
   }
