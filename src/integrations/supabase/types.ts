@@ -733,6 +733,51 @@ export type Database = {
           },
         ]
       }
+      logs_atividade: {
+        Row: {
+          conta_id: string
+          created_at: string | null
+          descricao: string | null
+          id: string
+          metadata: Json | null
+          tipo: string
+          usuario_id: string | null
+        }
+        Insert: {
+          conta_id: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          metadata?: Json | null
+          tipo: string
+          usuario_id?: string | null
+        }
+        Update: {
+          conta_id?: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          metadata?: Json | null
+          tipo?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "logs_atividade_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "logs_atividade_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mensagens: {
         Row: {
           contato_id: string | null
@@ -1097,6 +1142,60 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      uso_tokens: {
+        Row: {
+          completion_tokens: number
+          conta_id: string
+          conversa_id: string | null
+          created_at: string | null
+          custo_estimado: number | null
+          id: string
+          modelo: string
+          prompt_tokens: number
+          provider: string
+          total_tokens: number
+        }
+        Insert: {
+          completion_tokens?: number
+          conta_id: string
+          conversa_id?: string | null
+          created_at?: string | null
+          custo_estimado?: number | null
+          id?: string
+          modelo: string
+          prompt_tokens?: number
+          provider: string
+          total_tokens?: number
+        }
+        Update: {
+          completion_tokens?: number
+          conta_id?: string
+          conversa_id?: string | null
+          created_at?: string | null
+          custo_estimado?: number | null
+          id?: string
+          modelo?: string
+          prompt_tokens?: number
+          provider?: string
+          total_tokens?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uso_tokens_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "uso_tokens_conversa_id_fkey"
+            columns: ["conversa_id"]
+            isOneToOne: false
+            referencedRelation: "conversas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       usuarios: {
         Row: {

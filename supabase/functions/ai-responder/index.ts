@@ -22,12 +22,46 @@ interface AIResponse {
   resposta: string;
   provider: 'openai' | 'lovable';
   acoes?: Acao[];
+  tokens?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
 }
 
 interface Acao {
   tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda';
   valor?: string;
   calendario_id?: string;
+}
+
+// Função para calcular custo estimado de tokens
+function calcularCustoEstimado(
+  provider: string, 
+  modelo: string, 
+  tokens: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
+): number {
+  // Preços aproximados por 1K tokens (USD)
+  const precos: Record<string, { input: number; output: number }> = {
+    // OpenAI
+    'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
+    'gpt-4o': { input: 0.005, output: 0.015 },
+    'gpt-5-2025-08-07': { input: 0.01, output: 0.03 },
+    'gpt-5-mini-2025-08-07': { input: 0.003, output: 0.012 },
+    'gpt-5-nano-2025-08-07': { input: 0.001, output: 0.004 },
+    // Lovable/Gemini
+    'google/gemini-2.5-flash': { input: 0.00015, output: 0.0006 },
+    'google/gemini-2.5-pro': { input: 0.00125, output: 0.005 },
+    'openai/gpt-5': { input: 0.01, output: 0.03 },
+    'openai/gpt-5-mini': { input: 0.003, output: 0.012 },
+    'openai/gpt-5-nano': { input: 0.001, output: 0.004 },
+  };
+
+  const preco = precos[modelo] || { input: 0.001, output: 0.002 };
+  const custoInput = (tokens.prompt_tokens / 1000) * preco.input;
+  const custoOutput = (tokens.completion_tokens / 1000) * preco.output;
+  
+  return custoInput + custoOutput;
 }
 
 // Parser de ações do prompt
@@ -446,7 +480,15 @@ async function callOpenAI(
     throw new Error('Resposta vazia da OpenAI');
   }
 
-  return { resposta, provider: 'openai', acoes: acoes.length > 0 ? acoes : undefined };
+  // Extrair informações de tokens
+  const usage = data.usage || {};
+  const tokens = {
+    prompt_tokens: usage.prompt_tokens || 0,
+    completion_tokens: usage.completion_tokens || 0,
+    total_tokens: usage.total_tokens || 0,
+  };
+
+  return { resposta, provider: 'openai', acoes: acoes.length > 0 ? acoes : undefined, tokens };
 }
 
 async function callLovableAI(
@@ -587,7 +629,15 @@ async function callLovableAI(
     throw new Error('Resposta vazia da Lovable AI');
   }
 
-  return { resposta, provider: 'lovable', acoes: acoes.length > 0 ? acoes : undefined };
+  // Extrair informações de tokens
+  const usage = data.usage || {};
+  const tokens = {
+    prompt_tokens: usage.prompt_tokens || 0,
+    completion_tokens: usage.completion_tokens || 0,
+    total_tokens: usage.total_tokens || 0,
+  };
+
+  return { resposta, provider: 'lovable', acoes: acoes.length > 0 ? acoes : undefined, tokens };
 }
 
 serve(async (req) => {
@@ -1017,7 +1067,26 @@ serve(async (req) => {
 
     console.log('Resposta gerada via', result.provider + ':', result.resposta.substring(0, 100) + '...');
 
-    // 12. Executar ações se houver
+    // 12. Salvar uso de tokens
+    if (result.tokens && result.tokens.total_tokens > 0) {
+      console.log('Salvando uso de tokens:', result.tokens);
+      try {
+        await supabase.from('uso_tokens').insert({
+          conta_id,
+          conversa_id,
+          provider: result.provider,
+          modelo,
+          prompt_tokens: result.tokens.prompt_tokens,
+          completion_tokens: result.tokens.completion_tokens,
+          total_tokens: result.tokens.total_tokens,
+          custo_estimado: calcularCustoEstimado(result.provider, modelo, result.tokens),
+        });
+      } catch (tokenError) {
+        console.error('Erro ao salvar uso de tokens:', tokenError);
+      }
+    }
+
+    // 13. Executar ações se houver
     if (result.acoes && result.acoes.length > 0 && contatoId) {
       console.log('Executando', result.acoes.length, 'ações...');
       
