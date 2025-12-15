@@ -1017,9 +1017,6 @@ export default function Conversas() {
                   )}
                 </div>
 
-                {/* Label Status */}
-                <span className="text-sm font-medium text-foreground">Status</span>
-
                 {/* Botão Filtros com Popover */}
                 <Popover>
                   <PopoverTrigger asChild>
