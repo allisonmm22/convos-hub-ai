@@ -555,54 +555,36 @@ serve(async (req) => {
 
       console.log('Conversa atualizada com sucesso');
 
-      // Agendar resposta com debounce se IA ativa e não for mensagem de saída
+      // Chamar ai-responder diretamente se IA ativa e não for mensagem de saída
       if (conversa?.agente_ia_ativo && !fromMe) {
-        console.log('=== AGENDANDO RESPOSTA COM DEBOUNCE ===');
+        console.log('=== CHAMANDO AI-RESPONDER DIRETAMENTE ===');
         
         try {
-          // Buscar o agente para obter o tempo de espera configurado
-          const { data: conversaCompleta } = await supabase
-            .from('conversas')
-            .select('agente_ia_id')
-            .eq('id', conversa.id)
-            .single();
-
-          let tempoEspera = 5; // Default: 5 segundos
+          console.log('Iniciando chamada ao ai-responder para conversa:', conversa.id);
           
-          if (conversaCompleta?.agente_ia_id) {
-            const { data: agente } = await supabase
-              .from('agent_ia')
-              .select('tempo_espera_segundos')
-              .eq('id', conversaCompleta.agente_ia_id)
-              .single();
-            
-            if (agente?.tempo_espera_segundos) {
-              tempoEspera = agente.tempo_espera_segundos;
-            }
-          }
-
-          const responderEm = new Date(Date.now() + tempoEspera * 1000);
-          
-          console.log(`Tempo de espera: ${tempoEspera}s, responder em: ${responderEm.toISOString()}`);
-
-          // Upsert na tabela de pendentes (atualiza timer se já existe)
-          const { error: upsertError } = await supabase
-            .from('respostas_pendentes')
-            .upsert(
-              {
-                conversa_id: conversa.id,
-                responder_em: responderEm.toISOString(),
+          const aiResponse = await fetch(
+            `${supabaseUrl}/functions/v1/ai-responder`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseKey}`,
               },
-              { onConflict: 'conversa_id' }
-            );
+              body: JSON.stringify({
+                conversa_id: conversa.id,
+              }),
+            }
+          );
 
-          if (upsertError) {
-            console.error('Erro ao agendar resposta:', upsertError);
+          if (!aiResponse.ok) {
+            const errorText = await aiResponse.text();
+            console.error('Erro ao chamar ai-responder:', aiResponse.status, errorText);
           } else {
-            console.log('Resposta agendada com sucesso');
+            const aiData = await aiResponse.json();
+            console.log('AI-responder executado com sucesso:', aiData?.resposta?.substring(0, 100) || 'sem resposta');
           }
-        } catch (scheduleError) {
-          console.error('Erro ao agendar resposta:', scheduleError);
+        } catch (aiError) {
+          console.error('Erro ao executar ai-responder:', aiError);
         }
       }
 
