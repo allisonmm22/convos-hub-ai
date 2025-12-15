@@ -93,6 +93,37 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
+      
+      {/* Rotas Admin */}
+      <Route path="/admin" element={<SuperAdminRoute><AdminDashboard /></SuperAdminRoute>} />
+      <Route path="/admin/contas" element={<SuperAdminRoute><AdminContas /></SuperAdminRoute>} />
+      <Route path="/admin/contas/:id" element={<SuperAdminRoute><AdminContaDetalhe /></SuperAdminRoute>} />
+      
+      {/* Rotas CRM */}
+      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/conversas" element={<ProtectedRoute><Conversas /></ProtectedRoute>} />
+      <Route path="/agente-ia" element={<ProtectedRoute><AgenteIA /></ProtectedRoute>} />
+      <Route path="/agente-ia/:id" element={<ProtectedRoute><AgenteIAEditar /></ProtectedRoute>} />
+      <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
+      <Route path="/crm/configuracoes" element={<ProtectedRoute><CRMConfiguracoes /></ProtectedRoute>} />
+      <Route path="/agendamentos" element={<ProtectedRoute><Agendamentos /></ProtectedRoute>} />
+      <Route path="/prospeccao" element={<ProtectedRoute><Prospeccao /></ProtectedRoute>} />
+      <Route path="/contatos" element={<ProtectedRoute><Contatos /></ProtectedRoute>} />
+      <Route path="/usuarios" element={<ProtectedRoute><Usuarios /></ProtectedRoute>} />
+      <Route path="/conexao" element={<ProtectedRoute><Conexao /></ProtectedRoute>} />
+      <Route path="/integracoes" element={<ProtectedRoute><Integracoes /></ProtectedRoute>} />
+      <Route path="/integracoes/google-calendar" element={<ProtectedRoute><IntegracaoGoogleCalendar /></ProtectedRoute>} />
+      <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -100,32 +131,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
-            
-            {/* Rotas Admin */}
-            <Route path="/admin" element={<SuperAdminRoute><AdminDashboard /></SuperAdminRoute>} />
-            <Route path="/admin/contas" element={<SuperAdminRoute><AdminContas /></SuperAdminRoute>} />
-            <Route path="/admin/contas/:id" element={<SuperAdminRoute><AdminContaDetalhe /></SuperAdminRoute>} />
-            
-            {/* Rotas CRM */}
-            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/conversas" element={<ProtectedRoute><Conversas /></ProtectedRoute>} />
-            <Route path="/agente-ia" element={<ProtectedRoute><AgenteIA /></ProtectedRoute>} />
-            <Route path="/agente-ia/:id" element={<ProtectedRoute><AgenteIAEditar /></ProtectedRoute>} />
-            <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
-            <Route path="/crm/configuracoes" element={<ProtectedRoute><CRMConfiguracoes /></ProtectedRoute>} />
-            <Route path="/agendamentos" element={<ProtectedRoute><Agendamentos /></ProtectedRoute>} />
-            <Route path="/prospeccao" element={<ProtectedRoute><Prospeccao /></ProtectedRoute>} />
-            <Route path="/contatos" element={<ProtectedRoute><Contatos /></ProtectedRoute>} />
-            <Route path="/usuarios" element={<ProtectedRoute><Usuarios /></ProtectedRoute>} />
-            <Route path="/conexao" element={<ProtectedRoute><Conexao /></ProtectedRoute>} />
-            <Route path="/integracoes" element={<ProtectedRoute><Integracoes /></ProtectedRoute>} />
-            <Route path="/integracoes/google-calendar" element={<ProtectedRoute><IntegracaoGoogleCalendar /></ProtectedRoute>} />
-            <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <AppRoutes />
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
