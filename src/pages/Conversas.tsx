@@ -50,6 +50,8 @@ interface Usuario {
 interface AgenteIA {
   id: string;
   nome: string | null;
+  ativo: boolean | null;
+  tipo: string | null;
 }
 
 interface Conversa {
@@ -297,7 +299,7 @@ export default function Conversas() {
     try {
       const { data, error } = await supabase
         .from('conversas')
-        .select(`*, contatos(*), agent_ia:agente_ia_id(id, nome)`)
+        .select(`*, contatos(*), agent_ia:agente_ia_id(id, nome, ativo, tipo)`)
         .eq('conta_id', usuario!.conta_id)
         .eq('arquivada', false)
         .order('ultima_mensagem_at', { ascending: false });
@@ -329,7 +331,7 @@ export default function Conversas() {
     try {
       const { data, error } = await supabase
         .from('agent_ia')
-        .select('id, nome')
+        .select('id, nome, ativo, tipo')
         .eq('conta_id', usuario!.conta_id)
         .eq('ativo', true)
         .order('tipo', { ascending: false }); // principal primeiro
@@ -530,32 +532,30 @@ export default function Conversas() {
 
   const conversaEncerrada = conversaSelecionada?.status === 'encerrado';
 
-  const transferirAtendimento = async (paraUsuarioId: string | null, paraIA: boolean) => {
+  const transferirAtendimento = async (paraUsuarioId: string | null, paraIA: boolean, paraAgenteIAId?: string) => {
     if (!conversaSelecionada) return;
 
     try {
-      // Registrar transferência (tabela nova, usar type assertion)
-      await (supabase.from('transferencias_atendimento' as any) as any).insert({
-        conversa_id: conversaSelecionada.id,
-        de_usuario_id: usuario!.id,
-        para_usuario_id: paraUsuarioId,
-        para_agente_ia: paraIA,
+      // Chamar edge function que faz rastreamento e resposta automática
+      const { data, error } = await supabase.functions.invoke('transferir-atendimento', {
+        body: {
+          conversa_id: conversaSelecionada.id,
+          de_usuario_id: usuario?.id,
+          para_usuario_id: paraUsuarioId,
+          para_agente_ia_id: paraAgenteIAId,
+          para_ia: paraIA,
+          conta_id: usuario?.conta_id,
+        },
       });
 
-      // Atualizar conversa
-      await supabase
-        .from('conversas')
-        .update({
-          atendente_id: paraUsuarioId,
-          agente_ia_ativo: paraIA,
-        })
-        .eq('id', conversaSelecionada.id);
+      if (error) throw error;
 
-      toast.success(paraIA ? 'Transferido para Agente IA' : 'Atendimento transferido');
+      toast.success(data?.mensagem || (paraIA ? 'Transferido para Agente IA' : 'Atendimento transferido'));
       setShowTransferModal(false);
       setConversaSelecionada(null);
       fetchConversas();
     } catch (error) {
+      console.error('Erro ao transferir:', error);
       toast.error('Erro ao transferir atendimento');
     }
   };
@@ -1291,7 +1291,8 @@ export default function Conversas() {
                 </button>
               </div>
 
-              <div className="space-y-2 mb-4">
+              <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
+                {/* Agente IA Principal */}
                 <button
                   onClick={() => transferirAtendimento(null, true)}
                   className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted transition-colors"
@@ -1300,11 +1301,40 @@ export default function Conversas() {
                     <Bot className="h-5 w-5 text-primary" />
                   </div>
                   <div className="text-left">
-                    <p className="font-medium text-foreground">Agente IA</p>
+                    <p className="font-medium text-foreground">Agente IA Principal</p>
                     <p className="text-sm text-muted-foreground">Transferir para atendimento automático</p>
                   </div>
                 </button>
 
+                {/* Outros Agentes IA */}
+                {agentesDisponiveis
+                  .filter((a) => a.ativo)
+                  .map((agente) => (
+                    <button
+                      key={agente.id}
+                      onClick={() => transferirAtendimento(null, true, agente.id)}
+                      className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted transition-colors"
+                    >
+                      <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
+                        <Bot className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-medium text-foreground">{agente.nome}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Agente IA {agente.tipo === 'principal' ? '(Principal)' : '(Secundário)'}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+
+                {/* Separador */}
+                {usuarios.filter((u) => u.id !== usuario?.id).length > 0 && (
+                  <div className="border-t border-border my-2 pt-2">
+                    <p className="text-xs text-muted-foreground mb-2 px-1">Atendentes Humanos</p>
+                  </div>
+                )}
+
+                {/* Usuários Humanos */}
                 {usuarios
                   .filter((u) => u.id !== usuario?.id)
                   .map((u) => (
@@ -1313,8 +1343,8 @@ export default function Conversas() {
                       onClick={() => transferirAtendimento(u.id, false)}
                       className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted transition-colors"
                     >
-                      <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-                        <UserCheck className="h-5 w-5 text-primary" />
+                      <div className="h-10 w-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+                        <UserCheck className="h-5 w-5 text-orange-500" />
                       </div>
                       <div className="text-left">
                         <p className="font-medium text-foreground">{u.nome}</p>
