@@ -238,6 +238,16 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
         return `@tag:${tagValue.toLowerCase().replace(/\s+/g, '-')}`;
       case 'etapa': {
         const estagio = estagios.find(e => e.id === estagioSelecionado);
+        const funil = funis.find(f => f.id === funilSelecionado);
+        
+        // Se funil selecionado, usar formato funil/estagio para precisão
+        if (funil && estagio) {
+          const funilSlug = funil.nome.toLowerCase().replace(/\s+/g, '-');
+          const estagioSlug = estagio.nome.toLowerCase().replace(/\s+/g, '-');
+          return `@etapa:${funilSlug}/${estagioSlug}`;
+        }
+        
+        // Fallback para formato antigo se não selecionou funil
         return `@etapa:${estagio?.nome.toLowerCase().replace(/\s+/g, '-') || estagioSelecionado}`;
       }
       case 'transferir-usuario':
