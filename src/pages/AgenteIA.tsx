@@ -7,6 +7,18 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { NovoAgenteModal } from '@/components/NovoAgenteModal';
 import { FollowUpRegraModal } from '@/components/FollowUpRegraModal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+
 interface Agent {
   id: string;
   nome: string;
@@ -96,6 +108,27 @@ export default function AgenteIA() {
     } catch (error) {
       console.error('Erro ao criar agente:', error);
       toast.error('Erro ao criar agente');
+    }
+  };
+
+  const deleteAgente = async (id: string) => {
+    try {
+      // Deletar etapas e perguntas primeiro (cascade manual)
+      await supabase.from('agent_ia_etapas').delete().eq('agent_ia_id', id);
+      await supabase.from('agent_ia_perguntas').delete().eq('agent_ia_id', id);
+      
+      const { error } = await supabase
+        .from('agent_ia')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setAgentes(agentes.filter(a => a.id !== id));
+      toast.success('Agente excluído com sucesso');
+    } catch (error) {
+      console.error('Erro ao excluir agente:', error);
+      toast.error('Erro ao excluir agente');
     }
   };
 
@@ -203,6 +236,7 @@ export default function AgenteIA() {
                             agente={agente}
                             onToggle={() => toggleAgente(agente.id, agente.ativo)}
                             onEdit={() => navigate(`/agente-ia/${agente.id}`)}
+                            onDelete={() => deleteAgente(agente.id)}
                           />
                         ))}
                       </div>
@@ -226,6 +260,7 @@ export default function AgenteIA() {
                             agente={agente}
                             onToggle={() => toggleAgente(agente.id, agente.ativo)}
                             onEdit={() => navigate(`/agente-ia/${agente.id}`)}
+                            onDelete={() => deleteAgente(agente.id)}
                           />
                         ))}
                       </div>
@@ -257,40 +292,77 @@ export default function AgenteIA() {
 function AgentCard({ 
   agente, 
   onToggle, 
-  onEdit 
+  onEdit,
+  onDelete
 }: { 
   agente: Agent; 
   onToggle: () => void; 
   onEdit: () => void;
+  onDelete: () => void;
 }) {
   return (
-    <div className="group flex items-center justify-between p-4 rounded-lg bg-card border border-border hover:border-primary/30 transition-colors">
+    <div className="flex items-center justify-between p-4 rounded-lg bg-card border border-border hover:border-primary/30 transition-colors">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
           <Bot className="h-5 w-5 text-muted-foreground" />
         </div>
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-foreground">{agente.nome}</span>
-          <button
-            onClick={onEdit}
-            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-muted transition-all"
-          >
-            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-          </button>
-        </div>
+        <span className="font-medium text-foreground">{agente.nome}</span>
       </div>
-      <button
-        onClick={onToggle}
-        className={`relative h-6 w-11 rounded-full transition-colors ${
-          agente.ativo ? 'bg-primary' : 'bg-muted'
-        }`}
-      >
-        <div
-          className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-            agente.ativo ? 'translate-x-5' : ''
+      
+      <div className="flex items-center gap-2">
+        {/* Botão Editar */}
+        <button
+          onClick={onEdit}
+          className="p-2 rounded-lg bg-muted hover:bg-primary/20 hover:text-primary transition-all"
+          title="Editar agente"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+        
+        {/* Botão Excluir */}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <button
+              className="p-2 rounded-lg bg-muted hover:bg-destructive/20 hover:text-destructive transition-all"
+              title="Excluir agente"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir agente?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação não pode ser desfeita. O agente "{agente.nome}" será 
+                excluído permanentemente junto com suas etapas e perguntas.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={onDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        
+        {/* Toggle Ativo/Inativo */}
+        <button
+          onClick={onToggle}
+          className={`relative h-6 w-11 rounded-full transition-colors ${
+            agente.ativo ? 'bg-primary' : 'bg-muted'
           }`}
-        />
-      </button>
+        >
+          <div
+            className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+              agente.ativo ? 'translate-x-5' : ''
+            }`}
+          />
+        </button>
+      </div>
     </div>
   );
 }
