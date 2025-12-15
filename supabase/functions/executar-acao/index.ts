@@ -11,6 +11,75 @@ interface Acao {
   valor?: string;
 }
 
+// Função para mapear nome de etapa para UUID
+async function mapearEtapaPorNome(
+  supabase: any,
+  contaId: string,
+  nomeEtapa: string
+): Promise<string | null> {
+  // Normalizar o nome (minúsculo, sem pontuação final)
+  const nomeNormalizado = nomeEtapa.toLowerCase().replace(/[.,;!?]+$/, '').trim();
+  
+  console.log(`Buscando etapa "${nomeNormalizado}" para conta ${contaId}`);
+
+  // Buscar todos os funis da conta
+  const { data: funis, error: funisError } = await supabase
+    .from('funis')
+    .select('id')
+    .eq('conta_id', contaId);
+
+  if (funisError || !funis?.length) {
+    console.log('Nenhum funil encontrado para a conta');
+    return null;
+  }
+
+  const funilIds = funis.map((f: any) => f.id);
+  console.log(`Funis encontrados: ${funilIds.length}`);
+
+  // Buscar todos os estágios desses funis
+  const { data: estagios, error: estagiosError } = await supabase
+    .from('estagios')
+    .select('id, nome, funil_id')
+    .in('funil_id', funilIds);
+
+  if (estagiosError || !estagios?.length) {
+    console.log('Nenhum estágio encontrado');
+    return null;
+  }
+
+  console.log(`Estágios disponíveis: ${estagios.map((e: any) => e.nome).join(', ')}`);
+
+  // Procurar correspondência exata (case-insensitive)
+  const estagioExato = estagios.find((e: any) =>
+    e.nome.toLowerCase().trim() === nomeNormalizado
+  );
+
+  if (estagioExato) {
+    console.log(`Etapa encontrada: ${estagioExato.nome} (${estagioExato.id})`);
+    return estagioExato.id;
+  }
+
+  // Procurar correspondência parcial
+  const estagioParcial = estagios.find((e: any) =>
+    e.nome.toLowerCase().includes(nomeNormalizado) ||
+    nomeNormalizado.includes(e.nome.toLowerCase())
+  );
+
+  if (estagioParcial) {
+    console.log(`Etapa encontrada (parcial): ${estagioParcial.nome} (${estagioParcial.id})`);
+    return estagioParcial.id;
+  }
+
+  console.log(`Etapa "${nomeEtapa}" não encontrada`);
+  return null;
+}
+
+// Verificar se é um UUID válido
+function isValidUUID(value: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(value);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -35,12 +104,27 @@ serve(async (req) => {
     switch (acaoObj.tipo) {
       case 'etapa': {
         // Mover contato para etapa do CRM
-        const estagioId = acaoObj.valor;
+        let estagioId = acaoObj.valor;
         
         if (!estagioId) {
           resultado = { sucesso: false, mensagem: 'ID do estágio não fornecido' };
           break;
         }
+
+        // Se não é um UUID válido, tentar mapear pelo nome
+        if (!isValidUUID(estagioId)) {
+          console.log(`Valor "${estagioId}" não é UUID, tentando mapear por nome...`);
+          const estagioIdMapeado = await mapearEtapaPorNome(supabase, conta_id, estagioId);
+          
+          if (!estagioIdMapeado) {
+            resultado = { sucesso: false, mensagem: `Etapa "${estagioId}" não encontrada no CRM` };
+            break;
+          }
+          
+          estagioId = estagioIdMapeado;
+        }
+
+        console.log(`Usando estágio ID: ${estagioId}`);
 
         // Verificar se já existe uma negociação para este contato
         const { data: negociacaoExistente } = await supabase
@@ -196,7 +280,10 @@ serve(async (req) => {
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-    console.error('Erro ao executar ação:', errorMessage);
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.error('=== ERRO AO EXECUTAR AÇÃO ===');
+    console.error('Mensagem:', errorMessage);
+    console.error('Stack:', errorStack);
     return new Response(
       JSON.stringify({ sucesso: false, mensagem: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
