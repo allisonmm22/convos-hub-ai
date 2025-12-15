@@ -84,6 +84,8 @@ interface MensagemMetadata {
   interno?: boolean;
   acao_tipo?: string;
   acao_valor?: string;
+  participante_nome?: string;
+  participante_telefone?: string;
   [key: string]: unknown;
 }
 
@@ -897,6 +899,31 @@ export default function Conversas() {
 
     const isMedia = msg.tipo && msg.tipo !== 'texto' && msg.media_url;
 
+    // Verificar se é grupo e se tem info do participante
+    const isGrupo = conversaSelecionada?.contatos?.is_grupo;
+    const participanteNome = msg.metadata?.participante_nome;
+    const participanteTelefone = msg.metadata?.participante_telefone;
+    
+    // Gerar cor consistente baseada no telefone do participante
+    const getParticipantColor = (telefone: string | undefined) => {
+      if (!telefone) return 'text-primary';
+      const colors = [
+        'text-blue-500',
+        'text-emerald-500', 
+        'text-violet-500',
+        'text-rose-500',
+        'text-amber-500',
+        'text-cyan-500',
+        'text-pink-500',
+        'text-lime-500',
+      ];
+      let hash = 0;
+      for (let i = 0; i < telefone.length; i++) {
+        hash = telefone.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return colors[Math.abs(hash) % colors.length];
+    };
+
     return (
       <div key={msg.id} className="animate-message-in">
         {showDateSeparator && (
@@ -918,6 +945,16 @@ export default function Conversas() {
                 : 'message-bubble-received text-foreground rounded-bl-md'
             )}
           >
+            {/* Nome do participante em grupos */}
+            {isGrupo && msg.direcao === 'entrada' && participanteNome && (
+              <div className={cn(
+                'text-xs font-semibold mb-1',
+                getParticipantColor(participanteTelefone)
+              )}>
+                {participanteNome}
+              </div>
+            )}
+            
             {msg.direcao === 'saida' && (msg.enviada_por_ia || msg.enviada_por_dispositivo) && (
               <div className="flex items-center gap-1.5 text-xs opacity-80 mb-1.5 font-medium">
                 {msg.enviada_por_ia ? (
