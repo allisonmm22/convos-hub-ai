@@ -14,11 +14,18 @@ serve(async (req) => {
   }
 
   try {
-    const { mensagem_id } = await req.json();
+    const { mensagem_id, usuario_id } = await req.json();
 
     if (!mensagem_id) {
       return new Response(
         JSON.stringify({ error: 'mensagem_id é obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!usuario_id) {
+      return new Response(
+        JSON.stringify({ error: 'usuario_id é obrigatório' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -50,7 +57,20 @@ serve(async (req) => {
       );
     }
 
-    // 3. Buscar conversa
+    // 3. Buscar dados do usuário que está deletando
+    const { data: usuarioData, error: usuarioError } = await supabase
+      .from('usuarios')
+      .select('nome')
+      .eq('id', usuario_id)
+      .single();
+
+    if (usuarioError) {
+      console.error('Erro ao buscar usuário:', usuarioError);
+    }
+
+    const nomeUsuario = usuarioData?.nome || 'Desconhecido';
+
+    // 4. Buscar conversa
     const { data: conversa, error: conversaError } = await supabase
       .from('conversas')
       .select('*, contatos(*)')
@@ -65,41 +85,17 @@ serve(async (req) => {
       );
     }
 
-    // 4. Buscar conexão
-    const { data: conexao, error: conexaoError } = await supabase
+    // 5. Buscar conexão e tentar deletar do WhatsApp
+    let whatsappDeleted = false;
+    const { data: conexao } = await supabase
       .from('conexoes_whatsapp')
       .select('*')
       .eq('id', conversa.conexao_id)
       .single();
 
-    if (conexaoError || !conexao) {
-      console.log('Sem conexão WhatsApp, deletando apenas do banco');
-      // Deletar apenas do banco
-      const { error: deleteError } = await supabase
-        .from('mensagens')
-        .delete()
-        .eq('id', mensagem_id);
-
-      if (deleteError) {
-        console.error('Erro ao deletar mensagem do banco:', deleteError);
-        return new Response(
-          JSON.stringify({ error: 'Erro ao deletar mensagem' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      return new Response(
-        JSON.stringify({ success: true, whatsapp_deleted: false, message: 'Mensagem deletada apenas do CRM' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // 5. Verificar se tem evolution_msg_id
     const evolutionMsgId = mensagem.metadata?.evolution_msg_id;
-    let whatsappDeleted = false;
 
-    if (evolutionMsgId && conexao.status === 'conectado') {
-      // Montar o remoteJid
+    if (conexao && evolutionMsgId && conexao.status === 'conectado') {
       const contato = conversa.contatos;
       const remoteJid = contato.grupo_jid || `${contato.telefone}@s.whatsapp.net`;
 
@@ -139,25 +135,31 @@ serve(async (req) => {
         console.error('Erro na chamada Evolution API:', whatsappError);
       }
     } else {
-      console.log('Mensagem sem evolution_msg_id ou conexão offline, deletando apenas do banco');
+      console.log('Mensagem sem evolution_msg_id ou conexão offline, apenas marcando como deletada no CRM');
     }
 
-    // 6. Deletar do banco
-    const { error: deleteError } = await supabase
+    // 6. Marcar como deletada no banco (NÃO deletar)
+    const { error: updateError } = await supabase
       .from('mensagens')
-      .delete()
+      .update({
+        deletada: true,
+        deletada_por: usuario_id,
+        deletada_em: new Date().toISOString(),
+      })
       .eq('id', mensagem_id);
 
-    if (deleteError) {
-      console.error('Erro ao deletar mensagem do banco:', deleteError);
+    if (updateError) {
+      console.error('Erro ao marcar mensagem como deletada:', updateError);
       return new Response(
-        JSON.stringify({ error: 'Erro ao deletar mensagem do banco' }),
+        JSON.stringify({ error: 'Erro ao marcar mensagem como deletada' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Mensagem deletada com sucesso:', {
+    console.log('Mensagem marcada como deletada:', {
       mensagem_id,
+      deletada_por: usuario_id,
+      nome_usuario: nomeUsuario,
       whatsapp_deleted: whatsappDeleted,
     });
 
@@ -165,9 +167,10 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         whatsapp_deleted: whatsappDeleted,
+        deletada_por_nome: nomeUsuario,
         message: whatsappDeleted 
-          ? 'Mensagem deletada do WhatsApp e CRM' 
-          : 'Mensagem deletada apenas do CRM'
+          ? 'Mensagem deletada do WhatsApp e marcada como apagada no CRM' 
+          : 'Mensagem marcada como apagada apenas no CRM'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
