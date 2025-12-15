@@ -110,6 +110,8 @@ serve(async (req) => {
       success: true, 
       url: urlData.publicUrl,
       fileName,
+      base64: base64Data,
+      mimeType: mimeType,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

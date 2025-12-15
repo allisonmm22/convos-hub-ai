@@ -214,38 +214,6 @@ serve(async (req) => {
         messageContent = data.body;
       }
 
-      // Se é mídia, fazer download e salvar no Storage
-      if (needsMediaDownload && messageId) {
-        console.log('Baixando mídia:', messageType, messageId);
-        try {
-          const downloadResponse = await fetch(
-            `${supabaseUrl}/functions/v1/download-media`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${supabaseKey}`,
-              },
-              body: JSON.stringify({
-                instance_name: instance,
-                message_id: messageId,
-                message_type: messageType,
-              }),
-            }
-          );
-
-          if (downloadResponse.ok) {
-            const downloadData = await downloadResponse.json();
-            mediaUrl = downloadData.url;
-            console.log('Mídia baixada com sucesso:', mediaUrl);
-          } else {
-            console.error('Erro ao baixar mídia:', await downloadResponse.text());
-          }
-        } catch (downloadError) {
-          console.error('Erro ao chamar download-media:', downloadError);
-        }
-      }
-
       console.log('Conteúdo da mensagem:', messageContent);
       console.log('Tipo:', messageType);
 
@@ -274,6 +242,82 @@ serve(async (req) => {
       }
 
       console.log('Conexão encontrada:', conexao.id, 'Conta:', conexao.conta_id);
+
+      // Buscar chave OpenAI da conta para transcrição
+      let openaiApiKey: string | null = null;
+      const { data: contaData } = await supabase
+        .from('contas')
+        .select('openai_api_key')
+        .eq('id', conexao.conta_id)
+        .single();
+      openaiApiKey = contaData?.openai_api_key || null;
+
+      // Se é mídia, fazer download e salvar no Storage
+      let transcricaoAudio: string | null = null;
+      if (needsMediaDownload && messageId) {
+        console.log('Baixando mídia:', messageType, messageId);
+        try {
+          const downloadResponse = await fetch(
+            `${supabaseUrl}/functions/v1/download-media`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseKey}`,
+              },
+              body: JSON.stringify({
+                instance_name: instance,
+                message_id: messageId,
+                message_type: messageType,
+              }),
+            }
+          );
+
+          if (downloadResponse.ok) {
+            const downloadData = await downloadResponse.json();
+            mediaUrl = downloadData.url;
+            console.log('Mídia baixada com sucesso:', mediaUrl);
+
+            // Se for áudio e tiver chave OpenAI, transcrever
+            if (messageType === 'audio' && openaiApiKey && downloadData.base64) {
+              console.log('=== TRANSCREVENDO ÁUDIO ===');
+              try {
+                const transcribeResponse = await fetch(
+                  `${supabaseUrl}/functions/v1/transcrever-audio`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${supabaseKey}`,
+                    },
+                    body: JSON.stringify({
+                      audio_base64: downloadData.base64,
+                      mime_type: downloadData.mimeType,
+                      openai_api_key: openaiApiKey,
+                    }),
+                  }
+                );
+
+                if (transcribeResponse.ok) {
+                  const transcribeData = await transcribeResponse.json();
+                  if (transcribeData.sucesso && transcribeData.transcricao) {
+                    transcricaoAudio = transcribeData.transcricao;
+                    console.log('Transcrição obtida:', transcricaoAudio?.substring(0, 100));
+                  }
+                } else {
+                  console.error('Erro na transcrição:', await transcribeResponse.text());
+                }
+              } catch (transcribeError) {
+                console.error('Erro ao chamar transcrever-audio:', transcribeError);
+              }
+            }
+          } else {
+            console.error('Erro ao baixar mídia:', await downloadResponse.text());
+          }
+        } catch (downloadError) {
+          console.error('Erro ao chamar download-media:', downloadError);
+        }
+      }
 
       // Buscar token da conexão para usar na API Evolution
       const { data: conexaoCompleta } = await supabase
@@ -419,8 +463,16 @@ serve(async (req) => {
         }
       }
 
-      // Inserir mensagem com evolution_msg_id nos metadados
+      // Inserir mensagem com evolution_msg_id e transcrição nos metadados
       // Se fromMe = true (veio do dispositivo físico via webhook), marcar como enviada_por_dispositivo
+      const messageMetadata: Record<string, any> = {};
+      if (messageId) {
+        messageMetadata.evolution_msg_id = messageId;
+      }
+      if (transcricaoAudio) {
+        messageMetadata.transcricao = transcricaoAudio;
+      }
+      
       const { error: msgError } = await supabase.from('mensagens').insert({
         conversa_id: conversa!.id,
         contato_id: contato!.id,
@@ -429,7 +481,7 @@ serve(async (req) => {
         tipo: messageType,
         media_url: mediaUrl,
         enviada_por_dispositivo: fromMe,
-        metadata: messageId ? { evolution_msg_id: messageId } : {},
+        metadata: messageMetadata,
       });
 
       if (msgError) {
@@ -479,8 +531,10 @@ serve(async (req) => {
               },
               body: JSON.stringify({
                 conversa_id: conversa.id,
-                mensagem: messageContent,
+                mensagem: transcricaoAudio || messageContent,
                 conta_id: conexao.conta_id,
+                mensagem_tipo: messageType,
+                transcricao: transcricaoAudio,
               }),
             }
           );
