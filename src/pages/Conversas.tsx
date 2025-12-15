@@ -437,11 +437,16 @@ export default function Conversas() {
 
     setEnviando(true);
     try {
+      // Aplicar assinatura se ativada
+      const mensagemFinal = usuario?.assinatura_ativa !== false
+        ? `${novaMensagem}\n\n— ${usuario?.nome}`
+        : novaMensagem;
+
       // Salvar no banco
       const { error } = await supabase.from('mensagens').insert({
         conversa_id: conversaSelecionada.id,
         usuario_id: usuario!.id,
-        conteudo: novaMensagem,
+        conteudo: mensagemFinal,
         direcao: 'saida',
         tipo: 'texto',
         enviada_por_ia: false,
@@ -453,7 +458,7 @@ export default function Conversas() {
       await supabase
         .from('conversas')
         .update({
-          ultima_mensagem: novaMensagem,
+          ultima_mensagem: mensagemFinal,
           ultima_mensagem_at: new Date().toISOString(),
           status: 'aguardando_cliente',
           agente_ia_ativo: false,
@@ -476,7 +481,7 @@ export default function Conversas() {
           body: {
             conexao_id: conexaoIdToUse,
             telefone: conversaSelecionada.contatos.telefone,
-            mensagem: novaMensagem,
+            mensagem: mensagemFinal,
           },
         });
 

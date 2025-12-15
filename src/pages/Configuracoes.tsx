@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { User, Building, Save, Loader2, Bell, Volume2 } from 'lucide-react';
+import { User, Building, Save, Loader2, Bell, Volume2, PenLine } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -17,6 +17,7 @@ export default function Configuracoes() {
   const [contaData, setContaData] = useState({
     nome: '',
   });
+  const [assinaturaAtiva, setAssinaturaAtiva] = useState(true);
 
   const { 
     soundEnabled, 
@@ -31,6 +32,7 @@ export default function Configuracoes() {
         nome: usuario.nome,
         email: usuario.email,
       });
+      setAssinaturaAtiva(usuario.assinatura_ativa ?? true);
       fetchConta();
     }
   }, [usuario]);
@@ -98,6 +100,22 @@ export default function Configuracoes() {
     toast.success(enabled ? 'Notificações sonoras ativadas' : 'Notificações sonoras desativadas');
   };
 
+  const handleAssinaturaToggle = async (enabled: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('usuarios')
+        .update({ assinatura_ativa: enabled })
+        .eq('id', usuario!.id);
+
+      if (error) throw error;
+      
+      setAssinaturaAtiva(enabled);
+      toast.success(enabled ? 'Assinatura ativada' : 'Assinatura desativada');
+    } catch (error) {
+      toast.error('Erro ao salvar preferência');
+    }
+  };
+
   return (
     <MainLayout>
       <div className="max-w-2xl space-y-8 animate-fade-in">
@@ -142,6 +160,29 @@ export default function Configuracoes() {
               <p className="text-xs text-muted-foreground mt-1">
                 O email não pode ser alterado
               </p>
+            </div>
+
+            {/* Assinatura */}
+            <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center gap-3">
+                <PenLine className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium text-foreground">Assinatura nas Mensagens</p>
+                  <p className="text-sm text-muted-foreground">Adicionar seu nome ao final das mensagens enviadas</p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleAssinaturaToggle(!assinaturaAtiva)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  assinaturaAtiva ? 'bg-primary' : 'bg-muted-foreground/30'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    assinaturaAtiva ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
             </div>
           </div>
 

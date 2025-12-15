@@ -1097,6 +1097,7 @@ export type Database = {
       }
       usuarios: {
         Row: {
+          assinatura_ativa: boolean | null
           avatar_url: string | null
           conta_id: string
           created_at: string
@@ -1108,6 +1109,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          assinatura_ativa?: boolean | null
           avatar_url?: string | null
           conta_id: string
           created_at?: string
@@ -1119,6 +1121,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          assinatura_ativa?: boolean | null
           avatar_url?: string | null
           conta_id?: string
           created_at?: string
