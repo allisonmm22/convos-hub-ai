@@ -61,26 +61,25 @@ async function fetchGroupInfo(
   try {
     console.log('Buscando info do grupo:', grupoJid);
     
+    // Usar GET com query parameter conforme documentação da Evolution API
     const response = await fetch(
-      `${EVOLUTION_API_URL}/group/findGroupInfos/${instanceName}`,
+      `${EVOLUTION_API_URL}/group/findGroupInfos/${instanceName}?groupJid=${encodeURIComponent(grupoJid)}`,
       {
-        method: 'POST',
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
           'apikey': evolutionApiKey,
         },
-        body: JSON.stringify({
-          groupJid: grupoJid,
-        }),
       }
     );
 
     if (!response.ok) {
-      console.log('Não foi possível buscar info do grupo:', response.status);
+      console.log('Não foi possível buscar info do grupo:', response.status, await response.text());
       return { pictureUrl: null, subject: null };
     }
 
     const data = await response.json();
+    console.log('Resposta da API do grupo:', JSON.stringify(data, null, 2));
+    
     const pictureUrl = data.pictureUrl || data.profilePictureUrl || null;
     const subject = data.subject || null;
     
@@ -456,17 +455,28 @@ serve(async (req) => {
         }
         contato = novoContato;
         console.log('Contato criado:', contato?.id, 'É grupo:', isGrupo, 'Avatar:', avatarUrl ? 'sim' : 'não');
-      } else if (!contato.avatar_url && conexaoCompleta?.token) {
-        // Contato existe mas não tem foto, tentar buscar
+      } else if (conexaoCompleta?.token && isGrupo && grupoJid) {
+        // Grupo existente - sempre tentar atualizar nome e foto
+        console.log('Grupo existente, buscando info atualizada...');
+        
+        const groupInfo = await fetchGroupInfo(instance, grupoJid, conexaoCompleta.token);
+        
+        const updates: Record<string, string> = {};
+        if (groupInfo.subject) updates.nome = groupInfo.subject;
+        if (groupInfo.pictureUrl) updates.avatar_url = groupInfo.pictureUrl;
+        
+        if (Object.keys(updates).length > 0) {
+          await supabase
+            .from('contatos')
+            .update(updates)
+            .eq('id', contato.id);
+          console.log('Grupo atualizado:', updates);
+        }
+      } else if (!contato.avatar_url && conexaoCompleta?.token && !isGrupo) {
+        // Contato individual sem foto, tentar buscar
         console.log('Contato sem foto, buscando...');
         
-        let avatarUrl: string | null = null;
-        if (isGrupo && grupoJid) {
-          const groupInfo = await fetchGroupInfo(instance, grupoJid, conexaoCompleta.token);
-          avatarUrl = groupInfo.pictureUrl;
-        } else if (!isGrupo) {
-          avatarUrl = await fetchProfilePicture(instance, telefone, conexaoCompleta.token);
-        }
+        const avatarUrl = await fetchProfilePicture(instance, telefone, conexaoCompleta.token);
         
         if (avatarUrl) {
           await supabase
