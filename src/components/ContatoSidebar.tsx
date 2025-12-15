@@ -199,6 +199,9 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
 
   const handleUpdateNegociacao = async (negociacaoId: string, updates: { estagio_id?: string; status?: 'aberto' | 'ganho' | 'perdido' }, estagioAnteriorId?: string | null) => {
     try {
+      // Get negotiation details for notification
+      const negociacao = negociacoes.find(n => n.id === negociacaoId);
+      
       const { error } = await supabase
         .from('negociacoes')
         .update(updates)
@@ -206,7 +209,7 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
 
       if (error) throw error;
 
-      // Record stage change history
+      // Record stage change history and send notification
       if (updates.estagio_id && estagioAnteriorId !== updates.estagio_id) {
         await supabase.from('negociacao_historico').insert({
           negociacao_id: negociacaoId,
@@ -215,6 +218,21 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
           usuario_id: usuario?.id,
           tipo: 'mudanca_estagio',
         });
+
+        // Find stage names for notification
+        const estagioAnterior = funis.flatMap(f => f.estagios).find(e => e.id === estagioAnteriorId);
+        const estagioNovo = funis.flatMap(f => f.estagios).find(e => e.id === updates.estagio_id);
+
+        // Create notification for responsible users
+        if (usuario?.conta_id && estagioNovo) {
+          await supabase.from('notificacoes').insert({
+            conta_id: usuario.conta_id,
+            tipo: 'mudanca_estagio',
+            titulo: `Negociação movida para ${estagioNovo.nome}`,
+            mensagem: `${negociacao?.titulo || 'Negociação'} foi movida${estagioAnterior ? ` de "${estagioAnterior.nome}"` : ''} para "${estagioNovo.nome}"`,
+            link: '/crm',
+          });
+        }
       }
       
       toast.success('Negociação atualizada');
