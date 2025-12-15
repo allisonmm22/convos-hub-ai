@@ -773,7 +773,8 @@ function EtapasAtendimentoTab({
                       <div className="flex-1" />
                       <button 
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary/15 text-primary hover:bg-primary/25 transition-colors"
-                        onClick={() => {
+                        onMouseDown={(e) => {
+                          e.preventDefault(); // Prevenir perda de foco do editor!
                           const savedPos = cursorPositionsByEtapa.current[etapa.id] ?? etapa.descricao.length;
                           abrirModalDecisao(etapa.id, savedPos);
                         }}
