@@ -10,6 +10,7 @@ import {
   Users,
   UserCog,
   Plug,
+  Puzzle,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -28,6 +29,7 @@ const menuItems = [
   { icon: Users, label: 'Contatos', path: '/contatos' },
   { icon: UserCog, label: 'Usuários', path: '/usuarios' },
   { icon: Plug, label: 'Conexão', path: '/conexao' },
+  { icon: Puzzle, label: 'Integrações', path: '/integracoes' },
   { icon: Settings, label: 'Configurações', path: '/configuracoes' },
 ];
 
