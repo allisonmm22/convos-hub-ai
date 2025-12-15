@@ -775,20 +775,25 @@ serve(async (req) => {
       promptCompleto += '- @finalizar - Encerrar a conversa\n';
       promptCompleto += '- @nome:<novo nome> - Alterar o nome do contato/lead (use quando o cliente se identificar)\n';
       promptCompleto += '- @agenda:consultar - Consultar disponibilidade do calendário (próximos 7 dias)\n';
-      promptCompleto += '- @agenda:criar:<titulo>|<data_inicio>|<data_fim> - Criar evento no calendário (datas em ISO8601)\n';
+      promptCompleto += '- @agenda:criar:<titulo>|<data_inicio> - Criar evento no calendário com Google Meet (datas em ISO8601)\n';
       promptCompleto += '\n### INSTRUÇÕES DE AGENDAMENTO\n';
       promptCompleto += 'Quando o cliente solicitar agendamento:\n';
       promptCompleto += '1. Use @agenda:consultar para verificar disponibilidade\n';
       promptCompleto += '2. O sistema retornará os eventos já agendados - calcule os horários livres\n';
       promptCompleto += '3. Apresente opções de horários disponíveis ao cliente\n';
-      promptCompleto += '4. Após confirmação, use @agenda:criar com os detalhes\n';
-      promptCompleto += '5. IMPORTANTE: Considere horário comercial (8h-18h) ao sugerir horários\n';
+      promptCompleto += '4. Após confirmação do horário, use @agenda:criar com titulo e data_inicio em ISO8601\n';
+      promptCompleto += '   Exemplo: @agenda:criar:Reunião com João|2025-01-20T14:00:00-03:00\n';
+      promptCompleto += '5. O sistema criará automaticamente um evento de 1 hora com link do Google Meet\n';
+      promptCompleto += '6. IMPORTANTE: Após criar o evento, SEMPRE envie o link do Google Meet ao cliente!\n';
+      promptCompleto += '   O link estará disponível na resposta da ação. Inclua-o na sua mensagem.\n';
+      promptCompleto += '7. Considere horário comercial (8h-18h) ao sugerir horários\n';
       promptCompleto += '\nQuando identificar que uma ação deve ser executada baseado no contexto da conversa, use a ferramenta executar_acao.\n';
       promptCompleto += '\n## REGRAS IMPORTANTES\n';
       promptCompleto += '- NUNCA mencione ao cliente que está executando ações internas como transferências, mudanças de etapa, tags, etc.\n';
       promptCompleto += '- NUNCA inclua comandos @ na sua resposta ao cliente (ex: @transferir, @etapa, @tag).\n';
       promptCompleto += '- As ações são executadas silenciosamente em background. Mantenha o fluxo natural da conversa.\n';
       promptCompleto += '- Quando transferir para outro agente, apenas se despeça naturalmente sem mencionar a transferência.\n';
+      promptCompleto += '- Quando criar um agendamento, SEMPRE inclua o link do Google Meet na resposta ao cliente.\n';
     }
 
     // Adicionar restrições absolutas de escopo
@@ -840,7 +845,7 @@ serve(async (req) => {
               },
               valor: {
                 type: 'string',
-                description: 'Valor associado à ação (ID da etapa, nome da tag, destino da transferência, novo nome do contato, para agenda use "consultar" ou "criar:titulo|data_inicio|data_fim")',
+                description: 'Valor associado à ação (ID da etapa, nome da tag, destino da transferência, novo nome do contato, para agenda use "consultar" ou "criar:titulo|data_inicio" onde data_inicio é ISO8601)',
               },
             },
             required: ['tipo'],

@@ -170,7 +170,7 @@ serve(async (req) => {
     console.log('Conta ID:', conta_id);
 
     const acaoObj = acao as Acao;
-    let resultado = { sucesso: false, mensagem: '' };
+    let resultado: { sucesso: boolean; mensagem: string; dados?: any } = { sucesso: false, mensagem: '' };
 
     switch (acaoObj.tipo) {
       case 'etapa': {
@@ -565,10 +565,10 @@ serve(async (req) => {
         const subacao = acaoObj.valor || '';
         console.log('Executando ação de agenda:', subacao);
         
-        // Buscar calendário ativo da conta
+        // Buscar calendário ativo da conta com configurações padrão
         const { data: calendario } = await supabase
           .from('calendarios_google')
-          .select('id')
+          .select('id, nome')
           .eq('conta_id', conta_id)
           .eq('ativo', true)
           .limit(1)
@@ -609,29 +609,42 @@ serve(async (req) => {
           }
         } else if (subacao.startsWith('criar:')) {
           // Criar evento
-          // Formato esperado: criar:calendario:duracao:meet|titulo|data_inicio ou criar:titulo|data_inicio
+          // Formatos suportados:
+          // 1. criar:calendario:duracao:meet|titulo|data_inicio (do modal)
+          // 2. criar:titulo|data_inicio (formato simples da IA)
+          // 3. criar:calendario:duracao:meet (sem detalhes - usar defaults)
           const dadosEvento = subacao.replace('criar:', '');
           const partes = dadosEvento.split('|');
           
-          // Verificar se primeiro elemento tem configuração (calendario:duracao:meet)
-          let titulo: string;
-          let dataInicio: string;
-          let duracaoMinutos = 60;
-          let gerarMeet = false;
+          let titulo: string = '';
+          let dataInicio: string = '';
+          let duracaoMinutos = 60; // default 1 hora
+          let gerarMeet = true; // default gerar meet
           
           const primeiroElemento = partes[0];
           const configParts = primeiroElemento.split(':');
           
-          if (configParts.length >= 2 && !isNaN(parseInt(configParts[1]))) {
-            // Novo formato: criar:calendario:duracao:meet|titulo|data_inicio
+          console.log('Parsing criar evento:', { dadosEvento, partes, configParts });
+          
+          // Detectar o formato baseado na estrutura
+          if (configParts.length >= 3 && (configParts[2] === 'meet' || configParts[2] === 'no-meet')) {
+            // Novo formato do modal: calendario:duracao:meet|titulo|data_inicio
             duracaoMinutos = parseInt(configParts[1]) || 60;
             gerarMeet = configParts[2] === 'meet';
             titulo = partes[1] || '';
             dataInicio = partes[2] || '';
+            console.log('Formato modal detectado:', { duracaoMinutos, gerarMeet, titulo, dataInicio });
+          } else if (configParts.length === 2 && !isNaN(parseInt(configParts[1]))) {
+            // Formato parcial: calendario:duracao|titulo|data_inicio
+            duracaoMinutos = parseInt(configParts[1]) || 60;
+            titulo = partes[1] || '';
+            dataInicio = partes[2] || '';
+            console.log('Formato parcial detectado:', { duracaoMinutos, titulo, dataInicio });
           } else {
-            // Formato antigo: criar:titulo|data_inicio
+            // Formato simples da IA: titulo|data_inicio ou apenas titulo
             titulo = partes[0] || '';
             dataInicio = partes[1] || '';
+            console.log('Formato simples detectado:', { titulo, dataInicio });
           }
           
           // Buscar nome do contato para incluir no evento
@@ -640,6 +653,22 @@ serve(async (req) => {
             .select('nome, telefone')
             .eq('id', contato_id)
             .single();
+          
+          // Se não tem data de início, usar próximo horário comercial disponível
+          if (!dataInicio) {
+            const agora = new Date();
+            agora.setHours(agora.getHours() + 1, 0, 0, 0);
+            dataInicio = agora.toISOString();
+          }
+          
+          const tituloFinal = titulo || `Reunião com ${contatoData?.nome || 'Lead'}`;
+          
+          console.log('Criando evento com:', { 
+            titulo: tituloFinal, 
+            dataInicio, 
+            duracaoMinutos, 
+            gerarMeet 
+          });
           
           const calendarResponse = await fetch(`${supabaseUrl}/functions/v1/google-calendar-actions`, {
             method: 'POST',
@@ -651,9 +680,9 @@ serve(async (req) => {
               operacao: 'criar',
               calendario_id: calendario.id,
               dados: {
-                titulo: titulo || `Reunião com ${contatoData?.nome || 'Lead'}`,
+                titulo: tituloFinal,
                 descricao: `Agendamento realizado via WhatsApp\nContato: ${contatoData?.nome || 'Lead'}\nTelefone: ${contatoData?.telefone || 'N/A'}`,
-                data_inicio: dataInicio || new Date().toISOString(),
+                data_inicio: dataInicio,
                 duracao_minutos: duracaoMinutos,
                 gerar_meet: gerarMeet,
               },
@@ -661,17 +690,50 @@ serve(async (req) => {
           });
           
           const calendarResult = await calendarResponse.json();
+          console.log('Resultado do Google Calendar:', calendarResult);
           
           if (calendarResult.error) {
             resultado = { sucesso: false, mensagem: calendarResult.error };
           } else {
-            let mensagemSucesso = `Evento criado: ${titulo || 'Reunião'} (${duracaoMinutos}min)`;
+            // Calcular data_fim baseado na duração
+            const dataInicioDate = new Date(dataInicio);
+            const dataFimDate = new Date(dataInicioDate.getTime() + duracaoMinutos * 60 * 1000);
+            
+            // Criar agendamento interno no CRM
+            const { error: agendamentoError } = await supabase
+              .from('agendamentos')
+              .insert({
+                conta_id,
+                contato_id,
+                titulo: tituloFinal,
+                descricao: `Agendamento via WhatsApp${calendarResult.meet_link ? '\nLink Meet: ' + calendarResult.meet_link : ''}`,
+                data_inicio: dataInicio,
+                data_fim: dataFimDate.toISOString(),
+                google_event_id: calendarResult.id || null,
+                google_meet_link: calendarResult.meet_link || null,
+                concluido: false,
+              });
+            
+            if (agendamentoError) {
+              console.error('Erro ao criar agendamento interno:', agendamentoError);
+            } else {
+              console.log('Agendamento interno criado com sucesso');
+            }
+            
+            let mensagemSucesso = `Evento criado: ${tituloFinal} (${duracaoMinutos}min)`;
             if (calendarResult.meet_link) {
-              mensagemSucesso += ` - Meet: ${calendarResult.meet_link}`;
+              mensagemSucesso += ` | Link Meet: ${calendarResult.meet_link}`;
             }
             resultado = { 
               sucesso: true, 
               mensagem: mensagemSucesso,
+              dados: {
+                evento_id: calendarResult.id,
+                meet_link: calendarResult.meet_link,
+                titulo: tituloFinal,
+                data_inicio: dataInicio,
+                duracao: duracaoMinutos,
+              }
             };
           }
         } else {

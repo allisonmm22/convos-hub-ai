@@ -23,6 +23,8 @@ export type Database = {
           data_fim: string | null
           data_inicio: string
           descricao: string | null
+          google_event_id: string | null
+          google_meet_link: string | null
           id: string
           titulo: string
           updated_at: string
@@ -36,6 +38,8 @@ export type Database = {
           data_fim?: string | null
           data_inicio: string
           descricao?: string | null
+          google_event_id?: string | null
+          google_meet_link?: string | null
           id?: string
           titulo: string
           updated_at?: string
@@ -49,6 +53,8 @@ export type Database = {
           data_fim?: string | null
           data_inicio?: string
           descricao?: string | null
+          google_event_id?: string | null
+          google_meet_link?: string | null
           id?: string
           titulo?: string
           updated_at?: string
