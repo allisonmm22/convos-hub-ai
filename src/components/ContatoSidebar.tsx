@@ -1,8 +1,23 @@
 import { useState, useEffect } from 'react';
-import { X, Phone, Edit2, Save, User, Briefcase, Mail, Tag } from 'lucide-react';
+import { X, Phone, Edit2, Save, Briefcase, Mail, Tag, Plus, MoreVertical } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { NegociacaoDetalheModal } from '@/components/NegociacaoDetalheModal';
 
 interface Contato {
   id: string;
@@ -13,12 +28,27 @@ interface Contato {
   tags?: string[] | null;
 }
 
+interface Estagio {
+  id: string;
+  nome: string;
+  cor: string | null;
+  ordem: number | null;
+}
+
+interface Funil {
+  id: string;
+  nome: string;
+  estagios: Estagio[];
+}
+
 interface Negociacao {
   id: string;
   titulo: string;
   valor: number | null;
   status: 'aberto' | 'ganho' | 'perdido' | null;
   created_at: string;
+  estagio_id: string | null;
+  funil_id: string | null;
   estagio?: {
     nome: string;
     cor: string | null;
@@ -33,12 +63,23 @@ interface ContatoSidebarProps {
 }
 
 export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: ContatoSidebarProps) {
+  const { usuario } = useAuth();
   const [editando, setEditando] = useState(false);
   const [telefoneEdit, setTelefoneEdit] = useState(contato.telefone);
   const [emailEdit, setEmailEdit] = useState(contato.email || '');
   const [salvando, setSalvando] = useState(false);
   const [negociacoes, setNegociacoes] = useState<Negociacao[]>([]);
   const [loadingNegociacoes, setLoadingNegociacoes] = useState(false);
+  const [funis, setFunis] = useState<Funil[]>([]);
+  const [criandoNegociacao, setCriandoNegociacao] = useState(false);
+  const [novaNegociacao, setNovaNegociacao] = useState({
+    titulo: '',
+    valor: '',
+    funil_id: '',
+    estagio_id: '',
+  });
+  const [negociacaoSelecionada, setNegociacaoSelecionada] = useState<Negociacao | null>(null);
+  const [modalDetalheAberto, setModalDetalheAberto] = useState(false);
 
   useEffect(() => {
     setTelefoneEdit(contato.telefone);
@@ -46,8 +87,33 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
     setEditando(false);
     if (isOpen) {
       fetchNegociacoes();
+      fetchFunis();
     }
   }, [contato, isOpen]);
+
+  const fetchFunis = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('funis')
+        .select(`
+          id,
+          nome,
+          estagios:estagios(id, nome, cor, ordem)
+        `)
+        .order('ordem');
+
+      if (error) throw error;
+      
+      const funisOrdenados = (data || []).map((f: any) => ({
+        ...f,
+        estagios: (f.estagios || []).sort((a: Estagio, b: Estagio) => (a.ordem || 0) - (b.ordem || 0))
+      }));
+      
+      setFunis(funisOrdenados);
+    } catch (error) {
+      console.error('Erro ao buscar funis:', error);
+    }
+  };
 
   const fetchNegociacoes = async () => {
     setLoadingNegociacoes(true);
@@ -60,9 +126,11 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
           valor,
           status,
           created_at,
+          estagio_id,
           estagios:estagio_id (
             nome,
-            cor
+            cor,
+            funil_id
           )
         `)
         .eq('contato_id', contato.id)
@@ -70,10 +138,10 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
 
       if (error) throw error;
       
-      // Transform data to match interface
       const transformedData = (data || []).map((n: any) => ({
         ...n,
-        estagio: n.estagios
+        estagio: n.estagios,
+        funil_id: n.estagios?.funil_id || null
       }));
       
       setNegociacoes(transformedData);
@@ -115,6 +183,54 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
     }
   };
 
+  const handleUpdateNegociacao = async (negociacaoId: string, updates: { estagio_id?: string; status?: 'aberto' | 'ganho' | 'perdido' }) => {
+    try {
+      const { error } = await supabase
+        .from('negociacoes')
+        .update(updates)
+        .eq('id', negociacaoId);
+
+      if (error) throw error;
+      
+      toast.success('Negociação atualizada');
+      fetchNegociacoes();
+    } catch (error) {
+      console.error('Erro ao atualizar negociação:', error);
+      toast.error('Erro ao atualizar negociação');
+    }
+  };
+
+  const handleCriarNegociacao = async () => {
+    if (!novaNegociacao.titulo.trim() || !novaNegociacao.estagio_id) {
+      toast.error('Preencha o título e selecione o estágio');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('negociacoes')
+        .insert({
+          titulo: novaNegociacao.titulo.trim(),
+          valor: novaNegociacao.valor ? parseFloat(novaNegociacao.valor) : 0,
+          estagio_id: novaNegociacao.estagio_id,
+          contato_id: contato.id,
+          conta_id: usuario?.conta_id,
+          status: 'aberto',
+          probabilidade: 50,
+        });
+
+      if (error) throw error;
+
+      toast.success('Negociação criada');
+      setCriandoNegociacao(false);
+      setNovaNegociacao({ titulo: '', valor: '', funil_id: '', estagio_id: '' });
+      fetchNegociacoes();
+    } catch (error) {
+      console.error('Erro ao criar negociação:', error);
+      toast.error('Erro ao criar negociação');
+    }
+  };
+
   const formatCurrency = (value: number | null) => {
     if (value === null || value === undefined) return 'R$ 0,00';
     return new Intl.NumberFormat('pt-BR', {
@@ -134,15 +250,24 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
     }
   };
 
-  const getStatusLabel = (status: string | null) => {
-    switch (status) {
-      case 'ganho':
-        return 'Ganho';
-      case 'perdido':
-        return 'Perdido';
-      default:
-        return 'Aberto';
+  const getEstagiosByFunilId = (funilId: string) => {
+    const funil = funis.find(f => f.id === funilId);
+    return funil?.estagios || [];
+  };
+
+  const getFunilByEstagioId = (estagioId: string | null) => {
+    if (!estagioId) return null;
+    for (const funil of funis) {
+      if (funil.estagios.some(e => e.id === estagioId)) {
+        return funil;
+      }
     }
+    return null;
+  };
+
+  const handleOpenDetalhe = (negociacao: Negociacao) => {
+    setNegociacaoSelecionada(negociacao);
+    setModalDetalheAberto(true);
   };
 
   if (!isOpen) return null;
@@ -272,12 +397,86 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
 
           {/* Negociações */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Briefcase className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-muted-foreground">
-                Negociações ({negociacoes.length})
-              </span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Briefcase className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-muted-foreground">
+                  Negociações ({negociacoes.length})
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setCriandoNegociacao(true);
+                  setNovaNegociacao({ titulo: contato.nome, valor: '', funil_id: '', estagio_id: '' });
+                }}
+                className="flex items-center gap-1 text-sm text-primary hover:underline"
+              >
+                <Plus className="h-3 w-3" />
+                Nova
+              </button>
             </div>
+
+            {/* Form Nova Negociação */}
+            {criandoNegociacao && (
+              <div className="bg-muted/50 rounded-lg p-3 space-y-3 border border-primary/30">
+                <input
+                  type="text"
+                  placeholder="Título da negociação"
+                  value={novaNegociacao.titulo}
+                  onChange={(e) => setNovaNegociacao(prev => ({ ...prev, titulo: e.target.value }))}
+                  className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <input
+                  type="number"
+                  placeholder="Valor (opcional)"
+                  value={novaNegociacao.valor}
+                  onChange={(e) => setNovaNegociacao(prev => ({ ...prev, valor: e.target.value }))}
+                  className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <Select
+                  value={novaNegociacao.funil_id}
+                  onValueChange={(value) => setNovaNegociacao(prev => ({ ...prev, funil_id: value, estagio_id: '' }))}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Selecione o funil" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {funis.map(funil => (
+                      <SelectItem key={funil.id} value={funil.id}>{funil.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {novaNegociacao.funil_id && (
+                  <Select
+                    value={novaNegociacao.estagio_id}
+                    onValueChange={(value) => setNovaNegociacao(prev => ({ ...prev, estagio_id: value }))}
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Selecione o estágio" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getEstagiosByFunilId(novaNegociacao.funil_id).map(estagio => (
+                        <SelectItem key={estagio.id} value={estagio.id}>{estagio.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCriarNegociacao}
+                    className="flex-1 bg-primary text-primary-foreground text-sm py-1.5 rounded hover:bg-primary/90 transition-colors"
+                  >
+                    Criar
+                  </button>
+                  <button
+                    onClick={() => setCriandoNegociacao(false)}
+                    className="flex-1 bg-muted text-muted-foreground text-sm py-1.5 rounded hover:bg-muted/80 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
 
             {loadingNegociacoes ? (
               <div className="flex items-center justify-center py-4">
@@ -289,38 +488,143 @@ export function ContatoSidebar({ contato, isOpen, onClose, onContatoUpdate }: Co
                 <p className="text-sm text-muted-foreground">Nenhuma negociação</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {negociacoes.map((negociacao) => (
-                  <div
-                    key={negociacao.id}
-                    className="bg-muted/50 rounded-lg p-3 space-y-2 hover:bg-muted/70 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-medium text-foreground line-clamp-1">
-                        {negociacao.titulo}
-                      </p>
-                      <span className={cn(
-                        'px-2 py-0.5 rounded-full text-xs font-medium shrink-0',
-                        getStatusBadge(negociacao.status)
-                      )}>
-                        {getStatusLabel(negociacao.status)}
-                      </span>
+              <div className="space-y-3">
+                {negociacoes.map((negociacao) => {
+                  const funilAtual = getFunilByEstagioId(negociacao.estagio_id);
+                  
+                  return (
+                    <div
+                      key={negociacao.id}
+                      className="bg-muted/50 rounded-lg p-3 space-y-3 hover:bg-muted/70 transition-colors"
+                    >
+                      {/* Header com título e menu */}
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-medium text-foreground line-clamp-1 flex-1">
+                          {negociacao.titulo}
+                        </p>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="p-1 hover:bg-muted rounded">
+                              <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleOpenDetalhe(negociacao)}>
+                              Ver detalhes
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      {/* Selects de Funil e Etapa */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <Select
+                          value={funilAtual?.id || ''}
+                          onValueChange={(funilId) => {
+                            const novoFunil = funis.find(f => f.id === funilId);
+                            if (novoFunil && novoFunil.estagios.length > 0) {
+                              handleUpdateNegociacao(negociacao.id, { 
+                                estagio_id: novoFunil.estagios[0].id 
+                              });
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-7 text-xs">
+                            <SelectValue placeholder="Funil" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {funis.map(funil => (
+                              <SelectItem key={funil.id} value={funil.id} className="text-xs">
+                                {funil.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        <Select
+                          value={negociacao.estagio_id || ''}
+                          onValueChange={(estagioId) => {
+                            handleUpdateNegociacao(negociacao.id, { estagio_id: estagioId });
+                          }}
+                        >
+                          <SelectTrigger className="h-7 text-xs">
+                            <SelectValue placeholder="Etapa" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {funilAtual?.estagios.map(estagio => (
+                              <SelectItem key={estagio.id} value={estagio.id} className="text-xs">
+                                {estagio.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Valor e Status */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-foreground">
+                          {formatCurrency(negociacao.valor)}
+                        </span>
+                        <Select
+                          value={negociacao.status || 'aberto'}
+                          onValueChange={(status: 'aberto' | 'ganho' | 'perdido') => {
+                            handleUpdateNegociacao(negociacao.id, { status });
+                          }}
+                        >
+                          <SelectTrigger className={cn(
+                            "h-6 w-24 text-xs border-0",
+                            getStatusBadge(negociacao.status)
+                          )}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="aberto" className="text-xs">Aberto</SelectItem>
+                            <SelectItem value="ganho" className="text-xs">Ganho</SelectItem>
+                            <SelectItem value="perdido" className="text-xs">Perdido</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">
-                        {negociacao.estagio?.nome || 'Sem estágio'}
-                      </span>
-                      <span className="font-medium text-foreground">
-                        {formatCurrency(negociacao.valor)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Modal de Detalhes */}
+      {negociacaoSelecionada && (
+        <NegociacaoDetalheModal
+          isOpen={modalDetalheAberto}
+          onClose={() => {
+            setModalDetalheAberto(false);
+            setNegociacaoSelecionada(null);
+          }}
+          negociacao={{
+            id: negociacaoSelecionada.id,
+            titulo: negociacaoSelecionada.titulo,
+            valor: negociacaoSelecionada.valor || 0,
+            status: negociacaoSelecionada.status || 'aberto',
+            estagio_id: negociacaoSelecionada.estagio_id || '',
+            contato_id: contato.id,
+            contatos: {
+              nome: contato.nome,
+              telefone: contato.telefone,
+            },
+          }}
+          onUpdate={() => {
+            fetchNegociacoes();
+          }}
+          onDelete={() => {
+            fetchNegociacoes();
+            setModalDetalheAberto(false);
+            setNegociacaoSelecionada(null);
+          }}
+          estagios={funis.flatMap(f => f.estagios)}
+          funis={funis.map(f => ({ ...f, cor: '#3b82f6' }))}
+        />
+      )}
     </>
   );
 }
