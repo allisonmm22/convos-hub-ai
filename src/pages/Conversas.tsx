@@ -476,15 +476,15 @@ export default function Conversas() {
         ? `${usuario?.nome}:\n${novaMensagem}`
         : novaMensagem;
 
-      // Salvar no banco
-      const { error } = await supabase.from('mensagens').insert({
+      // Salvar no banco e pegar o ID para passar ao enviar-mensagem
+      const { data: novaMensagemData, error } = await supabase.from('mensagens').insert({
         conversa_id: conversaSelecionada.id,
         usuario_id: usuario!.id,
         conteudo: mensagemFinal,
         direcao: 'saida',
         tipo: 'texto',
         enviada_por_ia: false,
-      });
+      }).select('id').single();
 
       if (error) throw error;
 
@@ -517,6 +517,7 @@ export default function Conversas() {
             telefone: conversaSelecionada.contatos.telefone,
             mensagem: mensagemFinal,
             grupo_jid: conversaSelecionada.contatos.grupo_jid || undefined,
+            mensagem_id: novaMensagemData?.id,
           },
         });
 
@@ -653,8 +654,8 @@ export default function Conversas() {
 
         const mediaUrl = urlData.publicUrl;
 
-        // Salvar mensagem no banco
-        await supabase.from('mensagens').insert({
+        // Salvar mensagem no banco e pegar o ID
+        const { data: novaMensagemData } = await supabase.from('mensagens').insert({
           conversa_id: conversaSelecionada.id,
           usuario_id: usuario!.id,
           conteudo: file.name,
@@ -662,7 +663,7 @@ export default function Conversas() {
           tipo: fileType,
           media_url: mediaUrl,
           enviada_por_ia: false,
-        });
+        }).select('id').single();
 
         // Atualizar conversa - desativar IA e atribuir atendente humano
         await supabase
@@ -693,6 +694,7 @@ export default function Conversas() {
               tipo: fileType,
               media_url: mediaUrl,
               grupo_jid: conversaSelecionada.contatos.grupo_jid || undefined,
+              mensagem_id: novaMensagemData?.id,
             },
           });
 
@@ -749,8 +751,8 @@ export default function Conversas() {
       
       const durationFormatted = `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}`;
 
-      // Salvar mensagem no banco
-      await supabase.from('mensagens').insert({
+      // Salvar mensagem no banco e pegar o ID
+      const { data: novaMensagemData } = await supabase.from('mensagens').insert({
         conversa_id: conversaSelecionada.id,
         usuario_id: usuario!.id,
         conteudo: `🎤 Áudio (${durationFormatted})`,
@@ -758,7 +760,7 @@ export default function Conversas() {
         tipo: 'audio',
         media_url: mediaUrl,
         enviada_por_ia: false,
-      });
+      }).select('id').single();
 
       // Atualizar conversa - desativar IA e atribuir atendente humano
       await supabase
@@ -789,6 +791,7 @@ export default function Conversas() {
             tipo: 'audio',
             media_base64: audioBase64,
             grupo_jid: conversaSelecionada.contatos.grupo_jid || undefined,
+            mensagem_id: novaMensagemData?.id,
           },
         });
 
