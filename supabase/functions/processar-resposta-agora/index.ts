@@ -83,7 +83,25 @@ serve(async (req) => {
       });
     }
 
-    // Chamar ai-responder
+    // Buscar a última mensagem do lead para passar ao ai-responder
+    const { data: ultimaMensagem } = await supabase
+      .from('mensagens')
+      .select('conteudo, tipo, metadata')
+      .eq('conversa_id', conversa_id)
+      .eq('direcao', 'entrada')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    // Extrair transcrição/descrição se houver
+    const metadata = (ultimaMensagem?.metadata as Record<string, any>) || {};
+    const transcricao = metadata.transcricao || null;
+    const descricaoImagem = metadata.descricao_imagem || null;
+
+    console.log('Última mensagem do lead:', ultimaMensagem?.conteudo?.substring(0, 50));
+    console.log('Conta ID:', conversa.conta_id);
+
+    // Chamar ai-responder com TODOS os dados necessários
     console.log('Chamando ai-responder...');
     const aiResponse = await fetch(
       `${supabaseUrl}/functions/v1/ai-responder`,
@@ -93,7 +111,14 @@ serve(async (req) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${supabaseKey}`,
         },
-        body: JSON.stringify({ conversa_id }),
+        body: JSON.stringify({
+          conversa_id,
+          mensagem: transcricao || ultimaMensagem?.conteudo || 'Olá',
+          conta_id: conversa.conta_id,
+          mensagem_tipo: ultimaMensagem?.tipo || 'texto',
+          transcricao,
+          descricao_imagem: descricaoImagem,
+        }),
       }
     );
 
