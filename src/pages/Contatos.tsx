@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Search, Plus, User, Phone, Mail, MoreVertical, Loader2 } from 'lucide-react';
+import { Search, Plus, User, Phone, Mail, MoreVertical, Loader2, Tag, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface Contato {
   id: string;
@@ -13,6 +14,12 @@ interface Contato {
   avatar_url: string | null;
   tags: string[];
   created_at: string;
+}
+
+interface TagItem {
+  id: string;
+  nome: string;
+  cor: string;
 }
 
 export default function Contatos() {
@@ -26,12 +33,29 @@ export default function Contatos() {
     telefone: '',
     email: '',
   });
+  const [tagsDisponiveis, setTagsDisponiveis] = useState<TagItem[]>([]);
+  const [tagsSelecionadas, setTagsSelecionadas] = useState<string[]>([]);
 
   useEffect(() => {
     if (usuario?.conta_id) {
       fetchContatos();
+      fetchTags();
     }
   }, [usuario]);
+
+  const fetchTags = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tags')
+        .select('id, nome, cor')
+        .order('nome');
+      
+      if (error) throw error;
+      setTagsDisponiveis(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar tags:', error);
+    }
+  };
 
   const fetchContatos = async () => {
     try {
@@ -79,12 +103,32 @@ export default function Contatos() {
     }
   };
 
-  const filteredContatos = contatos.filter(
-    (c) =>
+  const toggleTagFilter = (tagNome: string) => {
+    setTagsSelecionadas(prev => 
+      prev.includes(tagNome)
+        ? prev.filter(t => t !== tagNome)
+        : [...prev, tagNome]
+    );
+  };
+
+  const getTagColor = (tagNome: string) => {
+    const tag = tagsDisponiveis.find(t => t.nome === tagNome);
+    return tag?.cor || '#3b82f6';
+  };
+
+  const filteredContatos = contatos.filter((c) => {
+    // Filtro de texto
+    const matchesSearch = 
       c.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.telefone.includes(searchTerm) ||
-      c.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+      c.email?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Filtro de tags
+    const matchesTags = tagsSelecionadas.length === 0 || 
+      tagsSelecionadas.some(tag => c.tags?.includes(tag));
+    
+    return matchesSearch && matchesTags;
+  });
 
   return (
     <MainLayout>
@@ -105,16 +149,61 @@ export default function Contatos() {
           </button>
         </div>
 
-        {/* Busca */}
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Buscar por nome, telefone ou email..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full h-11 pl-11 pr-4 rounded-lg bg-card border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          />
+        {/* Busca e Filtros */}
+        <div className="space-y-4">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Buscar por nome, telefone ou email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full h-11 pl-11 pr-4 rounded-lg bg-card border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          {/* Filtro de Tags */}
+          {tagsDisponiveis.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Tag className="h-4 w-4" />
+                <span>Filtrar por tags:</span>
+              </div>
+              {tagsDisponiveis.map((tag) => {
+                const isSelected = tagsSelecionadas.includes(tag.nome);
+                return (
+                  <button
+                    key={tag.id}
+                    onClick={() => toggleTagFilter(tag.nome)}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-all",
+                      isSelected 
+                        ? "text-white" 
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    )}
+                    style={isSelected ? { backgroundColor: tag.cor } : undefined}
+                  >
+                    {!isSelected && (
+                      <div 
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: tag.cor }}
+                      />
+                    )}
+                    {tag.nome}
+                    {isSelected && <X className="h-3 w-3" />}
+                  </button>
+                );
+              })}
+              {tagsSelecionadas.length > 0 && (
+                <button
+                  onClick={() => setTagsSelecionadas([])}
+                  className="text-sm text-primary hover:underline"
+                >
+                  Limpar filtros
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Lista */}
@@ -175,12 +264,13 @@ export default function Contatos() {
 
                 {contato.tags && contato.tags.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1">
-                    {contato.tags.map((tag, i) => (
+                    {contato.tags.map((tagNome, i) => (
                       <span
                         key={i}
-                        className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs"
+                        className="px-2 py-0.5 rounded-full text-xs text-white"
+                        style={{ backgroundColor: getTagColor(tagNome) }}
                       >
-                        {tag}
+                        {tagNome}
                       </span>
                     ))}
                   </div>
