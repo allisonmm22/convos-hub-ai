@@ -14,9 +14,9 @@ serve(async (req) => {
   }
 
   try {
-    const { conexao_id, telefone, mensagem, tipo = 'texto', media_url, media_base64 } = await req.json();
+    const { conexao_id, telefone, mensagem, tipo = 'texto', media_url, media_base64, grupo_jid } = await req.json();
 
-    console.log('Enviando mensagem:', { conexao_id, telefone, tipo, hasBase64: !!media_base64 });
+    console.log('Enviando mensagem:', { conexao_id, telefone, tipo, hasBase64: !!media_base64, grupo_jid });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -46,8 +46,8 @@ serve(async (req) => {
       });
     }
 
-    // Formatar número (remover caracteres especiais)
-    const formattedNumber = telefone.replace(/\D/g, '');
+    // Formatar número (remover caracteres especiais) ou usar grupo_jid diretamente
+    const formattedNumber = grupo_jid || telefone.replace(/\D/g, '');
 
     let evolutionUrl: string;
     let body: Record<string, unknown>;

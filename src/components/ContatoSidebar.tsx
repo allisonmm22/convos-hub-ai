@@ -28,6 +28,8 @@ interface Contato {
   email?: string | null;
   avatar_url: string | null;
   tags?: string[] | null;
+  is_grupo?: boolean | null;
+  grupo_jid?: string | null;
 }
 
 interface Estagio {
