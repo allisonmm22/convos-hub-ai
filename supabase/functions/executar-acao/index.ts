@@ -313,6 +313,100 @@ serve(async (req) => {
               });
 
             resultado = { sucesso: true, mensagem: `Conversa transferida para agente IA: ${agenteRef}` };
+            
+            // Disparar resposta automática do novo agente
+            console.log('Disparando resposta do novo agente:', agenteId);
+            
+            // Buscar última mensagem do lead para contexto
+            const { data: ultimaMensagemLead } = await supabase
+              .from('mensagens')
+              .select('conteudo')
+              .eq('conversa_id', conversa_id)
+              .eq('direcao', 'entrada')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
+            
+            // Chamar ai-responder para gerar resposta do novo agente
+            const aiResponderUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-responder`;
+            try {
+              const aiResponse = await fetch(aiResponderUrl, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  conversa_id,
+                  mensagem: ultimaMensagemLead?.conteudo || 'Olá',
+                  conta_id,
+                }),
+              });
+              
+              const aiResult = await aiResponse.json();
+              console.log('Resposta do novo agente gerada:', aiResult);
+              
+              if (aiResult.resposta && aiResult.should_respond) {
+                // Buscar conexão e contato para enviar via WhatsApp
+                const { data: conversaData } = await supabase
+                  .from('conversas')
+                  .select('conexao_id, contato_id')
+                  .eq('id', conversa_id)
+                  .single();
+                
+                const { data: contato } = await supabase
+                  .from('contatos')
+                  .select('telefone')
+                  .eq('id', conversaData?.contato_id)
+                  .single();
+                
+                const { data: conexao } = await supabase
+                  .from('conexoes_whatsapp')
+                  .select('instance_name, token')
+                  .eq('id', conversaData?.conexao_id)
+                  .single();
+                
+                if (conexao && contato) {
+                  // Salvar mensagem no banco
+                  await supabase
+                    .from('mensagens')
+                    .insert({
+                      conversa_id,
+                      conteudo: aiResult.resposta,
+                      direcao: 'saida',
+                      tipo: 'texto',
+                      enviada_por_ia: true,
+                    });
+                  
+                  // Atualizar última mensagem da conversa
+                  await supabase
+                    .from('conversas')
+                    .update({ 
+                      ultima_mensagem: aiResult.resposta.substring(0, 100),
+                      ultima_mensagem_at: new Date().toISOString(),
+                    })
+                    .eq('id', conversa_id);
+                  
+                  // Enviar via Evolution API
+                  const evolutionUrl = Deno.env.get('EVOLUTION_API_URL') || 'https://api.evolution.mendsolutions.com.br';
+                  await fetch(`${evolutionUrl}/message/sendText/${conexao.instance_name}`, {
+                    method: 'POST',
+                    headers: {
+                      'apikey': conexao.token,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      number: contato.telefone.replace(/\D/g, ''),
+                      text: aiResult.resposta,
+                    }),
+                  });
+                  
+                  console.log('Resposta do novo agente enviada via WhatsApp');
+                }
+              }
+            } catch (aiError) {
+              console.error('Erro ao gerar resposta do novo agente:', aiError);
+            }
           } else {
             resultado = { sucesso: false, mensagem: `Agente "${agenteRef}" não encontrado` };
           }
