@@ -143,6 +143,12 @@ const tiposAcao: AcaoTipo[] = [
   },
 ];
 
+interface TagItem {
+  id: string;
+  nome: string;
+  cor: string;
+}
+
 export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoInteligenteModalProps) {
   const { usuario } = useAuth();
   const [tipoSelecionado, setTipoSelecionado] = useState<string | null>(null);
@@ -153,6 +159,7 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [agentes, setAgentes] = useState<{ id: string; nome: string }[]>([]);
   const [calendarios, setCalendarios] = useState<{ id: string; nome: string }[]>([]);
+  const [tagsDisponiveis, setTagsDisponiveis] = useState<TagItem[]>([]);
   
   const [tagValue, setTagValue] = useState('');
   const [funilSelecionado, setFunilSelecionado] = useState('');
@@ -194,7 +201,7 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [funisRes, usuariosRes, agentesRes, calendariosRes] = await Promise.all([
+      const [funisRes, usuariosRes, agentesRes, calendariosRes, tagsRes] = await Promise.all([
         supabase
           .from('funis')
           .select('id, nome')
@@ -214,12 +221,18 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
           .select('id, nome')
           .eq('conta_id', usuario!.conta_id)
           .eq('ativo', true),
+        supabase
+          .from('tags')
+          .select('id, nome, cor')
+          .eq('conta_id', usuario!.conta_id)
+          .order('nome'),
       ]);
 
       if (funisRes.data) setFunis(funisRes.data);
       if (usuariosRes.data) setUsuarios(usuariosRes.data);
       if (agentesRes.data) setAgentes(agentesRes.data);
       if (calendariosRes.data) setCalendarios(calendariosRes.data);
+      if (tagsRes.data) setTagsDisponiveis(tagsRes.data);
 
       if (funisRes.data && funisRes.data.length > 0) {
         const { data: estagiosData } = await supabase
@@ -242,7 +255,7 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
 
     switch (tipoSelecionado) {
       case 'tag':
-        return tagValue.trim().length > 0;
+        return tagValue !== '';
       case 'etapa':
         return estagioSelecionado !== '';
       case 'negociacao':
@@ -408,18 +421,50 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
             ) : (
               <div className="space-y-4">
                 {tipoSelecionado === 'tag' && (
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">Nome da Tag</label>
-                    <input
-                      type="text"
-                      value={tagValue}
-                      onChange={(e) => setTagValue(e.target.value)}
-                      placeholder="Ex: cliente-vip, interessado, etc."
-                      className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                    <p className="text-xs text-muted-foreground mt-2">
-                      💡 A tag será adicionada automaticamente ao contato
-                    </p>
+                  <div className="space-y-3">
+                    {tagsDisponiveis.length > 0 ? (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-foreground mb-2">Selecione a Tag</label>
+                          <select
+                            value={tagValue}
+                            onChange={(e) => setTagValue(e.target.value)}
+                            className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                          >
+                            <option value="">Selecione uma tag...</option>
+                            {tagsDisponiveis.map(tag => (
+                              <option key={tag.id} value={tag.nome}>
+                                {tag.nome}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        {tagValue && (
+                          <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
+                            <div 
+                              className="w-3 h-3 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: tagsDisponiveis.find(t => t.nome === tagValue)?.cor || '#888' }}
+                            />
+                            <span className="text-sm font-medium">{tagValue}</span>
+                          </div>
+                        )}
+                        
+                        <p className="text-xs text-muted-foreground">
+                          💡 A tag será adicionada automaticamente ao contato
+                        </p>
+                      </>
+                    ) : (
+                      <div className="text-center py-6">
+                        <Tag className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground">
+                          Nenhuma tag cadastrada
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Cadastre tags na página de Contatos
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 
