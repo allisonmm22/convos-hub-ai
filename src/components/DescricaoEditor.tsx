@@ -186,11 +186,11 @@ function renderTextWithChips(
   
   let match;
   while ((match = ACTION_REGEX.exec(text)) !== null) {
-    // Texto antes da ação - TRANSPARENTE para não sobrepor o textarea
+    // Texto antes da ação - VISÍVEL com cor do foreground
     if (match.index > lastIndex) {
       const textBefore = text.slice(lastIndex, match.index);
       parts.push(
-        <span key={`text-${lastIndex}`} style={{ color: 'transparent' }}>
+        <span key={`text-${lastIndex}`} className="text-foreground">
           {textBefore}
         </span>
       );
@@ -210,10 +210,10 @@ function renderTextWithChips(
     lastIndex = matchEnd;
   }
   
-  // Texto restante - TRANSPARENTE
+  // Texto restante - VISÍVEL com cor do foreground
   if (lastIndex < text.length) {
     parts.push(
-      <span key={`text-${lastIndex}`} style={{ color: 'transparent' }}>
+      <span key={`text-${lastIndex}`} className="text-foreground">
         {text.slice(lastIndex)}
       </span>
     );
