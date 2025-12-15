@@ -168,11 +168,9 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
       }
 
-      // Ignorar mensagens de grupo por enquanto
-      if (remoteJid.includes('@g.us')) {
-        console.log('Mensagem de grupo ignorada');
-        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
-      }
+      // Detectar se é mensagem de grupo
+      const isGrupo = remoteJid.includes('@g.us');
+      console.log('É grupo:', isGrupo);
 
       // Extrair conteúdo da mensagem
       let messageContent = '';
@@ -222,9 +220,12 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
       }
 
-      // Extrair número do telefone
-      const telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
-      console.log('Telefone:', telefone);
+      // Extrair identificador do contato/grupo
+      const telefone = isGrupo 
+        ? remoteJid.replace('@g.us', '') 
+        : remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
+      const grupoJid = isGrupo ? remoteJid : null;
+      console.log('Telefone/ID:', telefone, 'Grupo JID:', grupoJid);
 
       // Buscar conexão pela instância
       const { data: conexao, error: conexaoError } = await supabase
@@ -362,30 +363,37 @@ serve(async (req) => {
         .eq('id', conexao.id)
         .single();
 
-      // Buscar ou criar contato
+      // Buscar ou criar contato (ou grupo)
       let { data: contato } = await supabase
         .from('contatos')
-        .select('id, avatar_url')
+        .select('id, avatar_url, is_grupo')
         .eq('conta_id', conexao.conta_id)
         .eq('telefone', telefone)
         .single();
 
       if (!contato) {
-        console.log('Criando novo contato...');
+        console.log('Criando novo contato/grupo...');
         
-        // Buscar foto de perfil antes de criar o contato
+        // Buscar foto de perfil antes de criar o contato (não para grupos)
         let avatarUrl: string | null = null;
-        if (conexaoCompleta?.token) {
+        if (!isGrupo && conexaoCompleta?.token) {
           avatarUrl = await fetchProfilePicture(instance, telefone, conexaoCompleta.token);
         }
+        
+        // Nome do grupo ou contato
+        const nomeContato = isGrupo 
+          ? (pushName || `Grupo ${telefone}`)
+          : (pushName || telefone);
         
         const { data: novoContato, error: contatoError } = await supabase
           .from('contatos')
           .insert({
             conta_id: conexao.conta_id,
-            nome: pushName || telefone,
+            nome: nomeContato,
             telefone,
             avatar_url: avatarUrl,
+            is_grupo: isGrupo,
+            grupo_jid: grupoJid,
           })
           .select()
           .single();
@@ -395,9 +403,9 @@ serve(async (req) => {
           throw contatoError;
         }
         contato = novoContato;
-        console.log('Contato criado:', contato?.id, 'Avatar:', avatarUrl ? 'sim' : 'não');
-      } else if (!contato.avatar_url && conexaoCompleta?.token) {
-        // Contato existe mas não tem foto, tentar buscar
+        console.log('Contato criado:', contato?.id, 'É grupo:', isGrupo, 'Avatar:', avatarUrl ? 'sim' : 'não');
+      } else if (!contato.avatar_url && !isGrupo && conexaoCompleta?.token) {
+        // Contato existe mas não tem foto, tentar buscar (não para grupos)
         console.log('Contato sem foto, buscando...');
         const avatarUrl = await fetchProfilePicture(instance, telefone, conexaoCompleta.token);
         
@@ -440,16 +448,25 @@ serve(async (req) => {
       if (!conversa) {
         console.log('Criando nova conversa com SQL direto...');
         
-        // Buscar agente principal da conta
-        const { data: agentePrincipal } = await supabase
-          .from('agent_ia')
-          .select('id')
-          .eq('conta_id', conexao.conta_id)
-          .eq('tipo', 'principal')
-          .eq('ativo', true)
-          .maybeSingle();
+        // Para grupos, SEMPRE desativar IA. Para contatos individuais, buscar agente principal
+        let agenteIaAtivo = !isGrupo; // Grupos sempre com IA desativada
+        let agenteIaId: string | null = null;
         
-        console.log('Agente principal encontrado:', agentePrincipal?.id);
+        if (!isGrupo) {
+          // Buscar agente principal da conta apenas para contatos individuais
+          const { data: agentePrincipal } = await supabase
+            .from('agent_ia')
+            .select('id')
+            .eq('conta_id', conexao.conta_id)
+            .eq('tipo', 'principal')
+            .eq('ativo', true)
+            .maybeSingle();
+          
+          agenteIaId = agentePrincipal?.id || null;
+          console.log('Agente principal encontrado:', agenteIaId);
+        } else {
+          console.log('Grupo detectado - IA desativada automaticamente');
+        }
         
         // Inserir conversa usando SQL direto
         const insertResponse = await fetch(
@@ -466,8 +483,8 @@ serve(async (req) => {
               conta_id: conexao.conta_id,
               contato_id: contato!.id,
               conexao_id: conexao.id,
-              agente_ia_ativo: true,
-              agente_ia_id: agentePrincipal?.id || null,
+              agente_ia_ativo: agenteIaAtivo,
+              agente_ia_id: agenteIaId,
               status: 'em_atendimento',
             }),
           }
@@ -564,7 +581,8 @@ serve(async (req) => {
       console.log('Conversa atualizada com sucesso');
 
       // Sistema de debounce: agendar resposta com tempo_espera_segundos
-      if (conversa?.agente_ia_ativo && !fromMe) {
+      // IMPORTANTE: Nunca agendar resposta IA para grupos
+      if (conversa?.agente_ia_ativo && !fromMe && !isGrupo) {
         console.log('=== AGENDANDO RESPOSTA IA COM DEBOUNCE ===');
         
         try {

@@ -48,6 +48,8 @@ interface Contato {
   nome: string;
   telefone: string;
   avatar_url: string | null;
+  is_grupo?: boolean | null;
+  grupo_jid?: string | null;
 }
 
 interface Usuario {
@@ -482,6 +484,7 @@ export default function Conversas() {
             conexao_id: conexaoIdToUse,
             telefone: conversaSelecionada.contatos.telefone,
             mensagem: mensagemFinal,
+            grupo_jid: conversaSelecionada.contatos.grupo_jid || undefined,
           },
         });
 
@@ -657,6 +660,7 @@ export default function Conversas() {
               mensagem: '',
               tipo: fileType,
               media_url: mediaUrl,
+              grupo_jid: conversaSelecionada.contatos.grupo_jid || undefined,
             },
           });
 
@@ -752,6 +756,7 @@ export default function Conversas() {
             mensagem: '',
             tipo: 'audio',
             media_base64: audioBase64,
+            grupo_jid: conversaSelecionada.contatos.grupo_jid || undefined,
           },
         });
 
@@ -1181,7 +1186,14 @@ export default function Conversas() {
                   )}
                 >
                   <div className="relative">
-                    {conversa.contatos.avatar_url ? (
+                    {conversa.contatos.is_grupo ? (
+                      <div className={cn(
+                        "flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/30 to-blue-500/10 text-blue-500 font-bold text-lg transition-all duration-200",
+                        conversaSelecionada?.id === conversa.id && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+                      )}>
+                        <Users className="h-6 w-6" />
+                      </div>
+                    ) : conversa.contatos.avatar_url ? (
                       <img
                         src={conversa.contatos.avatar_url}
                         alt={conversa.contatos.nome}
@@ -1198,11 +1210,12 @@ export default function Conversas() {
                         {conversa.contatos.nome.charAt(0).toUpperCase()}
                       </div>
                     )}
-                    {conversa.agente_ia_ativo ? (
+                    {/* Não mostrar badge de IA/Humano para grupos */}
+                    {!conversa.contatos.is_grupo && conversa.agente_ia_ativo ? (
                       <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-primary flex items-center justify-center shadow-md">
                         <Bot className="h-3 w-3 text-primary-foreground" />
                       </div>
-                    ) : conversa.atendente_id ? (
+                    ) : !conversa.contatos.is_grupo && conversa.atendente_id ? (
                       <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-orange-500 flex items-center justify-center shadow-md">
                         <User className="h-3 w-3 text-white" />
                       </div>
@@ -1238,12 +1251,18 @@ export default function Conversas() {
                         {conversa.status === 'em_atendimento' ? 'Em Atend.' : 
                          conversa.status === 'aguardando_cliente' ? 'Aguardando' : 'Encerrado'}
                       </span>
-                      {/* Badge IA/Humano */}
-                      {conversa.agente_ia_ativo ? (
+                      {/* Badge de Grupo */}
+                      {conversa.contatos.is_grupo && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-500 flex items-center gap-0.5">
+                          <Users className="h-2.5 w-2.5" /> Grupo
+                        </span>
+                      )}
+                      {/* Badge IA/Humano - não mostrar para grupos */}
+                      {!conversa.contatos.is_grupo && conversa.agente_ia_ativo ? (
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-primary/20 text-primary flex items-center gap-0.5">
                           <Bot className="h-2.5 w-2.5" /> IA
                         </span>
-                      ) : conversa.atendente_id ? (
+                      ) : !conversa.contatos.is_grupo && conversa.atendente_id ? (
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 flex items-center gap-0.5">
                           <User className="h-2.5 w-2.5" /> Humano
                         </span>
@@ -1271,7 +1290,11 @@ export default function Conversas() {
                 className="flex items-center gap-3 hover:bg-muted/50 rounded-xl p-2 -m-2 transition-all duration-200 cursor-pointer text-left group"
               >
                 <div className="relative">
-                  {conversaSelecionada.contatos.avatar_url ? (
+                  {conversaSelecionada.contatos.is_grupo ? (
+                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/40 to-blue-500/20 text-blue-500 ring-2 ring-blue-500/30 ring-offset-2 ring-offset-background transition-all duration-200 group-hover:ring-blue-500">
+                      <Users className="h-5 w-5" />
+                    </div>
+                  ) : conversaSelecionada.contatos.avatar_url ? (
                     <img
                       src={conversaSelecionada.contatos.avatar_url}
                       alt={conversaSelecionada.contatos.nome}
@@ -1293,6 +1316,11 @@ export default function Conversas() {
                     <span className="font-semibold text-foreground group-hover:text-primary transition-colors">
                       {conversaSelecionada.contatos.nome}
                     </span>
+                    {conversaSelecionada.contatos.is_grupo && (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/20 text-blue-500 flex items-center gap-1">
+                        <Users className="h-3 w-3" /> Grupo
+                      </span>
+                    )}
                     <span className={cn(
                       'px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide',
                       conversaSelecionada.status === 'em_atendimento' ? 'bg-green-500/20 text-green-400' :
@@ -1309,37 +1337,41 @@ export default function Conversas() {
               </button>
               {!conversaEncerrada ? (
                 <div className="flex items-center gap-2">
-                  {/* Botão Toggle Agente IA / Humano */}
-                  <button
-                    onClick={toggleAgenteIA}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
-                      conversaSelecionada.agente_ia_ativo
-                        ? 'bg-primary/20 text-primary hover:bg-primary/30 shadow-[0_0_12px_hsl(var(--primary)/0.2)]'
-                        : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
-                    )}
-                  >
-                    {conversaSelecionada.agente_ia_ativo ? (
-                      <>
-                        <Bot className="h-4 w-4" />
-                        {conversaSelecionada.agent_ia?.nome || 'Agente IA'}
-                      </>
-                    ) : (
-                      <>
-                        <User className="h-4 w-4" />
-                        Humano
-                      </>
-                    )}
-                  </button>
+                  {/* Botão Toggle Agente IA / Humano - não mostrar para grupos */}
+                  {!conversaSelecionada.contatos.is_grupo && (
+                    <button
+                      onClick={toggleAgenteIA}
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                        conversaSelecionada.agente_ia_ativo
+                          ? 'bg-primary/20 text-primary hover:bg-primary/30 shadow-[0_0_12px_hsl(var(--primary)/0.2)]'
+                          : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
+                      )}
+                    >
+                      {conversaSelecionada.agente_ia_ativo ? (
+                        <>
+                          <Bot className="h-4 w-4" />
+                          {conversaSelecionada.agent_ia?.nome || 'Agente IA'}
+                        </>
+                      ) : (
+                        <>
+                          <User className="h-4 w-4" />
+                          Humano
+                        </>
+                      )}
+                    </button>
+                  )}
 
-                  {/* Transferir */}
-                  <button
-                    onClick={() => setShowTransferModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
-                  >
-                    <ArrowRightLeft className="h-4 w-4" />
-                    Transferir
-                  </button>
+                  {/* Transferir - não mostrar para grupos (não faz sentido transferir grupo para IA) */}
+                  {!conversaSelecionada.contatos.is_grupo && (
+                    <button
+                      onClick={() => setShowTransferModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
+                    >
+                      <ArrowRightLeft className="h-4 w-4" />
+                      Transferir
+                    </button>
+                  )}
 
                   {/* Encerrar */}
                   <button

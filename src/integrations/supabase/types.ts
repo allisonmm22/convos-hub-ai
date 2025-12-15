@@ -411,7 +411,9 @@ export type Database = {
           conta_id: string
           created_at: string
           email: string | null
+          grupo_jid: string | null
           id: string
+          is_grupo: boolean | null
           metadata: Json | null
           nome: string
           tags: string[] | null
@@ -423,7 +425,9 @@ export type Database = {
           conta_id: string
           created_at?: string
           email?: string | null
+          grupo_jid?: string | null
           id?: string
+          is_grupo?: boolean | null
           metadata?: Json | null
           nome: string
           tags?: string[] | null
@@ -435,7 +439,9 @@ export type Database = {
           conta_id?: string
           created_at?: string
           email?: string | null
+          grupo_jid?: string | null
           id?: string
+          is_grupo?: boolean | null
           metadata?: Json | null
           nome?: string
           tags?: string[] | null
