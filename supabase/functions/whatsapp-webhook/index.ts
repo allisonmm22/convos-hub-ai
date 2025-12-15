@@ -229,7 +229,7 @@ serve(async (req) => {
       // Buscar conexão pela instância
       const { data: conexao, error: conexaoError } = await supabase
         .from('conexoes_whatsapp')
-        .select('id, conta_id')
+        .select('id, conta_id, instance_name, token')
         .eq('instance_name', instance)
         .single();
 
@@ -582,6 +582,61 @@ serve(async (req) => {
           } else {
             const aiData = await aiResponse.json();
             console.log('AI-responder executado com sucesso:', aiData?.resposta?.substring(0, 100) || 'sem resposta');
+            
+            // Enviar resposta para o WhatsApp e salvar no banco
+            if (aiData.should_respond && aiData.resposta) {
+              try {
+                console.log('Enviando resposta IA para:', telefone);
+                
+                // Enviar via Evolution API
+                const sendResponse = await fetch(
+                  `${EVOLUTION_API_URL}/message/sendText/${conexao.instance_name}`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'apikey': conexao.token,
+                    },
+                    body: JSON.stringify({
+                      number: telefone,
+                      text: aiData.resposta,
+                    }),
+                  }
+                );
+                
+                if (sendResponse.ok) {
+                  console.log('Resposta IA enviada com sucesso');
+                  
+                  // Salvar mensagem da IA no banco
+                  const { error: msgError } = await supabase.from('mensagens').insert({
+                    conversa_id: conversa.id,
+                    contato_id: contato?.id || null,
+                    conteudo: aiData.resposta,
+                    direcao: 'saida',
+                    tipo: 'texto',
+                    enviada_por_ia: true,
+                  });
+                  
+                  if (msgError) {
+                    console.error('Erro ao salvar mensagem IA:', msgError);
+                  }
+                  
+                  // Atualizar conversa
+                  await supabase.from('conversas').update({
+                    ultima_mensagem: aiData.resposta,
+                    ultima_mensagem_at: new Date().toISOString(),
+                    status: 'aguardando_cliente',
+                  }).eq('id', conversa.id);
+                  
+                  console.log('Mensagem IA salva e conversa atualizada');
+                } else {
+                  const sendError = await sendResponse.text();
+                  console.error('Erro ao enviar resposta IA:', sendResponse.status, sendError);
+                }
+              } catch (sendError) {
+                console.error('Erro ao processar envio da resposta IA:', sendError);
+              }
+            }
           }
         } catch (aiError) {
           console.error('Erro ao executar ai-responder:', aiError);
