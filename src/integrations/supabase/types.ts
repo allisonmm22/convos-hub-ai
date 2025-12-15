@@ -1160,7 +1160,7 @@ export type Database = {
       is_super_admin: { Args: never; Returns: boolean }
     }
     Enums: {
-      app_role: "admin" | "atendente"
+      app_role: "admin" | "atendente" | "super_admin"
       direcao_mensagem: "entrada" | "saida"
       status_conexao: "conectado" | "desconectado" | "aguardando"
       status_conversa: "em_atendimento" | "aguardando_cliente" | "encerrado"
@@ -1300,7 +1300,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "atendente"],
+      app_role: ["admin", "atendente", "super_admin"],
       direcao_mensagem: ["entrada", "saida"],
       status_conexao: ["conectado", "desconectado", "aguardando"],
       status_conversa: ["em_atendimento", "aguardando_cliente", "encerrado"],
