@@ -564,6 +564,14 @@ serve(async (req) => {
       promptCompleto += '- Quando transferir para outro agente, apenas se despeça naturalmente sem mencionar a transferência.\n';
     }
 
+    // Adicionar restrições absolutas de escopo
+    promptCompleto += '\n## RESTRIÇÕES ABSOLUTAS\n';
+    promptCompleto += '- NUNCA invente informações sobre você, sua identidade, sua empresa ou seus serviços.\n';
+    promptCompleto += '- Se o lead perguntar "quem é você?", "o que você faz?", "sobre a empresa" ou perguntas similares, responda APENAS com informações que estão explicitamente configuradas acima nas regras gerais, etapas ou perguntas frequentes.\n';
+    promptCompleto += '- Se não houver informação suficiente no prompt configurado para responder uma pergunta sobre você ou a empresa, diga educadamente que pode ajudar com outras questões ou solicite que o lead entre em contato com a equipe.\n';
+    promptCompleto += '- NUNCA adicione detalhes, funções, serviços ou características que não foram mencionados nas instruções acima.\n';
+    promptCompleto += '- Mantenha-se estritamente dentro do escopo das informações fornecidas.\n';
+
     console.log('Prompt montado com', promptCompleto.length, 'caracteres');
     console.log('Ações disponíveis:', acoesDisponiveis.length);
 
