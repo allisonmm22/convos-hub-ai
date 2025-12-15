@@ -809,7 +809,7 @@ export default function Conversas() {
                 <img 
                   src={msg.media_url!} 
                   alt="Imagem"
-                  className="max-w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                  className="max-w-[200px] max-h-[200px] object-cover rounded-lg cursor-pointer hover:opacity-90 hover:scale-105 transition-all"
                   onClick={() => setImagemExpandida(msg.media_url)}
                 />
               )}
