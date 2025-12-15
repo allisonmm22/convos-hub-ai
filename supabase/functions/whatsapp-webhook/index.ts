@@ -531,6 +531,19 @@ serve(async (req) => {
       console.log('Mensagem inserida com sucesso');
 
       // Atualizar conversa usando fetch direto
+      const updateData: Record<string, any> = {
+        ultima_mensagem: messageContent,
+        ultima_mensagem_at: new Date().toISOString(),
+        nao_lidas: fromMe ? 0 : (conversa?.nao_lidas || 0) + 1,
+        status: fromMe ? 'aguardando_cliente' : 'em_atendimento',
+      };
+
+      // Se mensagem veio do dispositivo externo, pausar o agente IA automaticamente
+      if (fromMe) {
+        updateData.agente_ia_ativo = false;
+        console.log('Mensagem do dispositivo externo - pausando agente IA automaticamente');
+      }
+
       const updateResponse = await fetch(
         `${supabaseUrl}/rest/v1/conversas?id=eq.${conversa!.id}`,
         {
@@ -540,12 +553,7 @@ serve(async (req) => {
             'Authorization': `Bearer ${supabaseKey}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            ultima_mensagem: messageContent,
-            ultima_mensagem_at: new Date().toISOString(),
-            nao_lidas: fromMe ? 0 : (conversa?.nao_lidas || 0) + 1,
-            status: fromMe ? 'aguardando_cliente' : 'em_atendimento',
-          }),
+          body: JSON.stringify(updateData),
         }
       );
 
