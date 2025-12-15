@@ -110,8 +110,8 @@ function parseAcao(acao: string): ChipConfig {
   };
 }
 
-// Regex para encontrar ações no texto
-const ACTION_REGEX = /@(tag|etapa|transferir|fonte|notificar|produto|finalizar)(:[^\s@<>]+)?/gi;
+// Regex para encontrar ações no texto (exclui pontuação final)
+const ACTION_REGEX = /@(tag|etapa|transferir|fonte|notificar|produto|finalizar)(:[^\s@<>.,;!?]+)?/gi;
 
 // Converter texto com ações para HTML com chips
 function textToHtml(text: string): string {
@@ -227,25 +227,32 @@ export function DescricaoEditor({ value, onChange, placeholder, onDecisaoClick }
     isRenderingChipsRef.current = false;
   }, [isFocused]);
 
-  // Debounce para renderizar chips
+  // Renderizar chips imediatamente (usado ao inserir via modal)
+  const forceRenderChips = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    renderChips();
+  }, [renderChips]);
+
+  // Debounce para renderizar chips (digitação normal)
   const scheduleChipRender = useCallback(() => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
     debounceRef.current = setTimeout(() => {
       renderChips();
-    }, 800);
+    }, 400);
   }, [renderChips]);
 
   // Inicializar e atualizar quando value muda externamente
   useEffect(() => {
     if (lastValueRef.current !== value) {
       lastValueRef.current = value;
-      if (!isFocused) {
-        renderChips();
-      }
+      // Sempre renderizar imediatamente quando valor muda externamente (ex: via modal)
+      renderChips();
     }
-  }, [value, isFocused, renderChips]);
+  }, [value, renderChips]);
 
   // Renderizar inicial
   useEffect(() => {
@@ -335,15 +342,18 @@ export function DescricaoEditor({ value, onChange, placeholder, onDecisaoClick }
   );
 }
 
-// Inserir ação na posição do cursor
+// Inserir ação na posição do cursor com callback para renderização imediata
 export function inserirAcaoNoEditor(
   editorRef: HTMLDivElement | null,
   currentValue: string,
   action: string,
-  onChange: (value: string) => void
+  onChange: (value: string) => void,
+  onAfterInsert?: () => void
 ) {
   if (!editorRef) {
     onChange(currentValue + ' ' + action);
+    // Renderizar imediatamente após a inserção
+    setTimeout(() => onAfterInsert?.(), 10);
     return;
   }
 
@@ -365,4 +375,7 @@ export function inserirAcaoNoEditor(
   
   const newValue = before + (needsSpaceBefore ? ' ' : '') + action + (needsSpaceAfter ? ' ' : '') + after;
   onChange(newValue);
+  
+  // Renderizar chips imediatamente após a inserção
+  setTimeout(() => onAfterInsert?.(), 10);
 }
