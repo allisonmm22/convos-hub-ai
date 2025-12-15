@@ -579,7 +579,7 @@ serve(async (req) => {
           break;
         }
         
-        if (subacao === 'consultar') {
+        if (subacao === 'consultar' || subacao.startsWith('consultar:')) {
           // Consultar disponibilidade
           const dataInicio = new Date().toISOString();
           const dataFim = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -609,9 +609,30 @@ serve(async (req) => {
           }
         } else if (subacao.startsWith('criar:')) {
           // Criar evento
-          // Formato esperado: criar:titulo|data_inicio|data_fim
+          // Formato esperado: criar:calendario:duracao:meet|titulo|data_inicio ou criar:titulo|data_inicio
           const dadosEvento = subacao.replace('criar:', '');
-          const [titulo, dataInicio, dataFim] = dadosEvento.split('|');
+          const partes = dadosEvento.split('|');
+          
+          // Verificar se primeiro elemento tem configuração (calendario:duracao:meet)
+          let titulo: string;
+          let dataInicio: string;
+          let duracaoMinutos = 60;
+          let gerarMeet = false;
+          
+          const primeiroElemento = partes[0];
+          const configParts = primeiroElemento.split(':');
+          
+          if (configParts.length >= 2 && !isNaN(parseInt(configParts[1]))) {
+            // Novo formato: criar:calendario:duracao:meet|titulo|data_inicio
+            duracaoMinutos = parseInt(configParts[1]) || 60;
+            gerarMeet = configParts[2] === 'meet';
+            titulo = partes[1] || '';
+            dataInicio = partes[2] || '';
+          } else {
+            // Formato antigo: criar:titulo|data_inicio
+            titulo = partes[0] || '';
+            dataInicio = partes[1] || '';
+          }
           
           // Buscar nome do contato para incluir no evento
           const { data: contatoData } = await supabase
@@ -633,7 +654,8 @@ serve(async (req) => {
                 titulo: titulo || `Reunião com ${contatoData?.nome || 'Lead'}`,
                 descricao: `Agendamento realizado via WhatsApp\nContato: ${contatoData?.nome || 'Lead'}\nTelefone: ${contatoData?.telefone || 'N/A'}`,
                 data_inicio: dataInicio || new Date().toISOString(),
-                data_fim: dataFim || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                duracao_minutos: duracaoMinutos,
+                gerar_meet: gerarMeet,
               },
             }),
           });
@@ -643,9 +665,13 @@ serve(async (req) => {
           if (calendarResult.error) {
             resultado = { sucesso: false, mensagem: calendarResult.error };
           } else {
+            let mensagemSucesso = `Evento criado: ${titulo || 'Reunião'} (${duracaoMinutos}min)`;
+            if (calendarResult.meet_link) {
+              mensagemSucesso += ` - Meet: ${calendarResult.meet_link}`;
+            }
             resultado = { 
               sucesso: true, 
-              mensagem: `Evento criado: ${titulo || 'Reunião'}`,
+              mensagem: mensagemSucesso,
             };
           }
         } else {

@@ -154,7 +154,7 @@ serve(async (req) => {
 
       case 'criar': {
         // Criar novo evento
-        const { titulo, data_inicio, data_fim, descricao, local } = dados || {};
+        const { titulo, data_inicio, data_fim, descricao, local, duracao_minutos, gerar_meet } = dados || {};
 
         if (!titulo || !data_inicio) {
           return new Response(
@@ -163,10 +163,11 @@ serve(async (req) => {
           );
         }
 
-        // Se não tiver data_fim, usar data_inicio + 1 hora
-        const endTime = data_fim || new Date(new Date(data_inicio).getTime() + 60 * 60 * 1000).toISOString();
+        // Calcular fim baseado na duração (se não tiver data_fim explícita)
+        const duracao = duracao_minutos || 60; // default 1 hora
+        const endTime = data_fim || new Date(new Date(data_inicio).getTime() + duracao * 60 * 1000).toISOString();
 
-        const eventPayload = {
+        const eventPayload: any = {
           summary: titulo,
           description: descricao,
           location: local,
@@ -174,7 +175,22 @@ serve(async (req) => {
           end: { dateTime: endTime, timeZone: 'America/Sao_Paulo' },
         };
 
-        const createResponse = await fetch(`${baseUrl}/events`, {
+        // Adicionar conferência Google Meet se solicitado
+        if (gerar_meet) {
+          eventPayload.conferenceData = {
+            createRequest: {
+              requestId: crypto.randomUUID(),
+              conferenceSolutionKey: { type: 'hangoutsMeet' },
+            },
+          };
+        }
+
+        // Adicionar conferenceDataVersion na URL se usar Meet
+        const createUrl = gerar_meet 
+          ? `${baseUrl}/events?conferenceDataVersion=1`
+          : `${baseUrl}/events`;
+
+        const createResponse = await fetch(createUrl, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -193,14 +209,20 @@ serve(async (req) => {
           );
         }
 
+        // Extrair link do Google Meet se existir
+        const meetLink = createData.hangoutLink || 
+                         createData.conferenceData?.entryPoints?.find((e: any) => e.entryPointType === 'video')?.uri ||
+                         null;
+
         result = {
           id: createData.id,
           titulo: createData.summary,
           inicio: createData.start?.dateTime,
           fim: createData.end?.dateTime,
           link: createData.htmlLink,
+          meet_link: meetLink,
         };
-        console.log('[google-calendar-actions] Evento criado:', result.id);
+        console.log('[google-calendar-actions] Evento criado:', result.id, meetLink ? `com Meet: ${meetLink}` : 'sem Meet');
         break;
       }
 

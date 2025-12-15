@@ -151,12 +151,21 @@ function parseAcao(acao: string): ChipConfig {
     };
   }
   
-  // Agenda - Criar
+  // Agenda - Criar (formato: @agenda:criar:calendario:duracao:meet)
   if (acaoLower.startsWith('@agenda:criar:')) {
-    const valor = acao.replace(/^@agenda:criar:/i, '');
+    const partes = acao.replace(/^@agenda:criar:/i, '').split(':');
+    const calendario = partes[0] || '';
+    const duracao = partes[1] ? `${partes[1]}min` : '';
+    const hasMeet = partes[2] === 'meet';
+    
+    let label = `Criar Evento: ${calendario}`;
+    if (duracao) {
+      label += ` (${duracao}${hasMeet ? ' + Meet' : ''})`;
+    }
+    
     return {
       icon: CalendarPlus,
-      label: `Criar Evento: ${valor}`,
+      label,
       colorClass: 'text-emerald-700 dark:text-emerald-400',
       bgClass: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700',
     };
