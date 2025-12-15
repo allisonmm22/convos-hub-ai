@@ -1,5 +1,5 @@
-import { useRef, useCallback } from 'react';
-import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen, Handshake } from 'lucide-react';
+import { useRef, useCallback, useEffect, useState } from 'react';
+import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen, Handshake, X } from 'lucide-react';
 
 interface DescricaoEditorProps {
   value: string;
@@ -139,82 +139,102 @@ function parseAcao(acao: string): ChipConfig {
   };
 }
 
-// Regex para encontrar ações no texto (exclui pontuação final)
+// Regex para encontrar ações no texto
 const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao)(:[^\s@<>.,;!?]+)?/gi;
 
-// Componente ActionChip para renderização visual
+// Componente ActionChip inline
 function ActionChip({ action, onRemove }: { action: string; onRemove?: () => void }) {
   const config = parseAcao(action);
   const Icon = config.icon;
   
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded border text-xs font-medium ${config.bgClass} ${config.colorClass}`}>
-      <Icon className="h-3 w-3" />
-      <span>{config.label}</span>
+    <span 
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs font-medium whitespace-nowrap ${config.bgClass} ${config.colorClass}`}
+      style={{ verticalAlign: 'middle' }}
+    >
+      <Icon className="h-3 w-3 flex-shrink-0" />
+      <span className="truncate max-w-[150px]">{config.label}</span>
       {onRemove && (
         <button 
           type="button" 
-          onClick={onRemove}
-          className="ml-1 hover:opacity-70 text-current"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="flex-shrink-0 hover:opacity-70 text-current"
         >
-          ×
+          <X className="h-3 w-3" />
         </button>
       )}
     </span>
   );
 }
 
-// Componente de Preview de Chips (renderiza texto com chips visuais)
-function ChipsPreview({ text, onRemoveAction }: { text: string; onRemoveAction: (action: string, index: number) => void }) {
-  if (!text) return null;
+// Renderizar texto com chips inline
+function renderTextWithChips(
+  text: string, 
+  onRemoveAction: (startIndex: number, endIndex: number) => void
+): React.ReactNode[] {
+  if (!text) return [];
   
-  const parts: { type: 'text' | 'action'; content: string; index: number }[] = [];
+  const parts: React.ReactNode[] = [];
   let lastIndex = 0;
-  let actionIndex = 0;
   
   // Resetar regex
   ACTION_REGEX.lastIndex = 0;
   
   let match;
   while ((match = ACTION_REGEX.exec(text)) !== null) {
-    // Adicionar texto antes da ação
+    // Texto antes da ação
     if (match.index > lastIndex) {
-      parts.push({ type: 'text', content: text.slice(lastIndex, match.index), index: -1 });
+      const textBefore = text.slice(lastIndex, match.index);
+      parts.push(<span key={`text-${lastIndex}`}>{textBefore}</span>);
     }
-    // Adicionar ação
-    parts.push({ type: 'action', content: match[0], index: actionIndex++ });
-    lastIndex = match.index + match[0].length;
+    
+    // Ação como chip
+    const matchStart = match.index;
+    const matchEnd = match.index + match[0].length;
+    parts.push(
+      <ActionChip 
+        key={`action-${match.index}`}
+        action={match[0]} 
+        onRemove={() => onRemoveAction(matchStart, matchEnd)}
+      />
+    );
+    
+    lastIndex = matchEnd;
   }
   
-  // Adicionar texto restante
+  // Texto restante
   if (lastIndex < text.length) {
-    parts.push({ type: 'text', content: text.slice(lastIndex), index: -1 });
+    parts.push(<span key={`text-${lastIndex}`}>{text.slice(lastIndex)}</span>);
   }
   
-  if (parts.length === 0) return null;
-  
-  return (
-    <div className="p-3 rounded-lg bg-muted/30 border border-border/50 text-sm leading-7">
-      <div className="text-xs text-muted-foreground mb-2 font-medium">Preview das ações:</div>
-      <div className="whitespace-pre-wrap">
-        {parts.map((part, i) => (
-          part.type === 'action' ? (
-            <ActionChip 
-              key={i} 
-              action={part.content} 
-              onRemove={() => onRemoveAction(part.content, part.index)}
-            />
-          ) : (
-            <span key={i}>{part.content}</span>
-          )
-        ))}
-      </div>
-    </div>
-  );
+  return parts;
 }
 
 export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: DescricaoEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isFocused, setIsFocused] = useState(false);
+
+  // Sincronizar scroll entre textarea e overlay
+  const syncScroll = useCallback(() => {
+    if (textareaRef.current && overlayRef.current) {
+      overlayRef.current.scrollTop = textareaRef.current.scrollTop;
+      overlayRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    }
+  }, []);
+
+  // Auto-resize do textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = Math.max(160, textareaRef.current.scrollHeight) + 'px';
+    }
+  }, [value]);
 
   // Handler para tecla @
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -225,52 +245,86 @@ export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: D
     }
   }, [onAcaoClick, value.length]);
 
-  // Obter posição do cursor (chamado pelo botão externo)
-  const getCursorPosition = useCallback(() => {
-    return textareaRef.current?.selectionStart ?? value.length;
-  }, [value.length]);
-
-  // Remover ação específica do texto
-  const handleRemoveAction = useCallback((action: string, actionIndex: number) => {
-    // Encontrar a n-ésima ocorrência da ação
-    ACTION_REGEX.lastIndex = 0;
-    let currentIndex = 0;
-    let match;
+  // Remover ação por posição no texto
+  const handleRemoveAction = useCallback((startIndex: number, endIndex: number) => {
+    const before = value.slice(0, startIndex);
+    const after = value.slice(endIndex);
     
-    while ((match = ACTION_REGEX.exec(value)) !== null) {
-      if (match[0] === action && currentIndex === actionIndex) {
-        // Remover esta ocorrência
-        const before = value.slice(0, match.index);
-        const after = value.slice(match.index + match[0].length);
-        // Limpar espaços extras
-        const newValue = (before.trimEnd() + ' ' + after.trimStart()).trim();
-        onChange(newValue);
-        return;
-      }
-      currentIndex++;
-    }
+    // Limpar espaço extra antes se existir
+    const cleanBefore = before.endsWith(' ') ? before.slice(0, -1) : before;
+    // Limpar espaço extra depois se existir
+    const cleanAfter = after.startsWith(' ') ? after.slice(1) : after;
+    
+    const newValue = cleanBefore + (cleanBefore.length > 0 && cleanAfter.length > 0 ? ' ' : '') + cleanAfter;
+    onChange(newValue.trim());
   }, [value, onChange]);
 
   // Verificar se há ações no texto
   ACTION_REGEX.lastIndex = 0;
   const hasActions = ACTION_REGEX.test(value);
 
+  // Estilos compartilhados entre textarea e overlay
+  const sharedStyles: React.CSSProperties = {
+    fontFamily: 'inherit',
+    fontSize: '0.875rem',
+    lineHeight: '1.75rem',
+    padding: '1rem',
+    whiteSpace: 'pre-wrap',
+    wordWrap: 'break-word',
+    overflowWrap: 'break-word',
+  };
+
   return (
-    <div className="space-y-3">
-      {/* Textarea de edição */}
+    <div 
+      ref={containerRef}
+      className="relative w-full"
+    >
+      {/* Overlay com chips visuais - fica por cima, mas não captura eventos */}
+      <div
+        ref={overlayRef}
+        className={`absolute inset-0 rounded-xl pointer-events-none overflow-hidden ${
+          hasActions ? 'block' : 'hidden'
+        }`}
+        style={{
+          ...sharedStyles,
+          color: 'transparent',
+          background: 'transparent',
+        }}
+        aria-hidden="true"
+      >
+        <div className="pointer-events-auto">
+          {renderTextWithChips(value, handleRemoveAction)}
+        </div>
+      </div>
+
+      {/* Textarea real - transparente quando há ações, visível quando não há */}
       <textarea
         ref={textareaRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
+        onScroll={syncScroll}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
         placeholder={placeholder}
-        className="w-full min-h-[160px] px-4 py-4 rounded-xl bg-input border border-border text-foreground text-sm leading-7 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:shadow-lg transition-all duration-200 resize-y"
-        style={{ fontFamily: 'inherit' }}
+        className={`w-full min-h-[160px] rounded-xl bg-input border text-sm leading-7 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:shadow-lg transition-all duration-200 resize-none ${
+          isFocused ? 'border-primary' : 'border-border'
+        } ${hasActions ? 'text-transparent caret-foreground' : 'text-foreground'}`}
+        style={{
+          ...sharedStyles,
+          WebkitTextFillColor: hasActions ? 'transparent' : undefined,
+          caretColor: 'hsl(var(--foreground))',
+        }}
       />
 
-      {/* Preview com chips visuais */}
-      {hasActions && (
-        <ChipsPreview text={value} onRemoveAction={handleRemoveAction} />
+      {/* Placeholder personalizado quando não há foco e está vazio */}
+      {!value && !isFocused && placeholder && (
+        <div 
+          className="absolute inset-0 rounded-xl pointer-events-none text-muted-foreground text-sm"
+          style={sharedStyles}
+        >
+          {placeholder}
+        </div>
       )}
     </div>
   );
