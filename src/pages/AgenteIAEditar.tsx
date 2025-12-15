@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { 
   Bot, Save, Clock, Loader2, Sparkles, ArrowLeft, Pencil, Check, X,
@@ -9,6 +9,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { ActionMenu } from '@/components/ActionMenu';
 import { useNavigate, useParams } from 'react-router-dom';
 
 interface AgentConfig {
@@ -458,11 +459,27 @@ interface ConfirmDeleteEtapa {
   nome: string;
 }
 
+interface ActionMenuState {
+  isOpen: boolean;
+  etapaId: string;
+  position: { top: number; left: number };
+  searchTerm: string;
+  cursorPosition: number;
+}
+
 function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
   const [etapas, setEtapas] = useState<Etapa[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<ConfirmDeleteEtapa | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [actionMenu, setActionMenu] = useState<ActionMenuState>({
+    isOpen: false,
+    etapaId: '',
+    position: { top: 0, left: 0 },
+    searchTerm: '',
+    cursorPosition: 0,
+  });
+  const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   useEffect(() => {
     fetchEtapas();
@@ -542,6 +559,96 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
     ));
   };
 
+  // Handler para detectar "@" no textarea
+  const handleDescricaoChange = (etapaId: string, value: string, event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    updateEtapa(etapaId, 'descricao', value);
+    
+    const textarea = event.target;
+    const cursorPos = textarea.selectionStart;
+    
+    // Encontrar se estamos digitando após um "@"
+    const textBeforeCursor = value.substring(0, cursorPos);
+    const atIndex = textBeforeCursor.lastIndexOf('@');
+    
+    if (atIndex !== -1) {
+      // Verificar se não há espaço entre @ e cursor
+      const textAfterAt = textBeforeCursor.substring(atIndex);
+      const hasSpace = textAfterAt.includes(' ');
+      
+      if (!hasSpace) {
+        // Calcular posição do menu
+        const rect = textarea.getBoundingClientRect();
+        
+        // Criar um elemento temporário para medir a posição do cursor
+        const mirror = document.createElement('div');
+        mirror.style.cssText = window.getComputedStyle(textarea).cssText;
+        mirror.style.position = 'absolute';
+        mirror.style.visibility = 'hidden';
+        mirror.style.whiteSpace = 'pre-wrap';
+        mirror.style.wordWrap = 'break-word';
+        mirror.style.width = `${textarea.offsetWidth}px`;
+        mirror.textContent = textBeforeCursor.replace(/\n/g, '\n ');
+        document.body.appendChild(mirror);
+        
+        const lineHeight = parseInt(window.getComputedStyle(textarea).lineHeight) || 20;
+        const lines = (textBeforeCursor.match(/\n/g) || []).length;
+        const topOffset = lines * lineHeight;
+        
+        document.body.removeChild(mirror);
+        
+        setActionMenu({
+          isOpen: true,
+          etapaId,
+          position: { 
+            top: rect.top + topOffset + lineHeight + 4, 
+            left: rect.left + 10 
+          },
+          searchTerm: textAfterAt,
+          cursorPosition: cursorPos,
+        });
+        return;
+      }
+    }
+    
+    // Fechar menu se não estiver digitando após @
+    if (actionMenu.isOpen && actionMenu.etapaId === etapaId) {
+      setActionMenu(prev => ({ ...prev, isOpen: false }));
+    }
+  };
+
+  // Handler para inserir ação selecionada
+  const handleActionSelect = (action: string) => {
+    const etapa = etapas.find(e => e.id === actionMenu.etapaId);
+    if (!etapa) return;
+
+    const textarea = textareaRefs.current[actionMenu.etapaId];
+    if (!textarea) return;
+
+    const cursorPos = actionMenu.cursorPosition;
+    const text = etapa.descricao;
+    
+    // Encontrar início do @ para substituir
+    const textBeforeCursor = text.substring(0, cursorPos);
+    const atIndex = textBeforeCursor.lastIndexOf('@');
+    
+    // Substituir texto do @ até cursor pela ação selecionada
+    const newText = text.substring(0, atIndex) + action + ' ' + text.substring(cursorPos);
+    
+    updateEtapa(actionMenu.etapaId, 'descricao', newText);
+    
+    // Fechar menu
+    setActionMenu(prev => ({ ...prev, isOpen: false }));
+    
+    // Focar de volta no textarea
+    setTimeout(() => {
+      if (textarea) {
+        textarea.focus();
+        const newCursorPos = atIndex + action.length + 1;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 10);
+  };
+
   const saveEtapa = async (id: string) => {
     const etapa = etapas.find(e => e.id === id);
     if (!etapa) return;
@@ -581,6 +688,15 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
 
   return (
     <div className="space-y-6">
+      {/* Action Menu */}
+      <ActionMenu
+        isOpen={actionMenu.isOpen}
+        onClose={() => setActionMenu(prev => ({ ...prev, isOpen: false }))}
+        onSelect={handleActionSelect}
+        position={actionMenu.position}
+        searchTerm={actionMenu.searchTerm}
+      />
+
       {/* Modal de Confirmação de Exclusão */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -695,7 +811,7 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
                     />
                   </div>
 
-                  <div>
+                  <div className="relative">
                     <label className="block text-sm font-medium text-foreground mb-2">
                       Descrição da Etapa
                     </label>
@@ -710,17 +826,48 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
                       <button className="flex items-center gap-1 px-2 py-1 rounded text-xs text-muted-foreground hover:bg-muted">
                         ⚡ Ação
                       </button>
-                      <button className="flex items-center gap-1 px-2 py-1 rounded text-xs text-muted-foreground hover:bg-muted">
-                        @ ou #
+                      <button 
+                        className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-primary/10 text-primary hover:bg-primary/20"
+                        onClick={() => {
+                          const textarea = textareaRefs.current[etapa.id];
+                          if (textarea) {
+                            const cursorPos = textarea.selectionStart;
+                            const text = etapa.descricao;
+                            const newText = text.substring(0, cursorPos) + '@' + text.substring(cursorPos);
+                            updateEtapa(etapa.id, 'descricao', newText);
+                            
+                            setTimeout(() => {
+                              textarea.focus();
+                              const newPos = cursorPos + 1;
+                              textarea.setSelectionRange(newPos, newPos);
+                              
+                              // Trigger the action menu manually
+                              const rect = textarea.getBoundingClientRect();
+                              setActionMenu({
+                                isOpen: true,
+                                etapaId: etapa.id,
+                                position: { top: rect.top + 30, left: rect.left + 10 },
+                                searchTerm: '@',
+                                cursorPosition: newPos,
+                              });
+                            }, 10);
+                          }
+                        }}
+                      >
+                        @ Ação
                       </button>
                     </div>
                     <textarea
+                      ref={(el) => { textareaRefs.current[etapa.id] = el; }}
                       rows={6}
                       value={etapa.descricao}
-                      onChange={(e) => updateEtapa(etapa.id, 'descricao', e.target.value)}
-                      className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm"
-                      placeholder="Descreva o comportamento desta etapa..."
+                      onChange={(e) => handleDescricaoChange(etapa.id, e.target.value, e)}
+                      className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm font-mono"
+                      placeholder="Descreva o comportamento desta etapa... Digite @ para inserir ações inteligentes"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      💡 Digite <kbd className="px-1 py-0.5 rounded bg-muted border border-border text-[10px]">@</kbd> para inserir ações como mover para etapa do CRM, adicionar tag, transferir, etc.
+                    </p>
                   </div>
 
                   <div className="flex items-center justify-between">

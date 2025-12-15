@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.ai-responder]
 verify_jwt = false
+
+[functions.executar-acao]
+verify_jwt = false

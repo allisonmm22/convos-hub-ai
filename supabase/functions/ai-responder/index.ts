@@ -21,6 +21,60 @@ const modelMapping: Record<string, string> = {
 interface AIResponse {
   resposta: string;
   provider: 'openai' | 'lovable';
+  acoes?: Acao[];
+}
+
+interface Acao {
+  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar';
+  valor?: string;
+}
+
+// Parser de ações do prompt
+function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: Acao[] } {
+  const acoesRegex = /@(etapa|tag|transferir|notificar|finalizar)(?::([^\s@]+))?/gi;
+  const matches = [...texto.matchAll(acoesRegex)];
+  
+  const acoes: string[] = [];
+  const acoesParseadas: Acao[] = [];
+  
+  for (const match of matches) {
+    acoes.push(match[0]);
+    acoesParseadas.push({
+      tipo: match[1].toLowerCase() as Acao['tipo'],
+      valor: match[2] || undefined,
+    });
+  }
+  
+  return { acoes, acoesParseadas };
+}
+
+// Mapear nome de etapa para ID
+async function mapearEtapaNome(supabase: any, contaId: string, nomeEtapa: string): Promise<string | null> {
+  // Normalizar nome (remover hífens, lowercase)
+  const nomeNormalizado = nomeEtapa.toLowerCase().replace(/-/g, ' ');
+  
+  // Buscar estágios da conta
+  const { data: funis } = await supabase
+    .from('funis')
+    .select('id')
+    .eq('conta_id', contaId);
+    
+  if (!funis || funis.length === 0) return null;
+  
+  const { data: estagios } = await supabase
+    .from('estagios')
+    .select('id, nome')
+    .in('funil_id', funis.map((f: any) => f.id));
+    
+  if (!estagios) return null;
+  
+  // Encontrar estágio por nome (case insensitive, com/sem hífen)
+  const estagio = estagios.find((e: any) => 
+    e.nome.toLowerCase() === nomeNormalizado ||
+    e.nome.toLowerCase().replace(/\s+/g, '-') === nomeEtapa.toLowerCase()
+  );
+  
+  return estagio?.id || null;
 }
 
 async function callOpenAI(
@@ -28,7 +82,8 @@ async function callOpenAI(
   messages: { role: string; content: string }[],
   modelo: string,
   maxTokens: number,
-  temperatura: number
+  temperatura: number,
+  tools?: any[]
 ): Promise<AIResponse> {
   const isModeloNovo = modelo.includes('gpt-5') || modelo.includes('gpt-4.1') || 
                        modelo.includes('o3') || modelo.includes('o4');
@@ -37,6 +92,11 @@ async function callOpenAI(
     model: modelo,
     messages,
   };
+
+  if (tools && tools.length > 0) {
+    requestBody.tools = tools;
+    requestBody.tool_choice = 'auto';
+  }
 
   if (isModeloNovo) {
     requestBody.max_completion_tokens = maxTokens;
@@ -60,18 +120,38 @@ async function callOpenAI(
   }
 
   const data = await response.json();
-  const resposta = data.choices?.[0]?.message?.content;
+  
+  // Verificar se há tool calls
+  const message = data.choices?.[0]?.message;
+  const toolCalls = message?.tool_calls;
+  
+  let resposta = message?.content || '';
+  let acoes: Acao[] = [];
+  
+  if (toolCalls && toolCalls.length > 0) {
+    for (const toolCall of toolCalls) {
+      if (toolCall.function?.name === 'executar_acao') {
+        try {
+          const args = JSON.parse(toolCall.function.arguments);
+          acoes.push(args);
+        } catch (e) {
+          console.error('Erro ao parsear argumentos da ação:', e);
+        }
+      }
+    }
+  }
 
-  if (!resposta) {
+  if (!resposta && acoes.length === 0) {
     throw new Error('Resposta vazia da OpenAI');
   }
 
-  return { resposta, provider: 'openai' };
+  return { resposta, provider: 'openai', acoes: acoes.length > 0 ? acoes : undefined };
 }
 
 async function callLovableAI(
   messages: { role: string; content: string }[],
-  modelo: string
+  modelo: string,
+  tools?: any[]
 ): Promise<AIResponse> {
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
   
@@ -84,16 +164,23 @@ async function callLovableAI(
 
   console.log('Usando Lovable AI com modelo:', lovableModel);
 
+  const requestBody: any = {
+    model: lovableModel,
+    messages,
+  };
+
+  if (tools && tools.length > 0) {
+    requestBody.tools = tools;
+    requestBody.tool_choice = 'auto';
+  }
+
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${LOVABLE_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model: lovableModel,
-      messages,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -102,13 +189,32 @@ async function callLovableAI(
   }
 
   const data = await response.json();
-  const resposta = data.choices?.[0]?.message?.content;
+  
+  // Verificar se há tool calls
+  const message = data.choices?.[0]?.message;
+  const toolCalls = message?.tool_calls;
+  
+  let resposta = message?.content || '';
+  let acoes: Acao[] = [];
+  
+  if (toolCalls && toolCalls.length > 0) {
+    for (const toolCall of toolCalls) {
+      if (toolCall.function?.name === 'executar_acao') {
+        try {
+          const args = JSON.parse(toolCall.function.arguments);
+          acoes.push(args);
+        } catch (e) {
+          console.error('Erro ao parsear argumentos da ação:', e);
+        }
+      }
+    }
+  }
 
-  if (!resposta) {
+  if (!resposta && acoes.length === 0) {
     throw new Error('Resposta vazia da Lovable AI');
   }
 
-  return { resposta, provider: 'lovable' };
+  return { resposta, provider: 'lovable', acoes: acoes.length > 0 ? acoes : undefined };
 }
 
 serve(async (req) => {
@@ -206,7 +312,43 @@ serve(async (req) => {
       .order('created_at', { ascending: true })
       .limit(20);
 
-    // 6. Montar o prompt completo
+    // 6. Buscar dados da conversa para obter contato_id
+    const { data: conversa } = await supabase
+      .from('conversas')
+      .select('contato_id')
+      .eq('id', conversa_id)
+      .single();
+
+    const contatoId = conversa?.contato_id;
+
+    // 7. Parsear ações das etapas para construir ferramentas
+    let todasAcoes: { etapaNum: number; acoes: string[] }[] = [];
+    let acoesDisponiveis: Acao[] = [];
+
+    if (etapas && etapas.length > 0) {
+      for (const etapa of etapas) {
+        if (etapa.descricao) {
+          const { acoes, acoesParseadas } = parseAcoesDoPrompt(etapa.descricao);
+          if (acoes.length > 0) {
+            todasAcoes.push({ etapaNum: etapa.numero, acoes });
+            
+            // Processar ações para mapear nomes de etapas para IDs
+            for (const acao of acoesParseadas) {
+              if (acao.tipo === 'etapa' && acao.valor) {
+                const estagioId = await mapearEtapaNome(supabase, conta_id, acao.valor);
+                if (estagioId) {
+                  acoesDisponiveis.push({ ...acao, valor: estagioId });
+                }
+              } else {
+                acoesDisponiveis.push(acao);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 8. Montar o prompt completo
     let promptCompleto = agente.prompt_sistema || '';
 
     if (etapas && etapas.length > 0) {
@@ -228,9 +370,23 @@ serve(async (req) => {
       });
     }
 
-    console.log('Prompt montado com', promptCompleto.length, 'caracteres');
+    // Adicionar instruções sobre ações se houver ações configuradas
+    if (acoesDisponiveis.length > 0) {
+      promptCompleto += '\n\n## AÇÕES DISPONÍVEIS\n';
+      promptCompleto += 'Você pode executar as seguintes ações quando apropriado:\n';
+      promptCompleto += '- @etapa:<nome> - Mover o lead para uma etapa específica do CRM\n';
+      promptCompleto += '- @tag:<nome> - Adicionar uma tag ao contato\n';
+      promptCompleto += '- @transferir:humano - Transferir a conversa para um atendente humano\n';
+      promptCompleto += '- @transferir:ia - Devolver a conversa para o agente IA\n';
+      promptCompleto += '- @notificar - Enviar notificação para a equipe\n';
+      promptCompleto += '- @finalizar - Encerrar a conversa\n';
+      promptCompleto += '\nQuando identificar que uma ação deve ser executada baseado no contexto da conversa, use a ferramenta executar_acao.\n';
+    }
 
-    // 7. Montar mensagens para a API
+    console.log('Prompt montado com', promptCompleto.length, 'caracteres');
+    console.log('Ações disponíveis:', acoesDisponiveis.length);
+
+    // 9. Montar mensagens para a API
     const messages: { role: string; content: string }[] = [
       { role: 'system', content: promptCompleto }
     ];
@@ -251,7 +407,33 @@ serve(async (req) => {
 
     console.log('Total de mensagens para API:', messages.length);
 
-    // 8. Chamar API com fallback inteligente
+    // 10. Definir ferramentas (tools) se houver ações configuradas
+    const tools = acoesDisponiveis.length > 0 ? [
+      {
+        type: 'function',
+        function: {
+          name: 'executar_acao',
+          description: 'Executa uma ação automatizada como mover lead para etapa do CRM, adicionar tag, transferir conversa, etc.',
+          parameters: {
+            type: 'object',
+            properties: {
+              tipo: {
+                type: 'string',
+                enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar'],
+                description: 'Tipo da ação a ser executada',
+              },
+              valor: {
+                type: 'string',
+                description: 'Valor associado à ação (ID da etapa, nome da tag, destino da transferência)',
+              },
+            },
+            required: ['tipo'],
+          },
+        },
+      },
+    ] : undefined;
+
+    // 11. Chamar API com fallback inteligente
     const modelo = agente.modelo || 'gpt-4o-mini';
     const maxTokens = agente.max_tokens || 1000;
     const temperatura = agente.temperatura || 0.7;
@@ -262,16 +444,16 @@ serve(async (req) => {
     if (hasOpenAIKey) {
       try {
         console.log('Tentando OpenAI com modelo:', modelo);
-        result = await callOpenAI(conta.openai_api_key, messages, modelo, maxTokens, temperatura);
+        result = await callOpenAI(conta.openai_api_key, messages, modelo, maxTokens, temperatura, tools);
         console.log('✅ Resposta via OpenAI');
       } catch (openaiError: any) {
         const errorMsg = openaiError.message || '';
         console.error('❌ Erro OpenAI:', errorMsg);
         
-        // Fallback para Lovable AI em caso de erro 429 (rate limit) ou 402 (quota) ou qualquer erro
+        // Fallback para Lovable AI em caso de erro
         console.log('⚡ Fallback para Lovable AI...');
         try {
-          result = await callLovableAI(messages, modelo);
+          result = await callLovableAI(messages, modelo, tools);
           console.log('✅ Resposta via Lovable AI (fallback)');
         } catch (lovableError: any) {
           console.error('❌ Erro Lovable AI:', lovableError.message);
@@ -285,7 +467,7 @@ serve(async (req) => {
       // Usar Lovable AI diretamente se não tiver chave OpenAI
       console.log('Usando Lovable AI diretamente (sem chave OpenAI configurada)');
       try {
-        result = await callLovableAI(messages, modelo);
+        result = await callLovableAI(messages, modelo, tools);
         console.log('✅ Resposta via Lovable AI');
       } catch (lovableError: any) {
         console.error('❌ Erro Lovable AI:', lovableError.message);
@@ -298,8 +480,41 @@ serve(async (req) => {
 
     console.log('Resposta gerada via', result.provider + ':', result.resposta.substring(0, 100) + '...');
 
+    // 12. Executar ações se houver
+    if (result.acoes && result.acoes.length > 0 && contatoId) {
+      console.log('Executando', result.acoes.length, 'ações...');
+      
+      for (const acao of result.acoes) {
+        try {
+          const response = await fetch(`${supabaseUrl}/functions/v1/executar-acao`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              acao,
+              conversa_id,
+              contato_id: contatoId,
+              conta_id,
+            }),
+          });
+          
+          const resultado = await response.json();
+          console.log('Resultado da ação:', resultado);
+        } catch (e) {
+          console.error('Erro ao executar ação:', e);
+        }
+      }
+    }
+
     return new Response(
-      JSON.stringify({ resposta: result.resposta, should_respond: true, provider: result.provider }),
+      JSON.stringify({ 
+        resposta: result.resposta, 
+        should_respond: true, 
+        provider: result.provider,
+        acoes_executadas: result.acoes?.length || 0,
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
