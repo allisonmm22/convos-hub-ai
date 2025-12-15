@@ -11,6 +11,34 @@ interface Acao {
   valor?: string;
 }
 
+// Gerar mensagem de sistema para rastreamento interno
+function gerarMensagemSistema(tipo: string, valor: string | undefined, resultado: string): string {
+  switch (tipo) {
+    case 'etapa':
+      return `📊 Lead movido para etapa "${valor}"`;
+    case 'tag':
+      return `🏷️ Tag "${valor}" adicionada ao contato`;
+    case 'transferir':
+      if (valor === 'humano' || valor === 'usuario') {
+        return `👤 Conversa transferida para atendente humano`;
+      } else if (valor === 'ia') {
+        return `🤖 Conversa retornada para agente IA principal`;
+      } else if (valor?.startsWith('agente:')) {
+        const agenteName = valor.replace('agente:', '').replace(/-/g, ' ').trim();
+        return `🤖 Conversa transferida para agente "${agenteName}"`;
+      }
+      return `↔️ Transferência realizada`;
+    case 'notificar':
+      return `🔔 Notificação: ${valor || 'Nova ação'}`;
+    case 'finalizar':
+      return `🔒 Conversa encerrada pelo agente IA`;
+    case 'nome':
+      return `✏️ Nome do contato alterado para "${valor}"`;
+    default:
+      return `⚙️ Ação executada: ${tipo}`;
+  }
+}
+
 // Função para mapear nome de etapa para UUID
 async function mapearEtapaPorNome(
   supabase: any,
@@ -336,6 +364,28 @@ serve(async (req) => {
 
       default:
         resultado = { sucesso: false, mensagem: 'Tipo de ação não reconhecido' };
+    }
+
+    // Registrar mensagem de sistema para rastreamento interno
+    if (resultado.sucesso) {
+      const mensagemSistema = gerarMensagemSistema(acaoObj.tipo, acaoObj.valor, resultado.mensagem);
+      
+      await supabase
+        .from('mensagens')
+        .insert({
+          conversa_id,
+          conteudo: mensagemSistema,
+          direcao: 'saida',
+          tipo: 'sistema',
+          enviada_por_ia: true,
+          metadata: { 
+            interno: true, 
+            acao_tipo: acaoObj.tipo,
+            acao_valor: acaoObj.valor || null
+          }
+        });
+      
+      console.log('Mensagem de sistema registrada:', mensagemSistema);
     }
 
     console.log('Resultado:', resultado);

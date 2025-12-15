@@ -12,6 +12,7 @@ import {
   CheckCheck,
   MessageSquare as MessageSquareIcon,
   X,
+  Activity,
   Image,
   FileText,
   Mic,
@@ -66,6 +67,13 @@ interface Conversa {
   agent_ia?: AgenteIA | null;
 }
 
+interface MensagemMetadata {
+  interno?: boolean;
+  acao_tipo?: string;
+  acao_valor?: string;
+  [key: string]: unknown;
+}
+
 interface Mensagem {
   id: string;
   conversa_id: string;
@@ -75,8 +83,9 @@ interface Mensagem {
   enviada_por_ia: boolean;
   enviada_por_dispositivo: boolean | null;
   lida: boolean;
-  tipo: 'texto' | 'imagem' | 'audio' | 'video' | 'documento' | 'sticker' | null;
+  tipo: 'texto' | 'imagem' | 'audio' | 'video' | 'documento' | 'sticker' | 'sistema' | null;
   media_url: string | null;
+  metadata?: MensagemMetadata | null;
 }
 
 interface Conexao {
@@ -369,7 +378,7 @@ export default function Conversas() {
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-      setMensagens(data || []);
+      setMensagens((data || []) as unknown as Mensagem[]);
     } catch (error) {
       console.error('Erro ao buscar mensagens:', error);
     }
@@ -778,6 +787,21 @@ export default function Conversas() {
   });
 
   const renderMensagem = (msg: Mensagem) => {
+    // Mensagem de sistema (rastreamento interno)
+    if (msg.tipo === 'sistema') {
+      return (
+        <div key={msg.id} className="flex justify-center my-3">
+          <div className="bg-muted/60 border border-border/50 rounded-lg px-4 py-2 flex items-center gap-2 max-w-[80%]">
+            <Activity className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+            <span className="text-xs text-muted-foreground">{msg.conteudo}</span>
+            <span className="text-xs text-muted-foreground/60 flex-shrink-0">
+              {formatTime(msg.created_at)}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
     const isMedia = msg.tipo && msg.tipo !== 'texto' && msg.media_url;
 
     return (
