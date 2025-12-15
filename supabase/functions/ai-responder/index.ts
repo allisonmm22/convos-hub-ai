@@ -557,6 +557,11 @@ serve(async (req) => {
       promptCompleto += '- @finalizar - Encerrar a conversa\n';
       promptCompleto += '- @nome:<novo nome> - Alterar o nome do contato/lead (use quando o cliente se identificar)\n';
       promptCompleto += '\nQuando identificar que uma ação deve ser executada baseado no contexto da conversa, use a ferramenta executar_acao.\n';
+      promptCompleto += '\n## REGRAS IMPORTANTES\n';
+      promptCompleto += '- NUNCA mencione ao cliente que está executando ações internas como transferências, mudanças de etapa, tags, etc.\n';
+      promptCompleto += '- NUNCA inclua comandos @ na sua resposta ao cliente (ex: @transferir, @etapa, @tag).\n';
+      promptCompleto += '- As ações são executadas silenciosamente em background. Mantenha o fluxo natural da conversa.\n';
+      promptCompleto += '- Quando transferir para outro agente, apenas se despeça naturalmente sem mencionar a transferência.\n';
     }
 
     console.log('Prompt montado com', promptCompleto.length, 'caracteres');
@@ -684,9 +689,17 @@ serve(async (req) => {
       }
     }
 
+    // Limpar comandos @ que possam ter vazado para o texto da resposta
+    let respostaFinal = result.resposta;
+    respostaFinal = respostaFinal.replace(/@(etapa|tag|transferir|notificar|finalizar|nome)(?::[^\s@.,!?]+)?/gi, '').trim();
+    respostaFinal = respostaFinal.replace(/\s{2,}/g, ' ').trim();
+    
+    // Remover menções de transferência que possam ter escapado
+    respostaFinal = respostaFinal.replace(/estou transferindo.*?(humano|agente|atendente).*?\./gi, '').trim();
+
     return new Response(
       JSON.stringify({ 
-        resposta: result.resposta, 
+        resposta: respostaFinal, 
         should_respond: true, 
         provider: result.provider,
         acoes_executadas: result.acoes?.length || 0,
