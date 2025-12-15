@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.analisar-imagem]
 verify_jwt = false
+
+[functions.processar-followups]
+verify_jwt = false
