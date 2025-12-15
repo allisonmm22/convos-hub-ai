@@ -367,15 +367,57 @@ serve(async (req) => {
     const hasOpenAIKey = !!conta?.openai_api_key;
     console.log('OpenAI API Key configurada:', hasOpenAIKey);
 
-    // 2. Buscar configuração do agente IA ativo
-    const { data: agente, error: agenteError } = await supabase
-      .from('agent_ia')
-      .select('*')
-      .eq('conta_id', conta_id)
-      .eq('ativo', true)
+    // 2. Buscar dados da conversa para determinar qual agente usar
+    const { data: conversaData } = await supabase
+      .from('conversas')
+      .select('agente_ia_id')
+      .eq('id', conversa_id)
       .single();
 
-    if (agenteError || !agente) {
+    let agente = null;
+
+    // Se a conversa tem um agente específico atribuído, usar ele
+    if (conversaData?.agente_ia_id) {
+      console.log('Conversa tem agente específico:', conversaData.agente_ia_id);
+      const { data: agenteEspecifico } = await supabase
+        .from('agent_ia')
+        .select('*')
+        .eq('id', conversaData.agente_ia_id)
+        .eq('ativo', true)
+        .single();
+      
+      agente = agenteEspecifico;
+    }
+
+    // Se não tem agente específico ou ele não está ativo, buscar agente principal
+    if (!agente) {
+      console.log('Buscando agente principal da conta...');
+      const { data: agentePrincipal } = await supabase
+        .from('agent_ia')
+        .select('*')
+        .eq('conta_id', conta_id)
+        .eq('tipo', 'principal')
+        .eq('ativo', true)
+        .single();
+      
+      agente = agentePrincipal;
+    }
+
+    // Se ainda não encontrou, buscar qualquer agente ativo
+    if (!agente) {
+      console.log('Buscando qualquer agente ativo da conta...');
+      const { data: agenteQualquer } = await supabase
+        .from('agent_ia')
+        .select('*')
+        .eq('conta_id', conta_id)
+        .eq('ativo', true)
+        .limit(1)
+        .maybeSingle();
+      
+      agente = agenteQualquer;
+    }
+
+    if (!agente) {
       console.log('Nenhum agente IA ativo para esta conta');
       return new Response(
         JSON.stringify({ error: 'Nenhum agente IA ativo', should_respond: false }),
@@ -383,7 +425,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('Agente encontrado:', agente.nome);
+    console.log('Agente encontrado:', agente.nome, '(tipo:', agente.tipo + ')');
 
     // Verificar se o agente está configurado para atender 24h
     if (!agente.atender_24h) {
@@ -509,7 +551,8 @@ serve(async (req) => {
       promptCompleto += '- @etapa:<nome> - Mover o lead para uma etapa específica do CRM\n';
       promptCompleto += '- @tag:<nome> - Adicionar uma tag ao contato\n';
       promptCompleto += '- @transferir:humano - Transferir a conversa para um atendente humano\n';
-      promptCompleto += '- @transferir:ia - Devolver a conversa para o agente IA\n';
+      promptCompleto += '- @transferir:ia - Devolver a conversa para o agente IA principal\n';
+      promptCompleto += '- @transferir:agente:<id_ou_nome> - Transferir a conversa para outro agente IA específico\n';
       promptCompleto += '- @notificar - Enviar notificação para a equipe\n';
       promptCompleto += '- @finalizar - Encerrar a conversa\n';
       promptCompleto += '- @nome:<novo nome> - Alterar o nome do contato/lead (use quando o cliente se identificar)\n';

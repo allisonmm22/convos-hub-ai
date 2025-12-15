@@ -352,6 +352,7 @@ export type Database = {
       conversas: {
         Row: {
           agente_ia_ativo: boolean | null
+          agente_ia_id: string | null
           arquivada: boolean | null
           atendente_id: string | null
           conexao_id: string | null
@@ -368,6 +369,7 @@ export type Database = {
         }
         Insert: {
           agente_ia_ativo?: boolean | null
+          agente_ia_id?: string | null
           arquivada?: boolean | null
           atendente_id?: string | null
           conexao_id?: string | null
@@ -384,6 +386,7 @@ export type Database = {
         }
         Update: {
           agente_ia_ativo?: boolean | null
+          agente_ia_id?: string | null
           arquivada?: boolean | null
           atendente_id?: string | null
           conexao_id?: string | null
@@ -399,6 +402,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "conversas_agente_ia_id_fkey"
+            columns: ["agente_ia_id"]
+            isOneToOne: false
+            referencedRelation: "agent_ia"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "conversas_atendente_id_fkey"
             columns: ["atendente_id"]
