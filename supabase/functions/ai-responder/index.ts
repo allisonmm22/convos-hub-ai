@@ -25,13 +25,14 @@ interface AIResponse {
 }
 
 interface Acao {
-  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao';
+  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda';
   valor?: string;
+  calendario_id?: string;
 }
 
 // Parser de ações do prompt
 function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: Acao[] } {
-  const acoesRegex = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao)(?::([^\s@]+))?/gi;
+  const acoesRegex = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda)(?::([^\s@:]+)(?::([^\s@]+))?)?/gi;
   const matches = [...texto.matchAll(acoesRegex)];
   
   const acoes: string[] = [];
@@ -41,10 +42,15 @@ function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: A
     acoes.push(match[0]);
     // Remover pontuação final do valor (. , ; ! ?)
     const valorLimpo = match[2]?.replace(/[.,;!?]+$/, '') || undefined;
-    acoesParseadas.push({
+    const subValor = match[3]?.replace(/[.,;!?]+$/, '') || undefined;
+    
+    // Para ações de agenda, combinar tipo e subvalor
+    const acaoObj: Acao = {
       tipo: match[1].toLowerCase() as Acao['tipo'],
-      valor: valorLimpo,
-    });
+      valor: subValor ? `${valorLimpo}:${subValor}` : valorLimpo,
+    };
+    
+    acoesParseadas.push(acaoObj);
   }
   
   return { acoes, acoesParseadas };
@@ -93,13 +99,125 @@ async function mapearEtapaNome(supabase: any, contaId: string, nomeEtapa: string
   return estagio?.id || null;
 }
 
+// Função para executar ação de agenda e retornar resultado
+async function executarAgendaLocal(
+  supabase: any, 
+  supabaseUrl: string, 
+  supabaseKey: string, 
+  contaId: string, 
+  valor: string
+): Promise<{ sucesso: boolean; mensagem: string; dados?: any }> {
+  console.log('Executando ação de agenda local:', valor);
+  
+  // Buscar calendário ativo da conta
+  const { data: calendario } = await supabase
+    .from('calendarios_google')
+    .select('id, nome')
+    .eq('conta_id', contaId)
+    .eq('ativo', true)
+    .limit(1)
+    .maybeSingle();
+  
+  if (!calendario) {
+    return { sucesso: false, mensagem: 'Nenhum calendário Google conectado' };
+  }
+  
+  if (valor === 'consultar' || valor.startsWith('consultar:')) {
+    // Consultar disponibilidade para os próximos 7 dias
+    const dataInicio = new Date().toISOString();
+    const dataFim = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    
+    try {
+      const calendarResponse = await fetch(`${supabaseUrl}/functions/v1/google-calendar-actions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          operacao: 'consultar',
+          calendario_id: calendario.id,
+          dados: { data_inicio: dataInicio, data_fim: dataFim },
+        }),
+      });
+      
+      const calendarResult = await calendarResponse.json();
+      
+      if (calendarResult.error) {
+        return { sucesso: false, mensagem: calendarResult.error };
+      }
+      
+      // Calcular horários livres baseado nos eventos
+      const eventos = calendarResult.eventos || [];
+      const horariosOcupados = eventos.map((e: any) => ({
+        inicio: e.inicio,
+        fim: e.fim,
+        titulo: e.titulo,
+      }));
+      
+      // Gerar lista de horários disponíveis (simplificado)
+      const horariosDisponiveis: string[] = [];
+      const agora = new Date();
+      
+      for (let dia = 0; dia < 7; dia++) {
+        const data = new Date(agora);
+        data.setDate(data.getDate() + dia);
+        data.setHours(8, 0, 0, 0);
+        
+        // Pular finais de semana
+        if (data.getDay() === 0 || data.getDay() === 6) continue;
+        
+        // Verificar cada horário comercial (8h às 18h)
+        for (let hora = 8; hora < 18; hora++) {
+          const horarioCheck = new Date(data);
+          horarioCheck.setHours(hora, 0, 0, 0);
+          
+          // Pular horários passados
+          if (horarioCheck <= agora) continue;
+          
+          // Verificar se está ocupado
+          const ocupado = horariosOcupados.some((e: any) => {
+            const eventoInicio = new Date(e.inicio);
+            const eventoFim = new Date(e.fim);
+            return horarioCheck >= eventoInicio && horarioCheck < eventoFim;
+          });
+          
+          if (!ocupado) {
+            const diasSemana = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+            const diaSemanaStr = diasSemana[horarioCheck.getDay()];
+            const diaStr = horarioCheck.getDate().toString().padStart(2, '0');
+            const mesStr = (horarioCheck.getMonth() + 1).toString().padStart(2, '0');
+            horariosDisponiveis.push(`${diaSemanaStr} ${diaStr}/${mesStr} às ${hora}h`);
+          }
+        }
+      }
+      
+      return { 
+        sucesso: true, 
+        mensagem: 'Disponibilidade consultada',
+        dados: {
+          eventos_ocupados: horariosOcupados,
+          horarios_disponiveis: horariosDisponiveis.slice(0, 10), // Limitar a 10 opções
+          calendario_nome: calendario.nome,
+        }
+      };
+    } catch (e) {
+      console.error('Erro ao consultar calendário:', e);
+      return { sucesso: false, mensagem: 'Erro ao consultar calendário' };
+    }
+  }
+  
+  return { sucesso: true, mensagem: 'Ação de agenda processada' };
+}
+
 async function callOpenAI(
   apiKey: string,
   messages: { role: string; content: string }[],
   modelo: string,
   maxTokens: number,
   temperatura: number,
-  tools?: any[]
+  tools?: any[],
+  executarAgendaFn?: (valor: string) => Promise<{ sucesso: boolean; mensagem: string; dados?: any }>
 ): Promise<AIResponse> {
   const isModeloNovo = modelo.includes('gpt-5') || modelo.includes('gpt-4.1') || 
                        modelo.includes('o3') || modelo.includes('o4');
@@ -145,20 +263,41 @@ async function callOpenAI(
   let acoes: Acao[] = [];
   
   if (toolCalls && toolCalls.length > 0) {
+    // Processar tool calls e obter resultados
+    const toolResults: { tool_call_id: string; content: string }[] = [];
+    
     for (const toolCall of toolCalls) {
       if (toolCall.function?.name === 'executar_acao') {
         try {
           const args = JSON.parse(toolCall.function.arguments);
           acoes.push(args);
+          
+          // Se for ação de agenda:consultar, executar e guardar resultado
+          if (args.tipo === 'agenda' && args.valor?.startsWith('consultar') && executarAgendaFn) {
+            const resultado = await executarAgendaFn(args.valor);
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(resultado),
+            });
+          } else {
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              content: JSON.stringify({ sucesso: true, mensagem: 'Ação será executada automaticamente' }),
+            });
+          }
         } catch (e) {
           console.error('Erro ao parsear argumentos da ação:', e);
+          toolResults.push({
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({ sucesso: false, mensagem: 'Erro ao processar ação' }),
+          });
         }
       }
     }
     
-    // Se há ações mas sem resposta textual, fazer segunda chamada para obter resposta
-    if (!resposta && acoes.length > 0) {
-      console.log('Tool call sem resposta textual, fazendo segunda chamada...');
+    // Se há ações, fazer segunda chamada com os resultados
+    if (acoes.length > 0) {
+      console.log('Tool call detectado, fazendo segunda chamada com resultados...');
       
       // Montar mensagens com o resultado do tool call
       const toolResultMessages: any[] = [
@@ -167,15 +306,15 @@ async function callOpenAI(
       ];
       
       // Adicionar resultado de cada tool call
-      for (const toolCall of toolCalls) {
+      for (const result of toolResults) {
         toolResultMessages.push({
           role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({ sucesso: true, mensagem: 'Ação será executada automaticamente' }),
+          tool_call_id: result.tool_call_id,
+          content: result.content,
         });
       }
       
-      // Segunda chamada sem tools para obter resposta textual
+      // Segunda chamada para obter resposta textual com os resultados
       const continuationBody: any = {
         model: modelo,
         messages: toolResultMessages,
@@ -224,7 +363,8 @@ async function callOpenAI(
 async function callLovableAI(
   messages: { role: string; content: string }[],
   modelo: string,
-  tools?: any[]
+  tools?: any[],
+  executarAgendaFn?: (valor: string) => Promise<{ sucesso: boolean; mensagem: string; dados?: any }>
 ): Promise<AIResponse> {
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
   
@@ -271,20 +411,41 @@ async function callLovableAI(
   let acoes: Acao[] = [];
   
   if (toolCalls && toolCalls.length > 0) {
+    // Processar tool calls e obter resultados
+    const toolResults: { tool_call_id: string; content: string }[] = [];
+    
     for (const toolCall of toolCalls) {
       if (toolCall.function?.name === 'executar_acao') {
         try {
           const args = JSON.parse(toolCall.function.arguments);
           acoes.push(args);
+          
+          // Se for ação de agenda:consultar, executar e guardar resultado
+          if (args.tipo === 'agenda' && args.valor?.startsWith('consultar') && executarAgendaFn) {
+            const resultado = await executarAgendaFn(args.valor);
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(resultado),
+            });
+          } else {
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              content: JSON.stringify({ sucesso: true, mensagem: 'Ação será executada automaticamente' }),
+            });
+          }
         } catch (e) {
           console.error('Erro ao parsear argumentos da ação:', e);
+          toolResults.push({
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({ sucesso: false, mensagem: 'Erro ao processar ação' }),
+          });
         }
       }
     }
     
-    // Se há ações mas sem resposta textual, fazer segunda chamada para obter resposta
-    if (!resposta && acoes.length > 0) {
-      console.log('Tool call sem resposta textual (Lovable AI), fazendo segunda chamada...');
+    // Se há ações, fazer segunda chamada com os resultados
+    if (acoes.length > 0) {
+      console.log('Tool call detectado (Lovable AI), fazendo segunda chamada com resultados...');
       
       // Montar mensagens com o resultado do tool call
       const toolResultMessages: any[] = [
@@ -293,15 +454,15 @@ async function callLovableAI(
       ];
       
       // Adicionar resultado de cada tool call
-      for (const toolCall of toolCalls) {
+      for (const result of toolResults) {
         toolResultMessages.push({
           role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({ sucesso: true, mensagem: 'Ação será executada automaticamente' }),
+          tool_call_id: result.tool_call_id,
+          content: result.content,
         });
       }
       
-      // Segunda chamada sem tools para obter resposta textual
+      // Segunda chamada para obter resposta textual com os resultados
       const continuationBody: any = {
         model: lovableModel,
         messages: toolResultMessages,
@@ -613,6 +774,15 @@ serve(async (req) => {
       promptCompleto += '- @notificar - Enviar notificação para a equipe\n';
       promptCompleto += '- @finalizar - Encerrar a conversa\n';
       promptCompleto += '- @nome:<novo nome> - Alterar o nome do contato/lead (use quando o cliente se identificar)\n';
+      promptCompleto += '- @agenda:consultar - Consultar disponibilidade do calendário (próximos 7 dias)\n';
+      promptCompleto += '- @agenda:criar:<titulo>|<data_inicio>|<data_fim> - Criar evento no calendário (datas em ISO8601)\n';
+      promptCompleto += '\n### INSTRUÇÕES DE AGENDAMENTO\n';
+      promptCompleto += 'Quando o cliente solicitar agendamento:\n';
+      promptCompleto += '1. Use @agenda:consultar para verificar disponibilidade\n';
+      promptCompleto += '2. O sistema retornará os eventos já agendados - calcule os horários livres\n';
+      promptCompleto += '3. Apresente opções de horários disponíveis ao cliente\n';
+      promptCompleto += '4. Após confirmação, use @agenda:criar com os detalhes\n';
+      promptCompleto += '5. IMPORTANTE: Considere horário comercial (8h-18h) ao sugerir horários\n';
       promptCompleto += '\nQuando identificar que uma ação deve ser executada baseado no contexto da conversa, use a ferramenta executar_acao.\n';
       promptCompleto += '\n## REGRAS IMPORTANTES\n';
       promptCompleto += '- NUNCA mencione ao cliente que está executando ações internas como transferências, mudanças de etapa, tags, etc.\n';
@@ -659,18 +829,18 @@ serve(async (req) => {
         type: 'function',
         function: {
           name: 'executar_acao',
-          description: 'Executa uma ação automatizada como mover lead para etapa do CRM, adicionar tag, transferir conversa, alterar nome do contato, etc.',
+          description: 'Executa uma ação automatizada como mover lead para etapa do CRM, adicionar tag, transferir conversa, alterar nome do contato, consultar agenda ou criar evento.',
           parameters: {
             type: 'object',
             properties: {
               tipo: {
                 type: 'string',
-                enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar', 'nome', 'negociacao'],
-                description: 'Tipo da ação a ser executada. Use "nome" para alterar o nome do contato quando ele se identificar. Use "negociacao" para criar uma nova negociação no CRM.',
+                enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar', 'nome', 'negociacao', 'agenda'],
+                description: 'Tipo da ação a ser executada. Use "nome" para alterar o nome do contato quando ele se identificar. Use "negociacao" para criar uma nova negociação no CRM. Use "agenda" para consultar disponibilidade ou criar eventos.',
               },
               valor: {
                 type: 'string',
-                description: 'Valor associado à ação (ID da etapa, nome da tag, destino da transferência, novo nome do contato)',
+                description: 'Valor associado à ação (ID da etapa, nome da tag, destino da transferência, novo nome do contato, para agenda use "consultar" ou "criar:titulo|data_inicio|data_fim")',
               },
             },
             required: ['tipo'],
@@ -684,13 +854,18 @@ serve(async (req) => {
     const maxTokens = agente.max_tokens || 1000;
     const temperatura = agente.temperatura || 0.7;
 
+    // Criar função de execução de agenda para passar para as chamadas de IA
+    const executarAgendaFn = async (valor: string) => {
+      return await executarAgendaLocal(supabase, supabaseUrl, supabaseKey, conta_id, valor);
+    };
+
     let result: AIResponse;
 
     // Tentar OpenAI primeiro se tiver chave configurada
     if (hasOpenAIKey) {
       try {
         console.log('Tentando OpenAI com modelo:', modelo);
-        result = await callOpenAI(conta.openai_api_key, messages, modelo, maxTokens, temperatura, tools);
+        result = await callOpenAI(conta.openai_api_key, messages, modelo, maxTokens, temperatura, tools, executarAgendaFn);
         console.log('✅ Resposta via OpenAI');
       } catch (openaiError: any) {
         const errorMsg = openaiError.message || '';
@@ -699,7 +874,7 @@ serve(async (req) => {
         // Fallback para Lovable AI em caso de erro
         console.log('⚡ Fallback para Lovable AI...');
         try {
-          result = await callLovableAI(messages, modelo, tools);
+          result = await callLovableAI(messages, modelo, tools, executarAgendaFn);
           console.log('✅ Resposta via Lovable AI (fallback)');
         } catch (lovableError: any) {
           console.error('❌ Erro Lovable AI:', lovableError.message);
@@ -713,7 +888,7 @@ serve(async (req) => {
       // Usar Lovable AI diretamente se não tiver chave OpenAI
       console.log('Usando Lovable AI diretamente (sem chave OpenAI configurada)');
       try {
-        result = await callLovableAI(messages, modelo, tools);
+        result = await callLovableAI(messages, modelo, tools, executarAgendaFn);
         console.log('✅ Resposta via Lovable AI');
       } catch (lovableError: any) {
         console.error('❌ Erro Lovable AI:', lovableError.message);
@@ -731,6 +906,12 @@ serve(async (req) => {
       console.log('Executando', result.acoes.length, 'ações...');
       
       for (const acao of result.acoes) {
+        // Pular ações de agenda:consultar que já foram executadas durante o tool-calling
+        if (acao.tipo === 'agenda' && acao.valor?.startsWith('consultar')) {
+          console.log('Pulando ação agenda:consultar (já executada durante tool-calling)');
+          continue;
+        }
+        
         try {
           const response = await fetch(`${supabaseUrl}/functions/v1/executar-acao`, {
             method: 'POST',
@@ -756,7 +937,7 @@ serve(async (req) => {
 
     // Limpar comandos @ que possam ter vazado para o texto da resposta
     let respostaFinal = result.resposta;
-    respostaFinal = respostaFinal.replace(/@(etapa|tag|transferir|notificar|finalizar|nome|negociacao)(?::[^\s@.,!?]+)?/gi, '').trim();
+    respostaFinal = respostaFinal.replace(/@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda)(?::[^\s@.,!?]+(?::[^\s@.,!?]+)?)?/gi, '').trim();
     respostaFinal = respostaFinal.replace(/\s{2,}/g, ' ').trim();
     
     // Remover menções de transferência que possam ter escapado
