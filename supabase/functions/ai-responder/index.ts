@@ -1103,19 +1103,6 @@ serve(async (req) => {
           total_tokens: result.tokens.total_tokens,
           custo_estimado: calcularCustoEstimado(result.provider, modelo, result.tokens),
         });
-
-        // Log de atividade para resposta IA
-        await supabase.from('logs_atividade').insert({
-          conta_id,
-          tipo: 'ia_resposta',
-          descricao: `IA respondeu via ${result.provider} (${result.tokens.total_tokens} tokens)`,
-          metadata: {
-            provider: result.provider,
-            modelo,
-            tokens: result.tokens,
-            conversa_id,
-          },
-        });
       } catch (tokenError) {
         console.error('Erro ao salvar uso de tokens:', tokenError);
       }
@@ -1176,6 +1163,24 @@ serve(async (req) => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     console.error('Erro no ai-responder:', errorMessage);
+    
+    // Logar erro no sistema
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      
+      // Tentar obter conta_id do body se disponível
+      await supabase.from('logs_atividade').insert({
+        conta_id: '00000000-0000-0000-0000-000000000000', // fallback
+        tipo: 'erro_ia',
+        descricao: `Erro no ai-responder: ${errorMessage}`,
+        metadata: { error: errorMessage },
+      });
+    } catch (logError) {
+      console.error('Erro ao logar erro:', logError);
+    }
+    
     return new Response(
       JSON.stringify({ error: errorMessage, should_respond: false }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

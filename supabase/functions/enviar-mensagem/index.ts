@@ -153,6 +153,20 @@ serve(async (req) => {
 
     if (!response.ok) {
       console.error('Erro na Evolution API:', result);
+      
+      // Logar erro no sistema
+      await supabase.from('logs_atividade').insert({
+        conta_id: conexao.conta_id,
+        tipo: 'erro_whatsapp',
+        descricao: `Erro ao enviar mensagem para ${telefone}`,
+        metadata: { 
+          erro: result,
+          status_code: response.status,
+          instance_name: conexao.instance_name,
+          tipo_mensagem: tipo,
+        },
+      });
+      
       return new Response(JSON.stringify({ error: 'Erro ao enviar mensagem', details: result }), {
         status: response.status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, Users, MessageSquare, TrendingUp, Phone, Power, Save, KeyRound, Coins, Activity, Calendar } from 'lucide-react';
+import { ArrowLeft, Building2, Users, MessageSquare, TrendingUp, Phone, Power, Save, KeyRound, Coins, AlertTriangle, Calendar } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
@@ -338,16 +338,19 @@ export default function AdminContaDetalhe() {
 
   const getTipoLogIcon = (tipo: string) => {
     switch (tipo) {
-      case 'ia_resposta': return '🤖';
-      case 'mensagem_enviada': return '💬';
-      case 'negociacao_criada': return '📊';
-      case 'negociacao_movida': return '📈';
-      case 'conversa_encerrada': return '🔒';
-      case 'conversa_transferida': return '🔀';
-      case 'login': return '🔑';
-      case 'agente_ia_toggle': return '⚡';
-      default: return '📝';
+      case 'erro_whatsapp': return '📱';
+      case 'erro_ia': return '🤖';
+      case 'erro_etapa': return '📊';
+      case 'erro_transferencia': return '🔀';
+      case 'erro_webhook': return '🔗';
+      case 'erro_agendamento': return '📅';
+      default: return '⚠️';
     }
+  };
+
+  const getTipoLogSeverity = (tipo: string) => {
+    if (tipo.startsWith('erro_')) return 'destructive';
+    return 'secondary';
   };
 
   const custoTotal = tokenUsage.reduce((acc, t) => acc + (Number(t.custo_estimado) || 0), 0);
@@ -427,9 +430,9 @@ export default function AdminContaDetalhe() {
               <Coins className="h-4 w-4" />
               Tokens
             </TabsTrigger>
-            <TabsTrigger value="atividades" className="gap-2">
-              <Activity className="h-4 w-4" />
-              Atividades
+            <TabsTrigger value="erros" className="gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              Erros
             </TabsTrigger>
           </TabsList>
 
@@ -668,27 +671,27 @@ export default function AdminContaDetalhe() {
             </div>
           </TabsContent>
 
-          {/* Tab Atividades */}
-          <TabsContent value="atividades">
+          {/* Tab Erros */}
+          <TabsContent value="erros">
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <Activity className="h-5 w-5" />
-                    Logs de Atividade
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                    Monitoramento de Erros
                   </CardTitle>
                   <Select value={tipoLogFiltro} onValueChange={setTipoLogFiltro}>
                     <SelectTrigger className="w-48">
                       <SelectValue placeholder="Filtrar por tipo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="todos">Todos</SelectItem>
-                      <SelectItem value="ia_resposta">Respostas IA</SelectItem>
-                      <SelectItem value="mensagem_enviada">Mensagens</SelectItem>
-                      <SelectItem value="negociacao_criada">Negociações</SelectItem>
-                      <SelectItem value="negociacao_movida">Movimentações</SelectItem>
-                      <SelectItem value="conversa_encerrada">Conversas Encerradas</SelectItem>
-                      <SelectItem value="login">Logins</SelectItem>
+                      <SelectItem value="todos">Todos os Erros</SelectItem>
+                      <SelectItem value="erro_whatsapp">WhatsApp</SelectItem>
+                      <SelectItem value="erro_ia">Agente IA</SelectItem>
+                      <SelectItem value="erro_etapa">Etapas CRM</SelectItem>
+                      <SelectItem value="erro_transferencia">Transferências</SelectItem>
+                      <SelectItem value="erro_webhook">Webhook</SelectItem>
+                      <SelectItem value="erro_agendamento">Agendamentos</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -699,34 +702,37 @@ export default function AdminContaDetalhe() {
                     <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                   </div>
                 ) : logs.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    Nenhuma atividade registrada
-                  </p>
+                  <div className="text-center py-12">
+                    <AlertTriangle className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+                    <p className="text-muted-foreground">Nenhum erro registrado</p>
+                    <p className="text-sm text-muted-foreground/70 mt-1">O sistema está funcionando normalmente</p>
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     {logs.map((log) => (
                       <div 
                         key={log.id} 
-                        className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                        className="flex items-start gap-3 p-4 rounded-lg border border-destructive/20 bg-destructive/5 hover:bg-destructive/10 transition-colors"
                       >
                         <span className="text-xl">{getTipoLogIcon(log.tipo)}</span>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{log.descricao || log.tipo}</span>
-                            <Badge variant="outline" className="text-xs">
-                              {log.tipo.replace(/_/g, ' ')}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-foreground">{log.descricao || log.tipo}</span>
+                            <Badge variant="destructive" className="text-xs">
+                              {log.tipo.replace(/_/g, ' ').replace('erro ', '')}
                             </Badge>
                           </div>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                             <Calendar className="h-3 w-3" />
                             <span>{formatDateTime(log.created_at)}</span>
-                            {log.usuario && (
-                              <>
-                                <span>•</span>
-                                <span>{log.usuario.nome}</span>
-                              </>
-                            )}
                           </div>
+                          {log.metadata && Object.keys(log.metadata).length > 0 && (
+                            <div className="mt-2 p-2 bg-muted/50 rounded text-xs font-mono overflow-x-auto">
+                              <pre className="whitespace-pre-wrap text-muted-foreground">
+                                {JSON.stringify(log.metadata, null, 2)}
+                              </pre>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}

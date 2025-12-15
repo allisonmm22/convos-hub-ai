@@ -42,7 +42,6 @@ import { ContatoSidebar } from '@/components/ContatoSidebar';
 import { notifyNewMessage, requestNotificationPermission } from '@/lib/notificationSound';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { registrarLog } from '@/lib/logAtividade';
 
 interface Contato {
   id: string;
@@ -505,21 +504,6 @@ export default function Conversas() {
       setNovaMensagem('');
       fetchMensagens(conversaSelecionada.id);
       fetchConversas();
-
-      // Registrar log de mensagem enviada
-      if (usuario?.conta_id) {
-        registrarLog({
-          contaId: usuario.conta_id,
-          usuarioId: usuario.id,
-          tipo: 'mensagem_enviada',
-          descricao: `${usuario.nome} enviou mensagem para ${conversaSelecionada.contatos.nome}`,
-          metadata: {
-            conversa_id: conversaSelecionada.id,
-            contato_nome: conversaSelecionada.contatos.nome,
-            tipo_mensagem: 'texto',
-          },
-        });
-      }
     } catch (error) {
       toast.error('Erro ao enviar mensagem');
     } finally {
@@ -544,17 +528,6 @@ export default function Conversas() {
       toast.success('Atendimento encerrado');
       setConversaSelecionada(prev => prev ? { ...prev, status: 'encerrado' } : null);
       fetchConversas();
-
-      // Registrar log
-      if (usuario?.conta_id) {
-        registrarLog({
-          contaId: usuario.conta_id,
-          usuarioId: usuario.id,
-          tipo: 'conversa_encerrada',
-          descricao: `${usuario.nome} encerrou conversa com ${conversaSelecionada.contatos.nome}`,
-          metadata: { conversa_id: conversaSelecionada.id },
-        });
-      }
     } catch (error) {
       toast.error('Erro ao encerrar atendimento');
     }
