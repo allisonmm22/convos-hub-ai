@@ -13,6 +13,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 
 interface Estagio {
   id: string;
@@ -40,6 +49,12 @@ interface Funil {
   estagios: Estagio[];
 }
 
+interface Contato {
+  id: string;
+  nome: string;
+  telefone: string;
+}
+
 export default function CRM() {
   const { usuario } = useAuth();
   const [funis, setFunis] = useState<Funil[]>([]);
@@ -47,6 +62,16 @@ export default function CRM() {
   const [negociacoes, setNegociacoes] = useState<Negociacao[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragging, setDragging] = useState<string | null>(null);
+  
+  // Modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [contatos, setContatos] = useState<Contato[]>([]);
+  const [novoContatoId, setNovoContatoId] = useState('');
+  const [novoTitulo, setNovoTitulo] = useState('');
+  const [tituloEditado, setTituloEditado] = useState(false);
+  const [novoValor, setNovoValor] = useState('');
+  const [novoEstagioId, setNovoEstagioId] = useState('');
+  const [criando, setCriando] = useState(false);
 
   const selectedFunil = funis.find(f => f.id === selectedFunilId) || null;
 
@@ -103,6 +128,72 @@ export default function CRM() {
       console.error('Erro ao buscar dados:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchContatos = async () => {
+    const { data } = await supabase
+      .from('contatos')
+      .select('id, nome, telefone')
+      .eq('conta_id', usuario!.conta_id)
+      .order('nome');
+    if (data) setContatos(data);
+  };
+
+  const openModal = async () => {
+    await fetchContatos();
+    setNovoContatoId('');
+    setNovoTitulo('');
+    setTituloEditado(false);
+    setNovoValor('');
+    setNovoEstagioId(selectedFunil?.estagios[0]?.id || '');
+    setModalOpen(true);
+  };
+
+  const handleContatoChange = (contatoId: string) => {
+    setNovoContatoId(contatoId);
+    if (!tituloEditado) {
+      const contato = contatos.find(c => c.id === contatoId);
+      if (contato) setNovoTitulo(contato.nome);
+    }
+  };
+
+  const handleTituloChange = (valor: string) => {
+    setNovoTitulo(valor);
+    setTituloEditado(true);
+  };
+
+  const handleCriarNegociacao = async () => {
+    if (!novoContatoId || !novoTitulo.trim()) {
+      toast.error('Selecione um contato e preencha o título');
+      return;
+    }
+
+    setCriando(true);
+    try {
+      const { data, error } = await supabase
+        .from('negociacoes')
+        .insert({
+          titulo: novoTitulo.trim(),
+          contato_id: novoContatoId,
+          valor: parseFloat(novoValor) || 0,
+          estagio_id: novoEstagioId || null,
+          conta_id: usuario!.conta_id,
+          status: 'aberto',
+          probabilidade: 50,
+        })
+        .select('*, contatos(nome, telefone)')
+        .single();
+
+      if (error) throw error;
+
+      setNegociacoes(prev => [...prev, data]);
+      setModalOpen(false);
+      toast.success('Negociação criada!');
+    } catch (error) {
+      toast.error('Erro ao criar negociação');
+    } finally {
+      setCriando(false);
     }
   };
 
@@ -181,11 +272,100 @@ export default function CRM() {
             >
               <Settings className="h-5 w-5 text-muted-foreground" />
             </Link>
-            <button className="h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors">
+            <button 
+              onClick={openModal}
+              className="h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors"
+            >
               <Plus className="h-5 w-5" />
               Nova Negociação
             </button>
           </div>
+        </div>
+
+        {/* Modal Nova Negociação */}
+        <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Nova Negociação</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Contato *</Label>
+                <Select value={novoContatoId} onValueChange={handleContatoChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um contato" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contatos.map((contato) => (
+                      <SelectItem key={contato.id} value={contato.id}>
+                        {contato.nome} - {contato.telefone}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Título da Negociação *</Label>
+                <Input
+                  value={novoTitulo}
+                  onChange={(e) => handleTituloChange(e.target.value)}
+                  placeholder="Nome da negociação"
+                />
+                {novoContatoId && !tituloEditado && (
+                  <p className="text-xs text-muted-foreground">
+                    Auto-preenchido com nome do contato
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Valor (R$)</Label>
+                <Input
+                  type="number"
+                  value={novoValor}
+                  onChange={(e) => setNovoValor(e.target.value)}
+                  placeholder="0,00"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Estágio Inicial</Label>
+                <Select value={novoEstagioId} onValueChange={setNovoEstagioId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um estágio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectedFunil?.estagios.map((estagio) => (
+                      <SelectItem key={estagio.id} value={estagio.id}>
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="h-3 w-3 rounded-full" 
+                            style={{ backgroundColor: estagio.cor }}
+                          />
+                          {estagio.nome}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button variant="outline" onClick={() => setModalOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleCriarNegociacao} disabled={criando}>
+                  {criando ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Criar Negociação'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <div className="space-y-6">
         </div>
 
         {/* Funnel Selector */}
