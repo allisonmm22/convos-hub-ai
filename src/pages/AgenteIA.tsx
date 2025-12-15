@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-
+import { NovoAgenteModal } from '@/components/NovoAgenteModal';
 interface Agent {
   id: string;
   nome: string;
@@ -24,6 +24,7 @@ export default function AgenteIA() {
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
   const [subPage, setSubPage] = useState<SubPage>('agentes');
+  const [showNovoAgenteModal, setShowNovoAgenteModal] = useState(false);
 
   useEffect(() => {
     if (usuario?.conta_id) {
@@ -73,14 +74,14 @@ export default function AgenteIA() {
     }
   };
 
-  const criarNovoAgente = async () => {
+  const criarNovoAgente = async (nome: string, tipo: 'principal' | 'secundario') => {
     try {
       const { data, error } = await supabase
         .from('agent_ia')
         .insert({
           conta_id: usuario!.conta_id,
-          nome: 'Novo Agente',
-          tipo: 'secundario',
+          nome,
+          tipo,
           ativo: false,
           prompt_sistema: 'Você é um assistente virtual amigável e profissional.',
         })
@@ -164,13 +165,19 @@ export default function AgenteIA() {
                   />
                 </div>
                 <button
-                  onClick={criarNovoAgente}
+                  onClick={() => setShowNovoAgenteModal(true)}
                   className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
                   Novo Agente
                 </button>
               </div>
+
+              <NovoAgenteModal
+                open={showNovoAgenteModal}
+                onOpenChange={setShowNovoAgenteModal}
+                onConfirm={criarNovoAgente}
+              />
 
               {loading ? (
                 <div className="flex items-center justify-center h-64">
