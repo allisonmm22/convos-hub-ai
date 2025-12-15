@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Calendar, Plus, Clock, Check, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Plus, Clock, Check, Loader2, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -19,11 +19,14 @@ interface Agendamento {
   } | null;
 }
 
+const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
 export default function Agendamentos() {
   const { usuario } = useAuth();
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
     titulo: '',
@@ -31,6 +34,9 @@ export default function Agendamentos() {
     data_inicio: '',
     hora_inicio: '',
   });
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   useEffect(() => {
     if (usuario?.conta_id) {
@@ -102,13 +108,6 @@ export default function Agendamentos() {
     }
   };
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: 'short',
-    });
-  };
-
   const formatTime = (date: string) => {
     return new Date(date).toLocaleTimeString('pt-BR', {
       hour: '2-digit',
@@ -122,18 +121,92 @@ export default function Agendamentos() {
       newDate.setMonth(prev.getMonth() + (direction === 'next' ? 1 : -1));
       return newDate;
     });
+    setSelectedDate(null);
   };
 
   const getMonthName = () => {
     return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   };
 
-  const groupedAgendamentos = agendamentos.reduce((acc, agendamento) => {
-    const date = new Date(agendamento.data_inicio).toDateString();
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(agendamento);
-    return acc;
-  }, {} as Record<string, Agendamento[]>);
+  // Gerar grid do calendário
+  const generateCalendarGrid = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    
+    const firstDayOfMonth = new Date(year, month, 1);
+    const lastDayOfMonth = new Date(year, month + 1, 0);
+    
+    const startDay = firstDayOfMonth.getDay();
+    const daysInMonth = lastDayOfMonth.getDate();
+    
+    const grid: (Date | null)[] = [];
+    
+    // Dias do mês anterior
+    const prevMonth = new Date(year, month, 0);
+    for (let i = startDay - 1; i >= 0; i--) {
+      grid.push(new Date(year, month - 1, prevMonth.getDate() - i));
+    }
+    
+    // Dias do mês atual
+    for (let day = 1; day <= daysInMonth; day++) {
+      grid.push(new Date(year, month, day));
+    }
+    
+    // Dias do próximo mês para completar a grade
+    const remainingDays = 42 - grid.length;
+    for (let day = 1; day <= remainingDays; day++) {
+      grid.push(new Date(year, month + 1, day));
+    }
+    
+    return grid;
+  };
+
+  const getAgendamentosForDate = (date: Date) => {
+    return agendamentos.filter((a) => {
+      const aDate = new Date(a.data_inicio);
+      return (
+        aDate.getDate() === date.getDate() &&
+        aDate.getMonth() === date.getMonth() &&
+        aDate.getFullYear() === date.getFullYear()
+      );
+    });
+  };
+
+  const isToday = (date: Date) => {
+    return (
+      date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear()
+    );
+  };
+
+  const isCurrentMonth = (date: Date) => {
+    return date.getMonth() === currentDate.getMonth();
+  };
+
+  const isSelected = (date: Date) => {
+    if (!selectedDate) return false;
+    return (
+      date.getDate() === selectedDate.getDate() &&
+      date.getMonth() === selectedDate.getMonth() &&
+      date.getFullYear() === selectedDate.getFullYear()
+    );
+  };
+
+  const handleDayClick = (date: Date) => {
+    setSelectedDate(date);
+  };
+
+  const openNewAgendamentoModal = (prefilledDate?: Date) => {
+    if (prefilledDate) {
+      const dateStr = prefilledDate.toISOString().split('T')[0];
+      setFormData({ ...formData, data_inicio: dateStr });
+    }
+    setShowModal(true);
+  };
+
+  const calendarGrid = generateCalendarGrid();
+  const selectedDateAgendamentos = selectedDate ? getAgendamentosForDate(selectedDate) : [];
 
   return (
     <MainLayout>
@@ -146,7 +219,7 @@ export default function Agendamentos() {
             </p>
           </div>
           <button
-            onClick={() => setShowModal(true)}
+            onClick={() => openNewAgendamentoModal()}
             className="h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors"
           >
             <Plus className="h-5 w-5" />
@@ -154,95 +227,228 @@ export default function Agendamentos() {
           </button>
         </div>
 
-        {/* Navegação do Mês */}
-        <div className="flex items-center justify-between p-4 rounded-xl bg-card border border-border">
-          <button
-            onClick={() => navigateMonth('prev')}
-            className="p-2 rounded-lg hover:bg-muted transition-colors"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <h2 className="text-lg font-semibold text-foreground capitalize">{getMonthName()}</h2>
-          <button
-            onClick={() => navigateMonth('next')}
-            className="p-2 rounded-lg hover:bg-muted transition-colors"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </div>
+        <div className="flex gap-6">
+          {/* Calendário */}
+          <div className="flex-1">
+            {/* Navegação do Mês */}
+            <div className="flex items-center justify-between p-4 rounded-t-xl bg-card border border-border border-b-0">
+              <button
+                onClick={() => navigateMonth('prev')}
+                className="p-2 rounded-lg hover:bg-muted transition-colors"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <h2 className="text-lg font-semibold text-foreground capitalize">{getMonthName()}</h2>
+              <button
+                onClick={() => navigateMonth('next')}
+                className="p-2 rounded-lg hover:bg-muted transition-colors"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
 
-        {/* Lista de Agendamentos */}
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : Object.keys(groupedAgendamentos).length === 0 ? (
-          <div className="text-center py-12 bg-card rounded-xl border border-border">
-            <Calendar className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <p className="text-lg text-muted-foreground">Nenhum agendamento neste mês</p>
-            <button
-              onClick={() => setShowModal(true)}
-              className="mt-4 text-primary hover:underline"
-            >
-              Criar primeiro agendamento
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {Object.entries(groupedAgendamentos).map(([date, items]) => (
-              <div key={date}>
-                <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                  {formatDate(items[0].data_inicio)}
-                </h3>
-                <div className="space-y-3">
-                  {items.map((agendamento) => (
-                    <div
-                      key={agendamento.id}
-                      className={cn(
-                        'p-4 rounded-xl bg-card border border-border flex items-start gap-4 transition-all',
-                        agendamento.concluido && 'opacity-50'
-                      )}
-                    >
-                      <button
-                        onClick={() => toggleConcluido(agendamento.id, agendamento.concluido)}
+            {/* Grid do Calendário */}
+            <div className="bg-card border border-border rounded-b-xl overflow-hidden">
+              {/* Cabeçalho dos dias da semana */}
+              <div className="grid grid-cols-7 border-b border-border">
+                {WEEKDAYS.map((day) => (
+                  <div
+                    key={day}
+                    className="py-3 text-center text-sm font-medium text-muted-foreground"
+                  >
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              {/* Dias do mês */}
+              {loading ? (
+                <div className="flex items-center justify-center h-96">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-7">
+                  {calendarGrid.map((date, index) => {
+                    if (!date) return <div key={index} />;
+                    
+                    const dayAgendamentos = getAgendamentosForDate(date);
+                    const isTodayDate = isToday(date);
+                    const isCurrentMonthDate = isCurrentMonth(date);
+                    const isSelectedDate = isSelected(date);
+
+                    return (
+                      <div
+                        key={index}
+                        onClick={() => handleDayClick(date)}
                         className={cn(
-                          'flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors flex-shrink-0',
-                          agendamento.concluido
-                            ? 'bg-primary border-primary'
-                            : 'border-muted-foreground hover:border-primary'
+                          'min-h-[100px] p-2 border-b border-r border-border cursor-pointer transition-colors hover:bg-muted/50',
+                          !isCurrentMonthDate && 'bg-muted/30',
+                          isSelectedDate && 'bg-primary/10 ring-2 ring-primary ring-inset',
+                          isTodayDate && !isSelectedDate && 'bg-primary/5'
                         )}
                       >
-                        {agendamento.concluido && <Check className="h-4 w-4 text-primary-foreground" />}
+                        <div className="flex items-center justify-between mb-1">
+                          <span
+                            className={cn(
+                              'text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full',
+                              !isCurrentMonthDate && 'text-muted-foreground/50',
+                              isTodayDate && 'bg-primary text-primary-foreground',
+                              isCurrentMonthDate && !isTodayDate && 'text-foreground'
+                            )}
+                          >
+                            {date.getDate()}
+                          </span>
+                          {dayAgendamentos.length > 0 && (
+                            <span className="text-xs text-muted-foreground">
+                              {dayAgendamentos.length}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Mini cards dos agendamentos */}
+                        <div className="space-y-1">
+                          {dayAgendamentos.slice(0, 2).map((a) => (
+                            <div
+                              key={a.id}
+                              className={cn(
+                                'text-xs px-1.5 py-0.5 rounded truncate',
+                                a.concluido
+                                  ? 'bg-muted text-muted-foreground line-through'
+                                  : 'bg-primary/10 text-primary'
+                              )}
+                            >
+                              {a.titulo}
+                            </div>
+                          ))}
+                          {dayAgendamentos.length > 2 && (
+                            <span className="text-xs text-muted-foreground pl-1">
+                              +{dayAgendamentos.length - 2} mais
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sidebar de Detalhes do Dia */}
+          <div className="w-80 flex-shrink-0">
+            <div className="bg-card border border-border rounded-xl p-4 sticky top-4">
+              {selectedDate ? (
+                <>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-semibold text-foreground">
+                        {selectedDate.toLocaleDateString('pt-BR', {
+                          weekday: 'long',
+                          day: 'numeric',
+                        })}
+                      </h3>
+                      <p className="text-sm text-muted-foreground capitalize">
+                        {selectedDate.toLocaleDateString('pt-BR', {
+                          month: 'long',
+                          year: 'numeric',
+                        })}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedDate(null)}
+                      className="p-1 rounded hover:bg-muted transition-colors"
+                    >
+                      <X className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                  </div>
+
+                  {selectedDateAgendamentos.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Calendar className="h-12 w-12 mx-auto mb-3 text-muted-foreground/50" />
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Nenhum agendamento neste dia
+                      </p>
+                      <button
+                        onClick={() => openNewAgendamentoModal(selectedDate)}
+                        className="text-sm text-primary hover:underline"
+                      >
+                        + Criar agendamento
                       </button>
-                      <div className="flex-1 min-w-0">
-                        <h4
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {selectedDateAgendamentos.map((agendamento) => (
+                        <div
+                          key={agendamento.id}
                           className={cn(
-                            'font-medium text-foreground',
-                            agendamento.concluido && 'line-through'
+                            'p-3 rounded-lg bg-muted/50 border border-border transition-all',
+                            agendamento.concluido && 'opacity-50'
                           )}
                         >
-                          {agendamento.titulo}
-                        </h4>
-                        {agendamento.descricao && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {agendamento.descricao}
-                          </p>
-                        )}
-                        {agendamento.contatos && (
-                          <p className="text-sm text-primary mt-1">{agendamento.contatos.nome}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Clock className="h-4 w-4" />
-                        {formatTime(agendamento.data_inicio)}
-                      </div>
+                          <div className="flex items-start gap-3">
+                            <button
+                              onClick={() => toggleConcluido(agendamento.id, agendamento.concluido)}
+                              className={cn(
+                                'flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors flex-shrink-0 mt-0.5',
+                                agendamento.concluido
+                                  ? 'bg-primary border-primary'
+                                  : 'border-muted-foreground hover:border-primary'
+                              )}
+                            >
+                              {agendamento.concluido && (
+                                <Check className="h-3 w-3 text-primary-foreground" />
+                              )}
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              <h4
+                                className={cn(
+                                  'font-medium text-sm text-foreground',
+                                  agendamento.concluido && 'line-through'
+                                )}
+                              >
+                                {agendamento.titulo}
+                              </h4>
+                              {agendamento.descricao && (
+                                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                  {agendamento.descricao}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2 mt-1">
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Clock className="h-3 w-3" />
+                                  {formatTime(agendamento.data_inicio)}
+                                </div>
+                                {agendamento.contatos && (
+                                  <span className="text-xs text-primary">
+                                    {agendamento.contatos.nome}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      <button
+                        onClick={() => openNewAgendamentoModal(selectedDate)}
+                        className="w-full py-2 text-sm text-primary hover:underline"
+                      >
+                        + Novo agendamento
+                      </button>
                     </div>
-                  ))}
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-12">
+                  <Calendar className="h-12 w-12 mx-auto mb-3 text-muted-foreground/50" />
+                  <p className="text-sm text-muted-foreground">
+                    Selecione um dia no calendário para ver os agendamentos
+                  </p>
                 </div>
-              </div>
-            ))}
+              )}
+            </div>
           </div>
-        )}
+        </div>
 
         {/* Modal */}
         {showModal && (
@@ -299,7 +505,10 @@ export default function Agendamentos() {
 
               <div className="flex gap-3 mt-6">
                 <button
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    setShowModal(false);
+                    setFormData({ titulo: '', descricao: '', data_inicio: '', hora_inicio: '' });
+                  }}
                   className="flex-1 h-11 rounded-lg bg-muted text-foreground font-medium hover:bg-muted/80 transition-colors"
                 >
                   Cancelar
