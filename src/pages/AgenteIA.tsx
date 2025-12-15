@@ -477,7 +477,9 @@ function FollowUpPage() {
                     </span>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Após {regra.horas_sem_resposta}h sem resposta • Máx {regra.max_tentativas} tentativas
+                    Após {regra.horas_sem_resposta >= 60 && regra.horas_sem_resposta % 60 === 0 
+                      ? `${regra.horas_sem_resposta / 60}h` 
+                      : `${regra.horas_sem_resposta} min`} sem resposta • Máx {regra.max_tentativas} tentativas
                   </p>
                 </div>
               </div>
