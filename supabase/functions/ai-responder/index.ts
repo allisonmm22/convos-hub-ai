@@ -525,6 +525,36 @@ serve(async (req) => {
     // 8. Montar o prompt completo
     let promptCompleto = agente.prompt_sistema || '';
 
+    // Adicionar contexto temporal (Brasil - UTC-3)
+    const agora = new Date();
+    const brasilOffset = -3 * 60;
+    const utcOffset = agora.getTimezoneOffset();
+    const diferencaMinutos = brasilOffset + utcOffset;
+    const agoraBrasil = new Date(agora.getTime() + diferencaMinutos * 60 * 1000);
+
+    const diasSemana = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+    const meses = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
+    const diaSemana = diasSemana[agoraBrasil.getDay()];
+    const diaNum = agoraBrasil.getDate();
+    const mes = meses[agoraBrasil.getMonth()];
+    const ano = agoraBrasil.getFullYear();
+    const hora = agoraBrasil.getHours().toString().padStart(2, '0');
+    const minuto = agoraBrasil.getMinutes().toString().padStart(2, '0');
+
+    let periodo = 'madrugada';
+    const horaNum = agoraBrasil.getHours();
+    if (horaNum >= 5 && horaNum < 12) periodo = 'manhã';
+    else if (horaNum >= 12 && horaNum < 18) periodo = 'tarde';
+    else if (horaNum >= 18 && horaNum < 24) periodo = 'noite';
+
+    promptCompleto += `\n\n## CONTEXTO TEMPORAL\n`;
+    promptCompleto += `- Data atual: ${diaNum} de ${mes} de ${ano}\n`;
+    promptCompleto += `- Dia da semana: ${diaSemana}\n`;
+    promptCompleto += `- Horário atual: ${hora}:${minuto} (horário de Brasília)\n`;
+    promptCompleto += `- Período do dia: ${periodo}\n`;
+    promptCompleto += `\nUse estas informações para cumprimentos apropriados (Bom dia/Boa tarde/Boa noite) e referências temporais.\n`;
+
     if (etapas && etapas.length > 0) {
       promptCompleto += '\n\n## ETAPAS DE ATENDIMENTO\n';
       promptCompleto += 'Siga estas etapas no fluxo de atendimento:\n\n';
