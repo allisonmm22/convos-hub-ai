@@ -202,7 +202,7 @@ function ActionChip({ action, onRemove }: { action: string; onRemove?: () => voi
       style={{ verticalAlign: 'middle' }}
     >
       <Icon className="h-3 w-3 flex-shrink-0" />
-      <span className="truncate max-w-[150px]">{config.label}</span>
+      <span>{config.label}</span>
       {onRemove && (
         <button 
           type="button" 
