@@ -164,6 +164,8 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
   const [produtoValue, setProdutoValue] = useState('');
   const [negociacaoValor, setNegociacaoValor] = useState('');
   const [calendarioSelecionado, setCalendarioSelecionado] = useState('');
+  const [duracaoEvento, setDuracaoEvento] = useState('60');
+  const [gerarMeet, setGerarMeet] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
@@ -178,6 +180,8 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
       setProdutoValue('');
       setNegociacaoValor('');
       setCalendarioSelecionado('');
+      setDuracaoEvento('60');
+      setGerarMeet(false);
     }
   }, [isOpen]);
 
@@ -317,7 +321,8 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
       case 'agenda-criar': {
         const cal = calendarios.find(c => c.id === calendarioSelecionado);
         const calSlug = cal?.nome.toLowerCase().replace(/\s+/g, '-') || calendarioSelecionado;
-        return `@agenda:criar:${calSlug}`;
+        const meetFlag = gerarMeet ? 'meet' : 'no-meet';
+        return `@agenda:criar:${calSlug}:${duracaoEvento}:${meetFlag}`;
       }
       default:
         return '';
@@ -662,6 +667,31 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
                         ))}
                       </select>
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Duração do Evento</label>
+                      <select
+                        value={duracaoEvento}
+                        onChange={(e) => setDuracaoEvento(e.target.value)}
+                        className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="30">30 minutos</option>
+                        <option value="60">1 hora</option>
+                        <option value="90">1 hora e 30 min</option>
+                        <option value="120">2 horas</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={gerarMeet}
+                          onChange={(e) => setGerarMeet(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-background after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                      </label>
+                      <span className="text-sm text-foreground">Gerar link do Google Meet</span>
+                    </div>
                     <div className="p-4 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-300 dark:border-emerald-700">
                       <p className="text-sm text-emerald-700 dark:text-emerald-300 mb-1">
                         📅 <strong>Criar Evento</strong>
@@ -669,6 +699,7 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
                       <p className="text-xs text-emerald-600 dark:text-emerald-400">
                         O agente IA irá criar um evento no Google Calendar com os 
                         detalhes do agendamento acordado com o lead durante a conversa.
+                        {gerarMeet && ' Um link do Google Meet será gerado automaticamente.'}
                       </p>
                     </div>
                     {calendarios.length === 0 && (
