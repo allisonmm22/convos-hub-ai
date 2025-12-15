@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Search, Plus, User, Phone, Mail, MoreVertical, Loader2, Tag, X } from 'lucide-react';
+import { Search, Plus, User, Phone, Mail, MoreVertical, Loader2, Tag, X, ChevronDown, Check } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -164,45 +165,57 @@ export default function Contatos() {
 
           {/* Filtro de Tags */}
           {tagsDisponiveis.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Tag className="h-4 w-4" />
-                <span>Filtrar por tags:</span>
-              </div>
-              {tagsDisponiveis.map((tag) => {
-                const isSelected = tagsSelecionadas.includes(tag.nome);
-                return (
-                  <button
-                    key={tag.id}
-                    onClick={() => toggleTagFilter(tag.nome)}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-all",
-                      isSelected 
-                        ? "text-white" 
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
-                    )}
-                    style={isSelected ? { backgroundColor: tag.cor } : undefined}
-                  >
-                    {!isSelected && (
-                      <div 
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: tag.cor }}
-                      />
-                    )}
-                    {tag.nome}
-                    {isSelected && <X className="h-3 w-3" />}
-                  </button>
-                );
-              })}
-              {tagsSelecionadas.length > 0 && (
-                <button
-                  onClick={() => setTagsSelecionadas([])}
-                  className="text-sm text-primary hover:underline"
-                >
-                  Limpar filtros
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="h-10 px-4 rounded-lg border border-border bg-card hover:bg-muted flex items-center gap-2 text-sm transition-all">
+                  <Tag className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-foreground">
+                    {tagsSelecionadas.length > 0 
+                      ? `${tagsSelecionadas.length} tag(s) selecionada(s)` 
+                      : 'Filtrar por tags'}
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
                 </button>
-              )}
-            </div>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-2 bg-popover border border-border" align="start">
+                <div className="space-y-1 max-h-64 overflow-y-auto">
+                  {tagsDisponiveis.map((tag) => {
+                    const isSelected = tagsSelecionadas.includes(tag.nome);
+                    return (
+                      <button
+                        key={tag.id}
+                        onClick={() => toggleTagFilter(tag.nome)}
+                        className={cn(
+                          "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all",
+                          isSelected 
+                            ? "bg-primary/10 text-foreground" 
+                            : "hover:bg-muted text-foreground"
+                        )}
+                      >
+                        <div 
+                          className="h-3 w-3 rounded-full shrink-0"
+                          style={{ backgroundColor: tag.cor }}
+                        />
+                        <span className="flex-1 text-left">{tag.nome}</span>
+                        {isSelected && <Check className="h-4 w-4 text-primary" />}
+                      </button>
+                    );
+                  })}
+                </div>
+                {tagsSelecionadas.length > 0 && (
+                  <>
+                    <div className="h-px bg-border my-2" />
+                    <button
+                      onClick={() => setTagsSelecionadas([])}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                    >
+                      <X className="h-4 w-4" />
+                      Limpar seleção
+                    </button>
+                  </>
+                )}
+              </PopoverContent>
+            </Popover>
           )}
         </div>
 
