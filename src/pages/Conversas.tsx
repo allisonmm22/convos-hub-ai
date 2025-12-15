@@ -1741,6 +1741,34 @@ export default function Conversas() {
               </button>
               {!conversaEncerrada ? (
                 <div className="flex items-center gap-2">
+                  {/* Tags do Contato */}
+                  {conversaSelecionada.contatos.tags && 
+                   conversaSelecionada.contatos.tags.length > 0 && (
+                    <div className="flex items-center gap-1.5 mr-2">
+                      {conversaSelecionada.contatos.tags.slice(0, 3).map((tagNome) => {
+                        const tag = tagsDisponiveis.find(t => t.nome === tagNome);
+                        return tag ? (
+                          <span
+                            key={tag.id}
+                            className="px-2 py-0.5 rounded-full text-[10px] font-medium text-white"
+                            style={{ backgroundColor: tag.cor }}
+                          >
+                            {tag.nome}
+                          </span>
+                        ) : (
+                          <span key={tagNome} className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground">
+                            {tagNome}
+                          </span>
+                        );
+                      })}
+                      {conversaSelecionada.contatos.tags.length > 3 && (
+                        <span className="text-xs text-muted-foreground">
+                          +{conversaSelecionada.contatos.tags.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   {/* Botão Toggle Agente IA / Humano - não mostrar para grupos */}
                   {!conversaSelecionada.contatos.is_grupo && (
                     <button
