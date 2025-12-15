@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface Acao {
-  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar';
+  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome';
   valor?: string;
 }
 
@@ -264,6 +264,25 @@ serve(async (req) => {
 
         if (error) throw error;
         resultado = { sucesso: true, mensagem: 'Conversa encerrada' };
+        break;
+      }
+
+      case 'nome': {
+        // Alterar nome do contato
+        const novoNome = acaoObj.valor?.trim();
+        
+        if (!novoNome) {
+          resultado = { sucesso: false, mensagem: 'Nome não fornecido' };
+          break;
+        }
+
+        const { error } = await supabase
+          .from('contatos')
+          .update({ nome: novoNome })
+          .eq('id', contato_id);
+
+        if (error) throw error;
+        resultado = { sucesso: true, mensagem: `Nome do contato alterado para "${novoNome}"` };
         break;
       }
 

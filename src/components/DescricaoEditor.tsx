@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle } from 'lucide-react';
+import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen } from 'lucide-react';
 
 interface DescricaoEditorProps {
   value: string;
@@ -18,6 +18,16 @@ interface ChipConfig {
 // Parse ação para config visual
 function parseAcao(acao: string): ChipConfig {
   const acaoLower = acao.toLowerCase();
+  
+  if (acaoLower.startsWith('@nome:')) {
+    const valor = acao.replace(/^@nome:/i, '');
+    return {
+      icon: UserPen,
+      label: `Alterar Nome: ${valor}`,
+      colorClass: 'text-amber-700 dark:text-amber-400',
+      bgClass: 'bg-amber-100 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700',
+    };
+  }
   
   if (acaoLower.startsWith('@tag:')) {
     const valor = acao.replace(/^@tag:/i, '');
@@ -111,7 +121,7 @@ function parseAcao(acao: string): ChipConfig {
 }
 
 // Regex para encontrar ações no texto (exclui pontuação final)
-const ACTION_REGEX = /@(tag|etapa|transferir|fonte|notificar|produto|finalizar)(:[^\s@<>.,;!?]+)?/gi;
+const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar)(:[^\s@<>.,;!?]+)?/gi;
 
 // Converter texto com ações para HTML com chips
 function textToHtml(text: string): string {
