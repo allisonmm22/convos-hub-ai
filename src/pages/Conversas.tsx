@@ -20,7 +20,7 @@ import {
   XCircle,
   ArrowRightLeft,
   UserCheck,
-  Filter,
+  SlidersHorizontal,
   Wifi,
   WifiOff,
   RefreshCw,
@@ -41,6 +41,7 @@ import { AudioPlayer } from '@/components/AudioPlayer';
 import { ContatoSidebar } from '@/components/ContatoSidebar';
 import { notifyNewMessage, requestNotificationPermission } from '@/lib/notificationSound';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface Contato {
   id: string;
@@ -982,34 +983,103 @@ export default function Conversas() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-foreground">Conversas</h2>
               
-              {/* Status da Conexão */}
-              <div className={cn(
-                'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300',
-                conexao?.status === 'conectado' 
-                  ? 'bg-green-500/20 text-green-400 shadow-[0_0_12px_hsl(142_70%_45%/0.3)]' 
-                  : conexao?.status === 'aguardando'
-                  ? 'bg-yellow-500/20 text-yellow-400'
-                  : 'bg-destructive/20 text-destructive'
-              )}>
-                {conexao?.status === 'conectado' ? (
-                  <>
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                    </span>
-                    Online
-                  </>
-                ) : conexao?.status === 'aguardando' ? (
-                  <>
-                    <RefreshCw className="h-3 w-3 animate-spin" />
-                    Conectando
-                  </>
-                ) : (
-                  <>
-                    <WifiOff className="h-3 w-3" />
-                    Offline
-                  </>
-                )}
+              <div className="flex items-center gap-2">
+                {/* Status da Conexão */}
+                <div className={cn(
+                  'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300',
+                  conexao?.status === 'conectado' 
+                    ? 'bg-green-500/20 text-green-400 shadow-[0_0_12px_hsl(142_70%_45%/0.3)]' 
+                    : conexao?.status === 'aguardando'
+                    ? 'bg-yellow-500/20 text-yellow-400'
+                    : 'bg-destructive/20 text-destructive'
+                )}>
+                  {conexao?.status === 'conectado' ? (
+                    <>
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                      </span>
+                      Online
+                    </>
+                  ) : conexao?.status === 'aguardando' ? (
+                    <>
+                      <RefreshCw className="h-3 w-3 animate-spin" />
+                      Conectando
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="h-3 w-3" />
+                      Offline
+                    </>
+                  )}
+                </div>
+
+                {/* Botão Filtros com Popover */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      className={cn(
+                        'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 border',
+                        atendenteFilter !== 'todos'
+                          ? 'bg-primary/20 text-primary border-primary/30'
+                          : 'bg-muted/50 text-muted-foreground border-border/50 hover:bg-muted hover:text-foreground'
+                      )}
+                    >
+                      <SlidersHorizontal className="h-3.5 w-3.5" />
+                      Filtros
+                      {atendenteFilter !== 'todos' && (
+                        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">
+                          1
+                        </span>
+                      )}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-56 p-2">
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 px-2">
+                        Atendente
+                      </span>
+                      <div className="space-y-1">
+                        <button
+                          onClick={() => setAtendenteFilter('todos')}
+                          className={cn(
+                            'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                            atendenteFilter === 'todos'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'text-foreground hover:bg-muted'
+                          )}
+                        >
+                          <Users className="h-4 w-4" />
+                          Todos
+                        </button>
+                        <button
+                          onClick={() => setAtendenteFilter('agente_ia')}
+                          className={cn(
+                            'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                            atendenteFilter === 'agente_ia'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'text-foreground hover:bg-muted'
+                          )}
+                        >
+                          <Bot className="h-4 w-4" />
+                          Agente IA
+                        </button>
+                        <button
+                          onClick={() => setAtendenteFilter('humano')}
+                          className={cn(
+                            'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                            atendenteFilter === 'humano'
+                              ? 'bg-orange-500 text-white'
+                              : 'text-foreground hover:bg-muted'
+                          )}
+                        >
+                          <User className="h-4 w-4" />
+                          Humano
+                        </button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
             <div className="relative mb-3">
@@ -1023,84 +1093,31 @@ export default function Conversas() {
               />
             </div>
             
-            {/* Filtros Organizados */}
-            <div className="space-y-3">
-              {/* Grupo: Status */}
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 px-1">
-                  Status
-                </span>
-                <div className="flex p-1 bg-muted/30 rounded-xl border border-border/50">
-                  {([
-                    { value: 'todos', label: 'Todos', icon: null },
-                    { value: 'em_atendimento', label: 'Atendimento', icon: MessageCircle },
-                    { value: 'aguardando_cliente', label: 'Aguardando', icon: Clock },
-                    { value: 'encerrado', label: 'Encerrado', icon: CheckCircle2 },
-                  ] as const).map((status, index) => (
-                    <button
-                      key={status.value}
-                      onClick={() => setStatusFilter(status.value as StatusFilter)}
-                      className={cn(
-                        'flex-1 px-2 py-1.5 text-[11px] font-medium transition-all duration-200 flex items-center justify-center gap-1',
-                        index === 0 && 'rounded-l-lg',
-                        index === 3 && 'rounded-r-lg',
-                        index > 0 && index < 3 && 'rounded-none',
-                        statusFilter === status.value
-                          ? 'bg-primary text-primary-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                      )}
-                    >
-                      {status.icon && <status.icon className="h-3 w-3" />}
-                      <span className="hidden sm:inline">{status.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Grupo: Atendente */}
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 px-1">
-                  Atendente
-                </span>
-                <div className="flex p-1 bg-muted/30 rounded-xl border border-border/50">
-                  <button
-                    onClick={() => setAtendenteFilter('todos')}
-                    className={cn(
-                      'flex-1 px-3 py-1.5 rounded-l-lg text-[11px] font-medium transition-all duration-200 flex items-center justify-center gap-1',
-                      atendenteFilter === 'todos'
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                    )}
-                  >
-                    <Users className="h-3 w-3" />
-                    Todos
-                  </button>
-                  <button
-                    onClick={() => setAtendenteFilter('agente_ia')}
-                    className={cn(
-                      'flex-1 px-3 py-1.5 text-[11px] font-medium transition-all duration-200 flex items-center justify-center gap-1',
-                      atendenteFilter === 'agente_ia'
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                    )}
-                  >
-                    <Bot className="h-3 w-3" />
-                    IA
-                  </button>
-                  <button
-                    onClick={() => setAtendenteFilter('humano')}
-                    className={cn(
-                      'flex-1 px-3 py-1.5 rounded-r-lg text-[11px] font-medium transition-all duration-200 flex items-center justify-center gap-1',
-                      atendenteFilter === 'humano'
-                        ? 'bg-orange-500 text-white shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                    )}
-                  >
-                    <User className="h-3 w-3" />
-                    Humano
-                  </button>
-                </div>
-              </div>
+            {/* Filtros de Status */}
+            <div className="flex p-1 bg-muted/30 rounded-xl border border-border/50">
+              {([
+                { value: 'todos', label: 'Todos', icon: null },
+                { value: 'em_atendimento', label: 'Atendimento', icon: MessageCircle },
+                { value: 'aguardando_cliente', label: 'Aguardando', icon: Clock },
+                { value: 'encerrado', label: 'Encerrado', icon: CheckCircle2 },
+              ] as const).map((status, index) => (
+                <button
+                  key={status.value}
+                  onClick={() => setStatusFilter(status.value as StatusFilter)}
+                  className={cn(
+                    'flex-1 px-2 py-1.5 text-[11px] font-medium transition-all duration-200 flex items-center justify-center gap-1',
+                    index === 0 && 'rounded-l-lg',
+                    index === 3 && 'rounded-r-lg',
+                    index > 0 && index < 3 && 'rounded-none',
+                    statusFilter === status.value
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  )}
+                >
+                  {status.icon && <status.icon className="h-3 w-3" />}
+                  <span className="hidden sm:inline">{status.label}</span>
+                </button>
+              ))}
             </div>
           </div>
 
