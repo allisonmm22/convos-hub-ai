@@ -1,17 +1,12 @@
 import { supabase } from '@/integrations/supabase/client';
 
 export type TipoLog = 
-  | 'login'
-  | 'logout'
-  | 'mensagem_enviada'
-  | 'ia_resposta'
-  | 'negociacao_criada'
-  | 'negociacao_movida'
-  | 'conversa_encerrada'
-  | 'conversa_transferida'
-  | 'agente_ia_toggle'
-  | 'usuario_criado'
-  | 'contato_criado';
+  | 'erro_etapa'           // Erro ao mover negociação de etapa
+  | 'erro_transferencia'   // Erro ao transferir conversa
+  | 'erro_whatsapp'        // Erro de conexão/envio WhatsApp
+  | 'erro_ia'              // Erro na resposta da IA
+  | 'erro_webhook'         // Erro no webhook
+  | 'erro_agendamento';    // Erro ao criar/editar agendamento
 
 interface LogOptions {
   contaId: string;

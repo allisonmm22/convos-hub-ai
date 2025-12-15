@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { registrarLog } from '@/lib/logAtividade';
 
 interface Usuario {
   id: string;
@@ -188,30 +187,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
       if (error) throw error;
-      
-      // Log do login - buscar conta_id do usuário
-      if (data.user) {
-        const { data: usuarioData } = await supabase
-          .from('usuarios')
-          .select('id, conta_id')
-          .eq('user_id', data.user.id)
-          .single();
-        
-        if (usuarioData?.conta_id) {
-          registrarLog({
-            contaId: usuarioData.conta_id,
-            usuarioId: usuarioData.id,
-            tipo: 'login',
-            descricao: `${email} fez login`,
-            metadata: { email },
-          });
-        }
-      }
       
       return { error: null };
     } catch (error) {
@@ -220,15 +200,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    // Log do logout antes de deslogar
-    if (usuario?.conta_id) {
-      registrarLog({
-        contaId: usuario.conta_id,
-        usuarioId: usuario.id,
-        tipo: 'logout',
-        descricao: `${usuario.email} fez logout`,
-      });
-    }
     await supabase.auth.signOut();
     setUsuario(null);
   };
