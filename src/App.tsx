@@ -26,99 +26,174 @@ import AdminContaDetalhe from "./pages/admin/AdminContaDetalhe";
 
 const queryClient = new QueryClient();
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, usuario, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Navigate to="/auth" replace />;
-  }
-
-  // Redirecionar super_admin para painel admin
-  if (usuario?.isSuperAdmin) {
-    return <Navigate to="/admin" replace />;
-  }
-
-  return <>{children}</>;
-}
-
-function SuperAdminRoute({ children }: { children: React.ReactNode }) {
-  const { user, usuario, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Navigate to="/auth" replace />;
-  }
-
-  if (!usuario?.isSuperAdmin) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  return <>{children}</>;
-}
-
-function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { user, usuario, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (user) {
-    // Redirecionar super_admin para painel admin
-    if (usuario?.isSuperAdmin) {
-      return <Navigate to="/admin" replace />;
-    }
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  return <>{children}</>;
+function LoadingSpinner() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
 }
 
 function AppRoutes() {
+  const { user, usuario, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
+      <Route 
+        path="/auth" 
+        element={
+          user ? (
+            usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> : <Navigate to="/dashboard" replace />
+          ) : (
+            <Auth />
+          )
+        } 
+      />
       
       {/* Rotas Admin */}
-      <Route path="/admin" element={<SuperAdminRoute><AdminDashboard /></SuperAdminRoute>} />
-      <Route path="/admin/contas" element={<SuperAdminRoute><AdminContas /></SuperAdminRoute>} />
-      <Route path="/admin/contas/:id" element={<SuperAdminRoute><AdminContaDetalhe /></SuperAdminRoute>} />
+      <Route 
+        path="/admin" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          !usuario?.isSuperAdmin ? <Navigate to="/dashboard" replace /> :
+          <AdminDashboard />
+        } 
+      />
+      <Route 
+        path="/admin/contas" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          !usuario?.isSuperAdmin ? <Navigate to="/dashboard" replace /> :
+          <AdminContas />
+        } 
+      />
+      <Route 
+        path="/admin/contas/:id" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          !usuario?.isSuperAdmin ? <Navigate to="/dashboard" replace /> :
+          <AdminContaDetalhe />
+        } 
+      />
       
       {/* Rotas CRM */}
-      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/conversas" element={<ProtectedRoute><Conversas /></ProtectedRoute>} />
-      <Route path="/agente-ia" element={<ProtectedRoute><AgenteIA /></ProtectedRoute>} />
-      <Route path="/agente-ia/:id" element={<ProtectedRoute><AgenteIAEditar /></ProtectedRoute>} />
-      <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
-      <Route path="/crm/configuracoes" element={<ProtectedRoute><CRMConfiguracoes /></ProtectedRoute>} />
-      <Route path="/agendamentos" element={<ProtectedRoute><Agendamentos /></ProtectedRoute>} />
-      <Route path="/prospeccao" element={<ProtectedRoute><Prospeccao /></ProtectedRoute>} />
-      <Route path="/contatos" element={<ProtectedRoute><Contatos /></ProtectedRoute>} />
-      <Route path="/usuarios" element={<ProtectedRoute><Usuarios /></ProtectedRoute>} />
-      <Route path="/conexao" element={<ProtectedRoute><Conexao /></ProtectedRoute>} />
-      <Route path="/integracoes" element={<ProtectedRoute><Integracoes /></ProtectedRoute>} />
-      <Route path="/integracoes/google-calendar" element={<ProtectedRoute><IntegracaoGoogleCalendar /></ProtectedRoute>} />
-      <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
+      <Route 
+        path="/dashboard" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <Dashboard />
+        } 
+      />
+      <Route 
+        path="/conversas" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <Conversas />
+        } 
+      />
+      <Route 
+        path="/agente-ia" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <AgenteIA />
+        } 
+      />
+      <Route 
+        path="/agente-ia/:id" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <AgenteIAEditar />
+        } 
+      />
+      <Route 
+        path="/crm" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <CRM />
+        } 
+      />
+      <Route 
+        path="/crm/configuracoes" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <CRMConfiguracoes />
+        } 
+      />
+      <Route 
+        path="/agendamentos" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <Agendamentos />
+        } 
+      />
+      <Route 
+        path="/prospeccao" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <Prospeccao />
+        } 
+      />
+      <Route 
+        path="/contatos" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <Contatos />
+        } 
+      />
+      <Route 
+        path="/usuarios" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <Usuarios />
+        } 
+      />
+      <Route 
+        path="/conexao" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <Conexao />
+        } 
+      />
+      <Route 
+        path="/integracoes" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <Integracoes />
+        } 
+      />
+      <Route 
+        path="/integracoes/google-calendar" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <IntegracaoGoogleCalendar />
+        } 
+      />
+      <Route 
+        path="/configuracoes" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <Configuracoes />
+        } 
+      />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
