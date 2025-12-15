@@ -62,17 +62,15 @@ serve(async (req) => {
         'apikey': evolutionApiKey,
       },
       body: JSON.stringify({
-        webhook: {
-          url: webhookUrl,
-          enabled: true,
-          webhookByEvents: false,
-          webhookBase64: true,
-          events: [
-            'MESSAGES_UPSERT',
-            'CONNECTION_UPDATE',
-            'QRCODE_UPDATED',
-          ],
-        },
+        url: webhookUrl,
+        enabled: true,
+        webhookByEvents: false,
+        webhookBase64: true,
+        events: [
+          'MESSAGES_UPSERT',
+          'CONNECTION_UPDATE',
+          'QRCODE_UPDATED',
+        ],
       }),
     });
 
