@@ -513,24 +513,14 @@ serve(async (req) => {
         
         console.log(`Criando negociação: estagioRef="${estagioRef}", valor=${valorNumerico}`);
         
-        // Buscar configuração do agente para verificar se permite múltiplas negociações
-        const { data: conversaData } = await supabase
-          .from('conversas')
-          .select('agente_ia_id')
-          .eq('id', conversa_id)
+        // Buscar configuração da conta para verificar se permite múltiplas negociações
+        const { data: contaConfig } = await supabase
+          .from('contas')
+          .select('permitir_multiplas_negociacoes')
+          .eq('id', conta_id)
           .maybeSingle();
         
-        let permitirMultiplas = true; // default
-        
-        if (conversaData?.agente_ia_id) {
-          const { data: agenteConfig } = await supabase
-            .from('agent_ia')
-            .select('permitir_multiplas_negociacoes')
-            .eq('id', conversaData.agente_ia_id)
-            .maybeSingle();
-          
-          permitirMultiplas = agenteConfig?.permitir_multiplas_negociacoes ?? true;
-        }
+        const permitirMultiplas = contaConfig?.permitir_multiplas_negociacoes ?? true;
         
         console.log(`Permitir múltiplas negociações: ${permitirMultiplas}`);
         
