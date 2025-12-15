@@ -296,14 +296,14 @@ export function FollowUpRegraModal({ open, onOpenChange, regra, onSave }: Props)
                 </label>
                 <input
                   type="range"
-                  min={5}
+                  min={1}
                   max={30}
                   value={form.quantidade_mensagens_contexto}
                   onChange={(e) => setForm({ ...form, quantidade_mensagens_contexto: parseInt(e.target.value) })}
                   className="w-full accent-primary"
                 />
                 <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                  <span>5 mensagens</span>
+                  <span>1 mensagem</span>
                   <span>30 mensagens</span>
                 </div>
               </div>
