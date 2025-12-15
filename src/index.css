@@ -145,6 +145,149 @@
   .glass {
     @apply bg-card/80 backdrop-blur-lg border border-border/50;
   }
+
+  /* Conversation card hover effects */
+  .conversation-card {
+    @apply transition-all duration-200 ease-out;
+    border-left: 3px solid transparent;
+  }
+
+  .conversation-card:hover {
+    @apply bg-muted/70;
+    transform: translateX(2px);
+  }
+
+  .conversation-card.active {
+    border-left-color: hsl(var(--primary));
+    @apply bg-primary/10;
+  }
+
+  .conversation-card.unread {
+    border-left-color: hsl(var(--primary));
+  }
+
+  /* Message bubbles */
+  .message-bubble {
+    @apply transition-all duration-200;
+  }
+
+  .message-bubble-sent {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(160 70% 40%) 100%);
+    box-shadow: 0 2px 8px hsl(var(--primary) / 0.25);
+  }
+
+  .message-bubble-received {
+    @apply bg-muted;
+    box-shadow: 0 2px 8px hsl(0 0% 0% / 0.15);
+  }
+
+  /* Typing indicator */
+  .typing-indicator {
+    @apply flex items-center gap-1 px-3 py-2;
+  }
+
+  .typing-dot {
+    @apply w-2 h-2 rounded-full bg-muted-foreground/60;
+    animation: typingDot 1.4s ease-in-out infinite;
+  }
+
+  .typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  /* Send button animation */
+  .send-button {
+    @apply transition-all duration-150;
+  }
+
+  .send-button:active {
+    transform: scale(0.95);
+  }
+
+  .send-button:hover:not(:disabled) {
+    box-shadow: 0 0 16px hsl(var(--primary) / 0.5);
+  }
+
+  /* Date separator */
+  .date-separator {
+    @apply relative flex items-center justify-center my-4;
+  }
+
+  .date-separator::before,
+  .date-separator::after {
+    content: '';
+    @apply flex-1 h-px bg-border/50;
+  }
+
+  .date-separator span {
+    @apply px-4 text-xs text-muted-foreground bg-background;
+  }
+
+  /* Online status pulse */
+  .online-pulse {
+    @apply relative;
+  }
+
+  .online-pulse::after {
+    content: '';
+    @apply absolute inset-0 rounded-full;
+    animation: onlinePulse 2s ease-in-out infinite;
+  }
+
+  /* Empty state animation */
+  .empty-state-icon {
+    @apply transition-all duration-500;
+    animation: floatIcon 3s ease-in-out infinite;
+  }
+
+  /* Input focus glow */
+  .input-glow:focus {
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.2);
+  }
+
+  /* Avatar ring */
+  .avatar-ring {
+    @apply ring-2 ring-offset-2 ring-offset-background;
+  }
+
+  .avatar-ring-primary {
+    @apply ring-primary;
+  }
+
+  .avatar-ring-online {
+    @apply ring-green-500;
+  }
+}
+
+@keyframes typingDot {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes onlinePulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 hsl(142 70% 45% / 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px hsl(142 70% 45% / 0);
+  }
+}
+
+@keyframes floatIcon {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
 @keyframes fadeIn {

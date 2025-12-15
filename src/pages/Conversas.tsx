@@ -767,6 +767,40 @@ export default function Conversas() {
     });
   };
 
+  const formatRelativeTime = (date: string) => {
+    const now = new Date();
+    const messageDate = new Date(date);
+    const diffInMinutes = Math.floor((now.getTime() - messageDate.getTime()) / 60000);
+    
+    if (diffInMinutes < 1) return 'Agora';
+    if (diffInMinutes < 60) return `${diffInMinutes}min`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h`;
+    if (diffInMinutes < 2880) return 'Ontem';
+    return messageDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  };
+
+  const formatDateSeparator = (date: string) => {
+    const messageDate = new Date(date);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (messageDate.toDateString() === today.toDateString()) return 'Hoje';
+    if (messageDate.toDateString() === yesterday.toDateString()) return 'Ontem';
+    return messageDate.toLocaleDateString('pt-BR', { 
+      weekday: 'long', 
+      day: '2-digit', 
+      month: 'long' 
+    });
+  };
+
+  const shouldShowDateSeparator = (currentMsg: Mensagem, prevMsg: Mensagem | null) => {
+    if (!prevMsg) return true;
+    const currentDate = new Date(currentMsg.created_at).toDateString();
+    const prevDate = new Date(prevMsg.created_at).toDateString();
+    return currentDate !== prevDate;
+  };
+
   const getStatusColor = (status: string | null) => {
     switch (status) {
       case 'em_atendimento':
@@ -774,7 +808,7 @@ export default function Conversas() {
       case 'aguardando_cliente':
         return 'bg-yellow-500';
       case 'encerrado':
-        return 'bg-gray-500';
+        return 'bg-muted-foreground';
       default:
         return 'bg-blue-500';
     }
@@ -793,6 +827,14 @@ export default function Conversas() {
     }
   };
 
+  const getMediaPreviewIcon = (ultimaMensagem: string | null) => {
+    if (!ultimaMensagem) return null;
+    if (ultimaMensagem.includes('📷') || ultimaMensagem.includes('🖼')) return '📷';
+    if (ultimaMensagem.includes('🎤') || ultimaMensagem.includes('🎵')) return '🎵';
+    if (ultimaMensagem.includes('📎') || ultimaMensagem.includes('📄')) return '📄';
+    return null;
+  };
+
   const filteredConversas = conversas.filter((c) => {
     const matchesSearch = c.contatos.nome.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'todos' || c.status === statusFilter;
@@ -803,17 +845,27 @@ export default function Conversas() {
     return matchesSearch && matchesStatus && matchesAtendente;
   });
 
-  const renderMensagem = (msg: Mensagem) => {
+  const renderMensagem = (msg: Mensagem, index: number) => {
+    const prevMsg = index > 0 ? mensagens[index - 1] : null;
+    const showDateSeparator = shouldShowDateSeparator(msg, prevMsg);
+
     // Mensagem de sistema (rastreamento interno)
     if (msg.tipo === 'sistema') {
       return (
-        <div key={msg.id} className="flex justify-center my-3">
-          <div className="bg-muted/60 border border-border/50 rounded-lg px-4 py-2 flex items-center gap-2 max-w-[80%]">
-            <Activity className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-            <span className="text-xs text-muted-foreground">{msg.conteudo}</span>
-            <span className="text-xs text-muted-foreground/60 flex-shrink-0">
-              {formatTime(msg.created_at)}
-            </span>
+        <div key={msg.id} className="animate-message-in">
+          {showDateSeparator && (
+            <div className="date-separator">
+              <span>{formatDateSeparator(msg.created_at)}</span>
+            </div>
+          )}
+          <div className="flex justify-center my-3">
+            <div className="glass rounded-lg px-4 py-2 flex items-center gap-2 max-w-[80%]">
+              <Activity className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+              <span className="text-xs text-muted-foreground">{msg.conteudo}</span>
+              <span className="text-xs text-muted-foreground/60 flex-shrink-0">
+                {formatTime(msg.created_at)}
+              </span>
+            </div>
           </div>
         </div>
       );
@@ -822,88 +874,94 @@ export default function Conversas() {
     const isMedia = msg.tipo && msg.tipo !== 'texto' && msg.media_url;
 
     return (
-      <div
-        key={msg.id}
-        className={cn(
-          'flex',
-          msg.direcao === 'saida' ? 'justify-end' : 'justify-start'
+      <div key={msg.id} className="animate-message-in">
+        {showDateSeparator && (
+          <div className="date-separator">
+            <span>{formatDateSeparator(msg.created_at)}</span>
+          </div>
         )}
-      >
         <div
           className={cn(
-            'max-w-[70%] rounded-2xl px-4 py-2',
-            msg.direcao === 'saida'
-              ? 'bg-primary text-primary-foreground rounded-br-sm'
-              : 'bg-muted text-foreground rounded-bl-sm'
+            'flex mb-1',
+            msg.direcao === 'saida' ? 'justify-end' : 'justify-start'
           )}
         >
-          {msg.direcao === 'saida' && (msg.enviada_por_ia || msg.enviada_por_dispositivo) && (
-            <div className="flex items-center gap-1 text-xs opacity-70 mb-1">
-              {msg.enviada_por_ia ? (
-                <>
-                  <Bot className="h-3 w-3" />
-                  <span>Agente IA</span>
-                </>
-              ) : msg.enviada_por_dispositivo ? (
-                <>
-                  <Phone className="h-3 w-3" />
-                  <span>Enviado pelo dispositivo</span>
-                </>
-              ) : null}
-            </div>
-          )}
-          
-          {isMedia ? (
-            <div className="space-y-2">
-              {msg.tipo === 'imagem' && (
-                <img 
-                  src={msg.media_url!} 
-                  alt="Imagem"
-                  className="max-w-[200px] max-h-[200px] object-cover rounded-lg cursor-pointer hover:opacity-90 hover:scale-105 transition-all"
-                  onClick={() => setImagemExpandida(msg.media_url)}
-                />
-              )}
-              {msg.tipo === 'audio' && (
-                <AudioPlayer 
-                  src={msg.media_url!} 
-                  variant={msg.direcao === 'saida' ? 'sent' : 'received'}
-                />
-              )}
-              {msg.tipo === 'documento' && (
-                <a 
-                  href={msg.media_url!} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 underline"
-                >
-                  <FileText className="h-4 w-4" />
-                  {msg.conteudo}
-                </a>
-              )}
-              {msg.tipo === 'video' && (
-                <video controls className="max-w-full rounded-lg">
-                  <source src={msg.media_url!} />
-                </video>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm whitespace-pre-wrap">{msg.conteudo}</p>
-          )}
-          
           <div
             className={cn(
-              'flex items-center gap-1 mt-1',
-              msg.direcao === 'saida' ? 'justify-end' : 'justify-start'
+              'max-w-[70%] rounded-2xl px-4 py-2.5 message-bubble',
+              msg.direcao === 'saida'
+                ? 'message-bubble-sent text-primary-foreground rounded-br-md'
+                : 'message-bubble-received text-foreground rounded-bl-md'
             )}
           >
-            <span className="text-xs opacity-70">{formatTime(msg.created_at)}</span>
-            {msg.direcao === 'saida' && (
-              msg.lida ? (
-                <CheckCheck className="h-3 w-3 text-blue-400" />
-              ) : (
-                <Check className="h-3 w-3 opacity-70" />
-              )
+            {msg.direcao === 'saida' && (msg.enviada_por_ia || msg.enviada_por_dispositivo) && (
+              <div className="flex items-center gap-1.5 text-xs opacity-80 mb-1.5 font-medium">
+                {msg.enviada_por_ia ? (
+                  <>
+                    <Bot className="h-3.5 w-3.5" />
+                    <span>Agente IA</span>
+                  </>
+                ) : msg.enviada_por_dispositivo ? (
+                  <>
+                    <Phone className="h-3.5 w-3.5" />
+                    <span>Via dispositivo</span>
+                  </>
+                ) : null}
+              </div>
             )}
+            
+            {isMedia ? (
+              <div className="space-y-2">
+                {msg.tipo === 'imagem' && (
+                  <img 
+                    src={msg.media_url!} 
+                    alt="Imagem"
+                    className="max-w-[200px] max-h-[200px] object-cover rounded-xl cursor-pointer hover:opacity-90 hover:scale-[1.02] transition-all duration-200 shadow-md"
+                    onClick={() => setImagemExpandida(msg.media_url)}
+                  />
+                )}
+                {msg.tipo === 'audio' && (
+                  <AudioPlayer 
+                    src={msg.media_url!} 
+                    variant={msg.direcao === 'saida' ? 'sent' : 'received'}
+                  />
+                )}
+                {msg.tipo === 'documento' && (
+                  <a 
+                    href={msg.media_url!} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 underline hover:opacity-80 transition-opacity"
+                  >
+                    <FileText className="h-4 w-4" />
+                    {msg.conteudo}
+                  </a>
+                )}
+                {msg.tipo === 'video' && (
+                  <video controls className="max-w-full rounded-xl shadow-md">
+                    <source src={msg.media_url!} />
+                  </video>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.conteudo}</p>
+            )}
+            
+            <div
+              className={cn(
+                'flex items-center gap-1.5 mt-1.5',
+                msg.direcao === 'saida' ? 'justify-end' : 'justify-start'
+              )}
+            >
+              <span className="text-[11px] opacity-70">{formatTime(msg.created_at)}</span>
+              {msg.direcao === 'saida' && (
+                msg.lida ? (
+                  <CheckCheck className="h-3.5 w-3.5 text-blue-300" />
+                ) : (
+                  <Check className="h-3.5 w-3.5 opacity-70" />
+                )
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -914,24 +972,27 @@ export default function Conversas() {
     <MainLayout>
       <div className="h-[calc(100vh-7rem)] flex rounded-xl overflow-hidden bg-card border border-border animate-fade-in">
         {/* Lista de Conversas */}
-        <div className="w-96 border-r border-border flex flex-col">
+        <div className="w-96 border-r border-border flex flex-col bg-card/50">
           {/* Header */}
-          <div className="p-4 border-b border-border">
+          <div className="p-4 border-b border-border bg-card/80 backdrop-blur-sm">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-foreground">Conversas</h2>
+              <h2 className="text-xl font-bold text-foreground">Conversas</h2>
               
               {/* Status da Conexão */}
               <div className={cn(
-                'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium',
+                'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300',
                 conexao?.status === 'conectado' 
-                  ? 'bg-green-500/20 text-green-500' 
+                  ? 'bg-green-500/20 text-green-400 shadow-[0_0_12px_hsl(142_70%_45%/0.3)]' 
                   : conexao?.status === 'aguardando'
-                  ? 'bg-yellow-500/20 text-yellow-500'
+                  ? 'bg-yellow-500/20 text-yellow-400'
                   : 'bg-destructive/20 text-destructive'
               )}>
                 {conexao?.status === 'conectado' ? (
                   <>
-                    <Wifi className="h-3 w-3" />
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    </span>
                     Online
                   </>
                 ) : conexao?.status === 'aguardando' ? (
@@ -954,7 +1015,7 @@ export default function Conversas() {
                 placeholder="Buscar conversa..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full h-10 pl-10 pr-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full h-10 pl-10 pr-4 rounded-xl bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 input-glow transition-all duration-200"
               />
             </div>
             
@@ -965,10 +1026,10 @@ export default function Conversas() {
                   key={status}
                   onClick={() => setStatusFilter(status)}
                   className={cn(
-                    'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+                    'px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200',
                     statusFilter === status
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      ? 'bg-primary text-primary-foreground shadow-md'
+                      : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
                   )}
                 >
                   {status === 'todos' ? 'Todos' : getStatusLabel(status)}
@@ -981,10 +1042,10 @@ export default function Conversas() {
               <button
                 onClick={() => setAtendenteFilter('todos')}
                 className={cn(
-                  'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+                  'px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200',
                   atendenteFilter === 'todos'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    ? 'bg-primary text-primary-foreground shadow-md'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
                 )}
               >
                 Todos
@@ -992,10 +1053,10 @@ export default function Conversas() {
               <button
                 onClick={() => setAtendenteFilter('agente_ia')}
                 className={cn(
-                  'px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1',
+                  'px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 flex items-center gap-1',
                   atendenteFilter === 'agente_ia'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    ? 'bg-primary text-primary-foreground shadow-md'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
                 )}
               >
                 <Bot className="h-3 w-3" />
@@ -1004,10 +1065,10 @@ export default function Conversas() {
               <button
                 onClick={() => setAtendenteFilter('humano')}
                 className={cn(
-                  'px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1',
+                  'px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 flex items-center gap-1',
                   atendenteFilter === 'humano'
-                    ? 'bg-orange-500 text-white'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    ? 'bg-orange-500 text-white shadow-md'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
                 )}
               >
                 <User className="h-3 w-3" />
@@ -1019,25 +1080,26 @@ export default function Conversas() {
           {/* Lista */}
           <div className="flex-1 overflow-y-auto">
             {loading ? (
-              <div className="flex items-center justify-center h-32">
-                <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              <div className="flex flex-col items-center justify-center h-32 gap-3">
+                <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-muted-foreground">Carregando...</span>
               </div>
             ) : filteredConversas.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
-                <Phone className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Nenhuma conversa</p>
-                <p className="text-sm mt-1">As conversas aparecerão quando você receber mensagens</p>
+                <MessageSquareIcon className="h-16 w-16 mx-auto mb-4 opacity-30 empty-state-icon" />
+                <p className="text-lg font-medium">Nenhuma conversa</p>
+                <p className="text-sm mt-1 opacity-80">As conversas aparecerão aqui</p>
               </div>
             ) : (
-              filteredConversas.map((conversa) => (
+              filteredConversas.map((conversa, index) => (
                 <div
                   key={conversa.id}
                   onClick={() => setConversaSelecionada(conversa)}
+                  style={{ animationDelay: `${index * 30}ms` }}
                   className={cn(
-                    'flex items-center gap-3 p-4 cursor-pointer transition-colors border-b border-border/50',
-                    conversaSelecionada?.id === conversa.id
-                      ? 'bg-primary/10'
-                      : 'hover:bg-muted/50'
+                    'flex items-center gap-3 p-4 cursor-pointer border-b border-border/30 conversation-card animate-fade-in',
+                    conversaSelecionada?.id === conversa.id && 'active',
+                    (conversa.nao_lidas || 0) > 0 && 'unread'
                   )}
                 >
                   <div className="relative">
@@ -1045,43 +1107,54 @@ export default function Conversas() {
                       <img
                         src={conversa.contatos.avatar_url}
                         alt={conversa.contatos.nome}
-                        className="h-12 w-12 rounded-full object-cover"
+                        className={cn(
+                          "h-12 w-12 rounded-full object-cover transition-all duration-200",
+                          conversaSelecionada?.id === conversa.id && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+                        )}
                       />
                     ) : (
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold">
+                      <div className={cn(
+                        "flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary/30 to-primary/10 text-primary font-bold text-lg transition-all duration-200",
+                        conversaSelecionada?.id === conversa.id && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+                      )}>
                         {conversa.contatos.nome.charAt(0).toUpperCase()}
                       </div>
                     )}
                     {conversa.agente_ia_ativo ? (
-                      <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-primary flex items-center justify-center">
+                      <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-primary flex items-center justify-center shadow-md">
                         <Bot className="h-3 w-3 text-primary-foreground" />
                       </div>
                     ) : conversa.atendente_id ? (
-                      <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-orange-500 flex items-center justify-center">
+                      <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-orange-500 flex items-center justify-center shadow-md">
                         <User className="h-3 w-3 text-white" />
                       </div>
                     ) : null}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium text-foreground truncate">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <p className="font-semibold text-foreground truncate">
                         {conversa.contatos.nome}
                       </p>
                       <div className="flex items-center gap-2">
                         <span className={cn('h-2 w-2 rounded-full', getStatusColor(conversa.status))} />
                         {conversa.ultima_mensagem_at && (
                           <span className="text-xs text-muted-foreground">
-                            {formatTime(conversa.ultima_mensagem_at)}
+                            {formatRelativeTime(conversa.ultima_mensagem_at)}
                           </span>
                         )}
                       </div>
                     </div>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {conversa.ultima_mensagem || 'Sem mensagens'}
-                    </p>
+                    <div className="flex items-center gap-1">
+                      {getMediaPreviewIcon(conversa.ultima_mensagem) && (
+                        <span className="text-xs">{getMediaPreviewIcon(conversa.ultima_mensagem)}</span>
+                      )}
+                      <p className="text-sm text-muted-foreground truncate">
+                        {conversa.ultima_mensagem || 'Sem mensagens'}
+                      </p>
+                    </div>
                   </div>
-                  {conversa.nao_lidas > 0 && (
-                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
+                  {(conversa.nao_lidas || 0) > 0 && (
+                    <div className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground px-1.5 shadow-md animate-bounce-subtle">
                       {conversa.nao_lidas}
                     </div>
                   )}
@@ -1093,32 +1166,41 @@ export default function Conversas() {
 
         {/* Área da Conversa */}
         {conversaSelecionada ? (
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col animate-slide-in-left bg-gradient-to-b from-background to-card/30">
             {/* Header da Conversa */}
-            <div className="flex items-center justify-between p-4 border-b border-border">
+            <div className="flex items-center justify-between p-4 border-b border-border bg-card/80 backdrop-blur-sm">
               <button
                 onClick={() => setShowContatoSidebar(true)}
-                className="flex items-center gap-3 hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors cursor-pointer text-left"
+                className="flex items-center gap-3 hover:bg-muted/50 rounded-xl p-2 -m-2 transition-all duration-200 cursor-pointer text-left group"
               >
-                {conversaSelecionada.contatos.avatar_url ? (
-                  <img
-                    src={conversaSelecionada.contatos.avatar_url}
-                    alt={conversaSelecionada.contatos.nome}
-                    className="h-10 w-10 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold">
-                    {conversaSelecionada.contatos.nome.charAt(0).toUpperCase()}
-                  </div>
-                )}
+                <div className="relative">
+                  {conversaSelecionada.contatos.avatar_url ? (
+                    <img
+                      src={conversaSelecionada.contatos.avatar_url}
+                      alt={conversaSelecionada.contatos.nome}
+                      className="h-11 w-11 rounded-full object-cover ring-2 ring-primary/30 ring-offset-2 ring-offset-background transition-all duration-200 group-hover:ring-primary"
+                    />
+                  ) : (
+                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-primary/40 to-primary/20 text-primary font-bold text-lg ring-2 ring-primary/30 ring-offset-2 ring-offset-background transition-all duration-200 group-hover:ring-primary">
+                      {conversaSelecionada.contatos.nome.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className={cn(
+                    'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background',
+                    conversaSelecionada.status === 'em_atendimento' ? 'bg-green-500' :
+                    conversaSelecionada.status === 'aguardando_cliente' ? 'bg-yellow-500' : 'bg-muted-foreground'
+                  )} />
+                </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-foreground">
+                    <span className="font-semibold text-foreground group-hover:text-primary transition-colors">
                       {conversaSelecionada.contatos.nome}
                     </span>
                     <span className={cn(
-                      'px-2 py-0.5 rounded-full text-xs font-medium text-white',
-                      getStatusColor(conversaSelecionada.status)
+                      'px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide',
+                      conversaSelecionada.status === 'em_atendimento' ? 'bg-green-500/20 text-green-400' :
+                      conversaSelecionada.status === 'aguardando_cliente' ? 'bg-yellow-500/20 text-yellow-400' :
+                      'bg-muted text-muted-foreground'
                     )}>
                       {getStatusLabel(conversaSelecionada.status)}
                     </span>
@@ -1134,10 +1216,10 @@ export default function Conversas() {
                   <button
                     onClick={toggleAgenteIA}
                     className={cn(
-                      'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+                      'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
                       conversaSelecionada.agente_ia_ativo
-                        ? 'bg-primary/20 text-primary'
-                        : 'bg-orange-500/20 text-orange-500'
+                        ? 'bg-primary/20 text-primary hover:bg-primary/30 shadow-[0_0_12px_hsl(var(--primary)/0.2)]'
+                        : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
                     )}
                   >
                     {conversaSelecionada.agente_ia_ativo ? (
@@ -1156,7 +1238,7 @@ export default function Conversas() {
                   {/* Transferir */}
                   <button
                     onClick={() => setShowTransferModal(true)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
                   >
                     <ArrowRightLeft className="h-4 w-4" />
                     Transferir
@@ -1165,18 +1247,18 @@ export default function Conversas() {
                   {/* Encerrar */}
                   <button
                     onClick={encerrarAtendimento}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all duration-200"
                   >
                     <XCircle className="h-4 w-4" />
                     Encerrar
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Conversa encerrada</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-muted-foreground italic">Conversa encerrada</span>
                   <button
                     onClick={reabrirAtendimento}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200 shadow-md hover:shadow-lg"
                   >
                     <RefreshCw className="h-4 w-4" />
                     Reabrir
@@ -1186,22 +1268,22 @@ export default function Conversas() {
             </div>
 
             {/* Mensagens */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {mensagens.map(renderMensagem)}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {mensagens.map((msg, index) => renderMensagem(msg, index))}
               <div ref={messagesEndRef} />
             </div>
 
             {/* Input */}
-            <div className="p-4 border-t border-border">
+            <div className="p-4 border-t border-border bg-card/80 backdrop-blur-sm">
               {conversaEncerrada ? (
-                <div className="flex items-center justify-between bg-muted/50 rounded-lg p-4">
+                <div className="flex items-center justify-between glass rounded-xl p-4">
                   <div className="flex items-center gap-3 text-muted-foreground">
                     <XCircle className="h-5 w-5" />
                     <span>Esta conversa foi encerrada</span>
                   </div>
                   <button
                     onClick={reabrirAtendimento}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200 text-sm font-medium shadow-md hover:shadow-lg"
                   >
                     <RefreshCw className="h-4 w-4" />
                     Reabrir Conversa
@@ -1212,33 +1294,39 @@ export default function Conversas() {
                   <div className="relative">
                     <button 
                       onClick={() => setShowAttachMenu(!showAttachMenu)}
-                      className="p-2 rounded-lg hover:bg-muted transition-colors"
+                      className="p-2.5 rounded-xl hover:bg-muted transition-all duration-200"
                       disabled={uploading}
                     >
-                      <Paperclip className={cn("h-5 w-5 text-muted-foreground", uploading && "animate-pulse")} />
+                      <Paperclip className={cn("h-5 w-5 text-muted-foreground transition-colors hover:text-foreground", uploading && "animate-pulse text-primary")} />
                     </button>
                     
                     {showAttachMenu && (
-                      <div className="absolute bottom-12 left-0 bg-card border border-border rounded-lg shadow-lg p-2 min-w-[150px]">
+                      <div className="absolute bottom-14 left-0 glass rounded-xl shadow-xl p-2 min-w-[160px] animate-slide-in-up z-10">
                         <button
                           onClick={() => handleFileSelect('imagem')}
-                          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted rounded-lg transition-colors text-sm"
+                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted rounded-lg transition-all duration-200 text-sm group"
                         >
-                          <Image className="h-4 w-4 text-blue-500" />
+                          <div className="p-1.5 rounded-lg bg-blue-500/20 group-hover:bg-blue-500/30 transition-colors">
+                            <Image className="h-4 w-4 text-blue-400" />
+                          </div>
                           Imagem
                         </button>
                         <button
                           onClick={() => handleFileSelect('documento')}
-                          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted rounded-lg transition-colors text-sm"
+                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted rounded-lg transition-all duration-200 text-sm group"
                         >
-                          <FileText className="h-4 w-4 text-orange-500" />
+                          <div className="p-1.5 rounded-lg bg-orange-500/20 group-hover:bg-orange-500/30 transition-colors">
+                            <FileText className="h-4 w-4 text-orange-400" />
+                          </div>
                           Documento
                         </button>
                         <button
                           onClick={() => handleFileSelect('audio')}
-                          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted rounded-lg transition-colors text-sm"
+                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted rounded-lg transition-all duration-200 text-sm group"
                         >
-                          <Mic className="h-4 w-4 text-green-500" />
+                          <div className="p-1.5 rounded-lg bg-green-500/20 group-hover:bg-green-500/30 transition-colors">
+                            <Mic className="h-4 w-4 text-green-400" />
+                          </div>
                           Áudio
                         </button>
                       </div>
@@ -1259,7 +1347,7 @@ export default function Conversas() {
                     value={novaMensagem}
                     onChange={(e) => setNovaMensagem(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && enviarMensagem()}
-                    className="flex-1 h-10 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="flex-1 h-11 px-4 rounded-xl bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 input-glow transition-all duration-200"
                     disabled={enviando}
                   />
                   
@@ -1272,7 +1360,10 @@ export default function Conversas() {
                   <button
                     onClick={enviarMensagem}
                     disabled={!novaMensagem.trim() || enviando}
-                    className="h-10 w-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50"
+                    className={cn(
+                      "h-11 w-11 rounded-xl bg-primary text-primary-foreground flex items-center justify-center transition-all duration-200 disabled:opacity-50 send-button",
+                      novaMensagem.trim() && !enviando && "shadow-[0_0_20px_hsl(var(--primary)/0.4)] hover:shadow-[0_0_24px_hsl(var(--primary)/0.5)]"
+                    )}
                   >
                     {enviando ? (
                       <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
@@ -1285,11 +1376,16 @@ export default function Conversas() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <MessageSquareIcon className="h-16 w-16 mx-auto mb-4 opacity-30" />
-              <p className="text-lg">Selecione uma conversa</p>
-              <p className="text-sm">Escolha uma conversa para começar a atender</p>
+          <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-background via-card/20 to-background">
+            <div className="text-center p-8">
+              <div className="relative inline-block mb-6">
+                <MessageSquareIcon className="h-20 w-20 text-muted-foreground/30 empty-state-icon" />
+                <div className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center animate-pulse-soft">
+                  <Smile className="h-4 w-4 text-primary" />
+                </div>
+              </div>
+              <p className="text-xl font-semibold text-foreground mb-2">Selecione uma conversa</p>
+              <p className="text-muted-foreground">Escolha uma conversa ao lado para começar a atender</p>
             </div>
           </div>
         )}
