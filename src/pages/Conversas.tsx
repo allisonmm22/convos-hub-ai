@@ -1073,7 +1073,7 @@ export default function Conversas() {
 
             <div
               className={cn(
-                'max-w-[70%] rounded-2xl px-4 py-2.5 message-bubble',
+                'min-w-[120px] max-w-[70%] rounded-2xl px-4 py-2.5 message-bubble',
                 msg.direcao === 'saida'
                   ? 'message-bubble-sent text-primary-foreground rounded-br-md'
                   : 'message-bubble-received text-foreground rounded-bl-md'
