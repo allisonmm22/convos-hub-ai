@@ -5,12 +5,13 @@ import { supabase } from '@/integrations/supabase/client';
 interface Usuario {
   id: string;
   user_id: string;
-  conta_id: string;
+  conta_id: string | null;
   nome: string;
   email: string;
   avatar_url: string | null;
   is_admin: boolean;
-  role?: 'admin' | 'atendente';
+  role?: 'admin' | 'atendente' | 'super_admin';
+  isSuperAdmin?: boolean;
   assinatura_ativa?: boolean;
 }
 
@@ -65,6 +66,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUsuario = async (userId: string) => {
     try {
+      // Primeiro, verificar se é super_admin
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      const isSuperAdmin = (roleData?.role as string) === 'super_admin';
+
+      // Se for super_admin, não precisa de registro na tabela usuarios
+      if (isSuperAdmin) {
+        // Buscar dados do auth.user para preencher dados básicos
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        
+        setUsuario({
+          id: userId,
+          user_id: userId,
+          conta_id: null,
+          nome: authUser?.email?.split('@')[0] || 'Super Admin',
+          email: authUser?.email || '',
+          avatar_url: null,
+          is_admin: true,
+          role: 'super_admin',
+          isSuperAdmin: true,
+          assinatura_ativa: true,
+        });
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('usuarios')
         .select('*')
@@ -73,17 +104,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
       
-      // Buscar role do usuário
       if (data) {
-        const { data: roleData } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', userId)
-          .maybeSingle();
-        
         setUsuario({
           ...data,
           role: roleData?.role as 'admin' | 'atendente' | undefined,
+          isSuperAdmin: false,
           assinatura_ativa: data.assinatura_ativa ?? true,
         });
       } else {
