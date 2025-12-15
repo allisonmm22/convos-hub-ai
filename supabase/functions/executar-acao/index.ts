@@ -240,14 +240,36 @@ serve(async (req) => {
 
       case 'tag': {
         // Adicionar tag ao contato
-        const tag = acaoObj.valor;
+        const tagNome = acaoObj.valor?.replace(/[.,;!?]+$/, '').trim();
         
-        if (!tag) {
+        if (!tagNome) {
           resultado = { sucesso: false, mensagem: 'Tag não fornecida' };
           break;
         }
 
-        // Buscar tags atuais
+        // Buscar tag existente na tabela tags (case insensitive)
+        const { data: tagExistente } = await supabase
+          .from('tags')
+          .select('id, nome')
+          .eq('conta_id', conta_id)
+          .ilike('nome', tagNome)
+          .maybeSingle();
+
+        // Se a tag não existir, retornar erro
+        if (!tagExistente) {
+          console.log(`Tag "${tagNome}" não encontrada na conta ${conta_id}`);
+          resultado = { 
+            sucesso: false, 
+            mensagem: `Tag "${tagNome}" não encontrada. Crie a tag primeiro nas configurações do CRM.` 
+          };
+          break;
+        }
+
+        // Usar o nome exato como cadastrado (preservar case e cor)
+        const tagNomeExato = tagExistente.nome;
+        console.log(`Tag encontrada: "${tagNomeExato}" (ID: ${tagExistente.id})`);
+
+        // Buscar tags atuais do contato
         const { data: contato } = await supabase
           .from('contatos')
           .select('tags')
@@ -256,14 +278,19 @@ serve(async (req) => {
 
         const tagsAtuais = contato?.tags || [];
         
-        if (!tagsAtuais.includes(tag)) {
+        // Verificar se já tem a tag (case insensitive)
+        const jaTemTag = tagsAtuais.some(
+          (t: string) => t.toLowerCase() === tagNomeExato.toLowerCase()
+        );
+        
+        if (!jaTemTag) {
           const { error } = await supabase
             .from('contatos')
-            .update({ tags: [...tagsAtuais, tag] })
+            .update({ tags: [...tagsAtuais, tagNomeExato] })
             .eq('id', contato_id);
 
           if (error) throw error;
-          resultado = { sucesso: true, mensagem: `Tag "${tag}" adicionada ao contato` };
+          resultado = { sucesso: true, mensagem: `Tag "${tagNomeExato}" adicionada ao contato` };
         } else {
           resultado = { sucesso: true, mensagem: 'Tag já existe no contato' };
         }
