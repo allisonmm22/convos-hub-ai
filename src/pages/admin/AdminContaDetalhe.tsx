@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, Users, MessageSquare, TrendingUp, Phone, Power, Save, KeyRound } from 'lucide-react';
+import { ArrowLeft, Building2, Users, MessageSquare, TrendingUp, Phone, Power, Save, KeyRound, Coins, Activity, Calendar } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -24,6 +26,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface Conta {
   id: string;
@@ -46,6 +49,34 @@ interface Metricas {
   conversas: number;
   negociacoes: number;
   contatos: number;
+  total_tokens: number;
+}
+
+interface TokenUsage {
+  id: string;
+  provider: string;
+  modelo: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  custo_estimado: number;
+  created_at: string;
+}
+
+interface LogAtividade {
+  id: string;
+  tipo: string;
+  descricao: string;
+  metadata: any;
+  usuario_id: string | null;
+  created_at: string;
+  usuario?: { nome: string } | null;
+}
+
+interface TokenStats {
+  data: string;
+  tokens: number;
+  custo: number;
 }
 
 export default function AdminContaDetalhe() {
@@ -53,13 +84,22 @@ export default function AdminContaDetalhe() {
   const navigate = useNavigate();
   const [conta, setConta] = useState<Conta | null>(null);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  const [metricas, setMetricas] = useState<Metricas>({ usuarios: 0, conversas: 0, negociacoes: 0, contatos: 0 });
+  const [metricas, setMetricas] = useState<Metricas>({ usuarios: 0, conversas: 0, negociacoes: 0, contatos: 0, total_tokens: 0 });
   const [loading, setLoading] = useState(true);
   const [editNome, setEditNome] = useState('');
   const [saving, setSaving] = useState(false);
   const [resetPasswordModal, setResetPasswordModal] = useState<Usuario | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
+  
+  // Estados para tokens e logs
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage[]>([]);
+  const [tokenStats, setTokenStats] = useState<TokenStats[]>([]);
+  const [logs, setLogs] = useState<LogAtividade[]>([]);
+  const [loadingTokens, setLoadingTokens] = useState(false);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [periodoTokens, setPeriodoTokens] = useState('30');
+  const [tipoLogFiltro, setTipoLogFiltro] = useState('todos');
 
   useEffect(() => {
     if (id) fetchContaData();
@@ -100,11 +140,20 @@ export default function AdminContaDetalhe() {
         supabase.from('contatos').select('*', { count: 'exact', head: true }).eq('conta_id', id),
       ]);
 
+      // Buscar total de tokens
+      const { data: tokensData } = await supabase
+        .from('uso_tokens')
+        .select('total_tokens')
+        .eq('conta_id', id);
+      
+      const totalTokens = tokensData?.reduce((acc, t) => acc + (t.total_tokens || 0), 0) || 0;
+
       setMetricas({
         usuarios: usuariosData?.length || 0,
         conversas: conversasCount || 0,
         negociacoes: negociacoesCount || 0,
         contatos: contatosCount || 0,
+        total_tokens: totalTokens,
       });
     } catch (error) {
       console.error('Erro ao buscar dados da conta:', error);
@@ -113,6 +162,92 @@ export default function AdminContaDetalhe() {
       setLoading(false);
     }
   };
+
+  const fetchTokenUsage = async () => {
+    if (!id) return;
+    setLoadingTokens(true);
+    
+    try {
+      const dataInicio = new Date();
+      dataInicio.setDate(dataInicio.getDate() - parseInt(periodoTokens));
+      
+      const { data } = await supabase
+        .from('uso_tokens')
+        .select('*')
+        .eq('conta_id', id)
+        .gte('created_at', dataInicio.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(100);
+      
+      setTokenUsage(data || []);
+      
+      // Calcular estatísticas por dia
+      const statsByDay: Record<string, { tokens: number; custo: number }> = {};
+      (data || []).forEach((t) => {
+        const dia = new Date(t.created_at).toLocaleDateString('pt-BR');
+        if (!statsByDay[dia]) statsByDay[dia] = { tokens: 0, custo: 0 };
+        statsByDay[dia].tokens += t.total_tokens;
+        statsByDay[dia].custo += Number(t.custo_estimado) || 0;
+      });
+      
+      const stats = Object.entries(statsByDay)
+        .map(([data, vals]) => ({ data, ...vals }))
+        .reverse();
+      
+      setTokenStats(stats);
+    } catch (error) {
+      console.error('Erro ao buscar uso de tokens:', error);
+    } finally {
+      setLoadingTokens(false);
+    }
+  };
+
+  const fetchLogs = async () => {
+    if (!id) return;
+    setLoadingLogs(true);
+    
+    try {
+      let query = supabase
+        .from('logs_atividade')
+        .select('*')
+        .eq('conta_id', id)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      
+      if (tipoLogFiltro !== 'todos') {
+        query = query.eq('tipo', tipoLogFiltro);
+      }
+      
+      const { data } = await query;
+      
+      // Buscar nomes dos usuários
+      const logsComUsuarios = await Promise.all((data || []).map(async (log) => {
+        if (log.usuario_id) {
+          const { data: usuario } = await supabase
+            .from('usuarios')
+            .select('nome')
+            .eq('id', log.usuario_id)
+            .single();
+          return { ...log, usuario };
+        }
+        return { ...log, usuario: null };
+      }));
+      
+      setLogs(logsComUsuarios);
+    } catch (error) {
+      console.error('Erro ao buscar logs:', error);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (id) fetchTokenUsage();
+  }, [id, periodoTokens]);
+
+  useEffect(() => {
+    if (id) fetchLogs();
+  }, [id, tipoLogFiltro]);
 
   const handleSaveNome = async () => {
     if (!conta || !editNome.trim()) return;
@@ -185,6 +320,38 @@ export default function AdminContaDetalhe() {
     });
   };
 
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const formatNumber = (num: number) => {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+  };
+
+  const getTipoLogIcon = (tipo: string) => {
+    switch (tipo) {
+      case 'ia_resposta': return '🤖';
+      case 'mensagem_enviada': return '💬';
+      case 'negociacao_criada': return '📊';
+      case 'negociacao_movida': return '📈';
+      case 'conversa_encerrada': return '🔒';
+      case 'conversa_transferida': return '🔀';
+      case 'login': return '🔑';
+      case 'agente_ia_toggle': return '⚡';
+      default: return '📝';
+    }
+  };
+
+  const custoTotal = tokenUsage.reduce((acc, t) => acc + (Number(t.custo_estimado) || 0), 0);
+
   if (loading) {
     return (
       <AdminLayout>
@@ -225,12 +392,13 @@ export default function AdminContaDetalhe() {
         </div>
 
         {/* Métricas */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-5">
           {[
             { label: 'Usuários', value: metricas.usuarios, icon: Users, color: 'text-blue-500' },
             { label: 'Conversas', value: metricas.conversas, icon: MessageSquare, color: 'text-green-500' },
             { label: 'Negociações', value: metricas.negociacoes, icon: TrendingUp, color: 'text-purple-500' },
             { label: 'Contatos', value: metricas.contatos, icon: Phone, color: 'text-orange-500' },
+            { label: 'Tokens', value: formatNumber(metricas.total_tokens), icon: Coins, color: 'text-yellow-500' },
           ].map((stat) => (
             <Card key={stat.label}>
               <CardContent className="flex items-center gap-4 p-4">
@@ -244,101 +412,330 @@ export default function AdminContaDetalhe() {
           ))}
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Informações da Conta */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5" />
-                Informações da Conta
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Nome da Conta</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={editNome}
-                    onChange={(e) => setEditNome(e.target.value)}
-                  />
-                  <Button
-                    onClick={handleSaveNome}
-                    disabled={saving || editNome === conta.nome}
-                  >
-                    <Save className="h-4 w-4" />
-                  </Button>
+        {/* Tabs */}
+        <Tabs defaultValue="info" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="info" className="gap-2">
+              <Building2 className="h-4 w-4" />
+              Info
+            </TabsTrigger>
+            <TabsTrigger value="usuarios" className="gap-2">
+              <Users className="h-4 w-4" />
+              Usuários
+            </TabsTrigger>
+            <TabsTrigger value="tokens" className="gap-2">
+              <Coins className="h-4 w-4" />
+              Tokens
+            </TabsTrigger>
+            <TabsTrigger value="atividades" className="gap-2">
+              <Activity className="h-4 w-4" />
+              Atividades
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Tab Info */}
+          <TabsContent value="info">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5" />
+                  Informações da Conta
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Nome da Conta</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={editNome}
+                      onChange={(e) => setEditNome(e.target.value)}
+                    />
+                    <Button
+                      onClick={handleSaveNome}
+                      disabled={saving || editNome === conta.nome}
+                    >
+                      <Save className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Criada em</Label>
-                <p className="text-muted-foreground">{formatDate(conta.created_at)}</p>
-              </div>
+                
+                <div className="space-y-2">
+                  <Label>Criada em</Label>
+                  <p className="text-muted-foreground">{formatDate(conta.created_at)}</p>
+                </div>
 
-              <Button
-                variant={conta.ativo ? 'destructive' : 'default'}
-                className="w-full"
-                onClick={toggleContaStatus}
-              >
-                <Power className="h-4 w-4 mr-2" />
-                {conta.ativo ? 'Desativar Conta' : 'Ativar Conta'}
-              </Button>
-            </CardContent>
-          </Card>
+                <Button
+                  variant={conta.ativo ? 'destructive' : 'default'}
+                  className="w-full"
+                  onClick={toggleContaStatus}
+                >
+                  <Power className="h-4 w-4 mr-2" />
+                  {conta.ativo ? 'Desativar Conta' : 'Ativar Conta'}
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-          {/* Lista de Usuários */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Usuários ({usuarios.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {usuarios.length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">
-                  Nenhum usuário nesta conta
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {usuarios.map((usuario) => (
-                      <TableRow key={usuario.id}>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{usuario.nome}</p>
-                            <p className="text-xs text-muted-foreground">{usuario.email}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={usuario.is_admin ? 'default' : 'secondary'}>
-                            {usuario.is_admin ? 'Admin' : 'Usuário'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setResetPasswordModal(usuario)}
-                          >
-                            <KeyRound className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
+          {/* Tab Usuários */}
+          <TabsContent value="usuarios">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Usuários ({usuarios.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {usuarios.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-4">
+                    Nenhum usuário nesta conta
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Criado</TableHead>
+                        <TableHead></TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {usuarios.map((usuario) => (
+                        <TableRow key={usuario.id}>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{usuario.nome}</p>
+                              <p className="text-xs text-muted-foreground">{usuario.email}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={usuario.is_admin ? 'default' : 'secondary'}>
+                              {usuario.is_admin ? 'Admin' : 'Usuário'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {formatDate(usuario.created_at)}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setResetPasswordModal(usuario)}
+                            >
+                              <KeyRound className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Tab Tokens */}
+          <TabsContent value="tokens">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Uso de Tokens</h3>
+                <Select value={periodoTokens} onValueChange={setPeriodoTokens}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7">Últimos 7 dias</SelectItem>
+                    <SelectItem value="30">Últimos 30 dias</SelectItem>
+                    <SelectItem value="90">Últimos 90 dias</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Resumo */}
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-primary">
+                        {formatNumber(tokenUsage.reduce((acc, t) => acc + t.total_tokens, 0))}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Total de Tokens</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-green-500">
+                        ${custoTotal.toFixed(4)}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Custo Estimado</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <p className="text-3xl font-bold text-blue-500">
+                        {tokenUsage.length}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Requisições</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Gráfico */}
+              {tokenStats.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Uso ao longo do tempo</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <AreaChart data={tokenStats}>
+                        <XAxis dataKey="data" tick={{ fontSize: 12 }} />
+                        <YAxis tick={{ fontSize: 12 }} />
+                        <Tooltip 
+                          formatter={(value: number) => [formatNumber(value), 'Tokens']}
+                          labelFormatter={(label) => `Data: ${label}`}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="tokens" 
+                          stroke="hsl(var(--primary))" 
+                          fill="hsl(var(--primary) / 0.2)" 
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
               )}
-            </CardContent>
-          </Card>
-        </div>
+
+              {/* Tabela de uso */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Histórico de Uso</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loadingTokens ? (
+                    <div className="flex justify-center py-8">
+                      <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : tokenUsage.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      Nenhum uso de tokens registrado
+                    </p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Data</TableHead>
+                          <TableHead>Provider</TableHead>
+                          <TableHead>Modelo</TableHead>
+                          <TableHead className="text-right">Prompt</TableHead>
+                          <TableHead className="text-right">Completion</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                          <TableHead className="text-right">Custo</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {tokenUsage.slice(0, 20).map((t) => (
+                          <TableRow key={t.id}>
+                            <TableCell className="text-sm">{formatDateTime(t.created_at)}</TableCell>
+                            <TableCell>
+                              <Badge variant={t.provider === 'openai' ? 'default' : 'secondary'}>
+                                {t.provider}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {t.modelo.split('/').pop()}
+                            </TableCell>
+                            <TableCell className="text-right">{t.prompt_tokens}</TableCell>
+                            <TableCell className="text-right">{t.completion_tokens}</TableCell>
+                            <TableCell className="text-right font-medium">{t.total_tokens}</TableCell>
+                            <TableCell className="text-right text-green-600">
+                              ${Number(t.custo_estimado).toFixed(6)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Tab Atividades */}
+          <TabsContent value="atividades">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5" />
+                    Logs de Atividade
+                  </CardTitle>
+                  <Select value={tipoLogFiltro} onValueChange={setTipoLogFiltro}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Filtrar por tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="ia_resposta">Respostas IA</SelectItem>
+                      <SelectItem value="mensagem_enviada">Mensagens</SelectItem>
+                      <SelectItem value="negociacao_criada">Negociações</SelectItem>
+                      <SelectItem value="negociacao_movida">Movimentações</SelectItem>
+                      <SelectItem value="conversa_encerrada">Conversas Encerradas</SelectItem>
+                      <SelectItem value="login">Logins</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {loadingLogs ? (
+                  <div className="flex justify-center py-8">
+                    <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : logs.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    Nenhuma atividade registrada
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {logs.map((log) => (
+                      <div 
+                        key={log.id} 
+                        className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                      >
+                        <span className="text-xl">{getTipoLogIcon(log.tipo)}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{log.descricao || log.tipo}</span>
+                            <Badge variant="outline" className="text-xs">
+                              {log.tipo.replace(/_/g, ' ')}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                            <Calendar className="h-3 w-3" />
+                            <span>{formatDateTime(log.created_at)}</span>
+                            {log.usuario && (
+                              <>
+                                <span>•</span>
+                                <span>{log.usuario.nome}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Modal Reset Password */}
