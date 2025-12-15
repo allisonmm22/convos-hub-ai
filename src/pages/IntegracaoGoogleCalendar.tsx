@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Calendar, Plus, Trash2, RefreshCw, Check, X, Settings } from "lucide-react";
+import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -209,8 +210,8 @@ export default function IntegracaoGoogleCalendar() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container max-w-4xl py-8">
+    <MainLayout>
+      <div className="max-w-4xl py-8">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <Button variant="ghost" size="icon" onClick={() => navigate('/integracoes')}>
@@ -403,6 +404,6 @@ export default function IntegracaoGoogleCalendar() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </MainLayout>
   );
 }
