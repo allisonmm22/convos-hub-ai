@@ -36,6 +36,7 @@ import { AudioRecorder } from '@/components/AudioRecorder';
 import { AudioPlayer } from '@/components/AudioPlayer';
 import { ContatoSidebar } from '@/components/ContatoSidebar';
 import { notifyNewMessage, requestNotificationPermission } from '@/lib/notificationSound';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
 interface Contato {
   id: string;
@@ -135,6 +136,10 @@ export default function Conversas() {
   const [conexao, setConexao] = useState<Conexao | null>(null);
   const [pollingActive, setPollingActive] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Calcular total de mensagens não lidas e atualizar título
+  const totalNaoLidas = conversas.reduce((acc, c) => acc + (c.nao_lidas || 0), 0);
+  useDocumentTitle(totalNaoLidas);
 
   // Buscar conexão WhatsApp
   const fetchConexao = useCallback(async () => {
