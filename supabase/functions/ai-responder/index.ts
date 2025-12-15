@@ -104,7 +104,9 @@ async function executarAgendaLocal(
   supabase: any, 
   supabaseUrl: string, 
   supabaseKey: string, 
-  contaId: string, 
+  contaId: string,
+  conversaId: string,
+  contatoId: string,
   valor: string
 ): Promise<{ sucesso: boolean; mensagem: string; dados?: any }> {
   console.log('Executando ação de agenda local:', valor);
@@ -122,6 +124,7 @@ async function executarAgendaLocal(
     return { sucesso: false, mensagem: 'Nenhum calendário Google conectado' };
   }
   
+  // CONSULTAR disponibilidade
   if (valor === 'consultar' || valor.startsWith('consultar:')) {
     // Consultar disponibilidade para os próximos 7 dias
     const dataInicio = new Date().toISOString();
@@ -197,13 +200,53 @@ async function executarAgendaLocal(
         mensagem: 'Disponibilidade consultada',
         dados: {
           eventos_ocupados: horariosOcupados,
-          horarios_disponiveis: horariosDisponiveis.slice(0, 10), // Limitar a 10 opções
+          horarios_disponiveis: horariosDisponiveis.slice(0, 10),
           calendario_nome: calendario.nome,
         }
       };
     } catch (e) {
       console.error('Erro ao consultar calendário:', e);
       return { sucesso: false, mensagem: 'Erro ao consultar calendário' };
+    }
+  }
+  
+  // CRIAR evento
+  if (valor.startsWith('criar:')) {
+    console.log('Executando criação de evento via executar-acao:', valor);
+    
+    try {
+      const response = await fetch(`${supabaseUrl}/functions/v1/executar-acao`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          acao: { tipo: 'agenda', valor },
+          conversa_id: conversaId,
+          contato_id: contatoId,
+          conta_id: contaId,
+        }),
+      });
+      
+      const resultado = await response.json();
+      console.log('Resultado da criação de evento:', resultado);
+      
+      if (resultado.sucesso) {
+        return {
+          sucesso: true,
+          mensagem: resultado.mensagem || 'Evento criado com sucesso',
+          dados: resultado.dados || {},
+        };
+      } else {
+        return {
+          sucesso: false,
+          mensagem: resultado.mensagem || 'Erro ao criar evento',
+        };
+      }
+    } catch (e) {
+      console.error('Erro ao executar criação de evento:', e);
+      return { sucesso: false, mensagem: 'Erro ao criar evento no calendário' };
     }
   }
   
@@ -272,8 +315,8 @@ async function callOpenAI(
           const args = JSON.parse(toolCall.function.arguments);
           acoes.push(args);
           
-          // Se for ação de agenda:consultar, executar e guardar resultado
-          if (args.tipo === 'agenda' && args.valor?.startsWith('consultar') && executarAgendaFn) {
+          // Se for ação de agenda (consultar OU criar), executar e guardar resultado
+          if (args.tipo === 'agenda' && executarAgendaFn) {
             const resultado = await executarAgendaFn(args.valor);
             toolResults.push({
               tool_call_id: toolCall.id,
@@ -776,24 +819,36 @@ serve(async (req) => {
       promptCompleto += '- @nome:<novo nome> - Alterar o nome do contato/lead (use quando o cliente se identificar)\n';
       promptCompleto += '- @agenda:consultar - Consultar disponibilidade do calendário (próximos 7 dias)\n';
       promptCompleto += '- @agenda:criar:<titulo>|<data_inicio> - Criar evento no calendário com Google Meet (datas em ISO8601)\n';
-      promptCompleto += '\n### INSTRUÇÕES DE AGENDAMENTO\n';
-      promptCompleto += 'Quando o cliente solicitar agendamento:\n';
-      promptCompleto += '1. Use @agenda:consultar para verificar disponibilidade\n';
-      promptCompleto += '2. O sistema retornará os eventos já agendados - calcule os horários livres\n';
-      promptCompleto += '3. Apresente opções de horários disponíveis ao cliente\n';
-      promptCompleto += '4. Após confirmação do horário, use @agenda:criar com titulo e data_inicio em ISO8601\n';
-      promptCompleto += '   Exemplo: @agenda:criar:Reunião com João|2025-01-20T14:00:00-03:00\n';
-      promptCompleto += '5. O sistema criará automaticamente um evento de 1 hora com link do Google Meet\n';
-      promptCompleto += '6. IMPORTANTE: Após criar o evento, SEMPRE envie o link do Google Meet ao cliente!\n';
-      promptCompleto += '   O link estará disponível na resposta da ação. Inclua-o na sua mensagem.\n';
-      promptCompleto += '7. Considere horário comercial (8h-18h) ao sugerir horários\n';
+      promptCompleto += '\n### INSTRUÇÕES DE AGENDAMENTO (MUITO IMPORTANTE)\n';
+      promptCompleto += 'O agendamento DEVE ser feito em ETAPAS SEPARADAS:\n\n';
+      
+      promptCompleto += '**ETAPA 1 - Quando o cliente PERGUNTAR sobre agendamento:**\n';
+      promptCompleto += '- Use @agenda:consultar para verificar disponibilidade\n';
+      promptCompleto += '- O sistema retornará os horários livres\n';
+      promptCompleto += '- Apresente as opções de horários ao cliente\n';
+      promptCompleto += '- PARE e AGUARDE o cliente escolher um horário\n';
+      promptCompleto += '- NÃO diga "vou agendar" nesta etapa - apenas ofereça as opções!\n\n';
+      
+      promptCompleto += '**ETAPA 2 - SOMENTE após o cliente CONFIRMAR um horário específico:**\n';
+      promptCompleto += '- QUANDO o cliente disser "pode ser às Xh", "confirmo", "esse horário", "pode agendar", etc.\n';
+      promptCompleto += '- ENTÃO use @agenda:criar:<titulo>|<data_inicio> para criar o evento\n';
+      promptCompleto += '- Exemplo: @agenda:criar:Reunião com João|2025-01-20T14:00:00-03:00\n';
+      promptCompleto += '- O sistema criará evento de 1 hora com link do Google Meet\n';
+      promptCompleto += '- O resultado incluirá o campo "meet_link" - SEMPRE inclua este link na sua resposta!\n';
+      promptCompleto += '- Considere horário comercial (8h-18h)\n\n';
+      
+      promptCompleto += '**COMPORTAMENTO OBRIGATÓRIO:**\n';
+      promptCompleto += '- NUNCA execute @agenda:criar se o cliente apenas perguntou sobre horários\n';
+      promptCompleto += '- NUNCA diga "vou agendar" ou "só um momento" antes do cliente confirmar\n';
+      promptCompleto += '- SEMPRE espere confirmação explícita antes de criar o evento\n';
+      promptCompleto += '- SEMPRE inclua o link do Google Meet na resposta após criar o evento\n';
+      
       promptCompleto += '\nQuando identificar que uma ação deve ser executada baseado no contexto da conversa, use a ferramenta executar_acao.\n';
       promptCompleto += '\n## REGRAS IMPORTANTES\n';
       promptCompleto += '- NUNCA mencione ao cliente que está executando ações internas como transferências, mudanças de etapa, tags, etc.\n';
       promptCompleto += '- NUNCA inclua comandos @ na sua resposta ao cliente (ex: @transferir, @etapa, @tag).\n';
       promptCompleto += '- As ações são executadas silenciosamente em background. Mantenha o fluxo natural da conversa.\n';
       promptCompleto += '- Quando transferir para outro agente, apenas se despeça naturalmente sem mencionar a transferência.\n';
-      promptCompleto += '- Quando criar um agendamento, SEMPRE inclua o link do Google Meet na resposta ao cliente.\n';
     }
 
     // Adicionar restrições absolutas de escopo
@@ -861,7 +916,7 @@ serve(async (req) => {
 
     // Criar função de execução de agenda para passar para as chamadas de IA
     const executarAgendaFn = async (valor: string) => {
-      return await executarAgendaLocal(supabase, supabaseUrl, supabaseKey, conta_id, valor);
+      return await executarAgendaLocal(supabase, supabaseUrl, supabaseKey, conta_id, conversa_id, contatoId, valor);
     };
 
     let result: AIResponse;
