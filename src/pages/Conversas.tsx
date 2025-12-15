@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import {
   Search,
@@ -102,6 +103,8 @@ type StatusFilter = 'todos' | 'em_atendimento' | 'aguardando_cliente' | 'encerra
 
 export default function Conversas() {
   const { usuario } = useAuth();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [conversaSelecionada, setConversaSelecionada] = useState<Conversa | null>(null);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
@@ -231,6 +234,21 @@ export default function Conversas() {
   useEffect(() => {
     conversaSelecionadaRef.current = conversaSelecionada;
   }, [conversaSelecionada]);
+
+  // Auto-selecionar conversa quando vier contato_id na URL
+  useEffect(() => {
+    const contatoIdFromUrl = searchParams.get('contato');
+    if (contatoIdFromUrl && conversas.length > 0 && !loading) {
+      const conversaDoContato = conversas.find(c => c.contato_id === contatoIdFromUrl);
+      if (conversaDoContato) {
+        setConversaSelecionada(conversaDoContato);
+      } else {
+        toast.info('Este contato ainda não possui conversa ativa');
+      }
+      // Limpar o parâmetro da URL após processar
+      navigate('/conversas', { replace: true });
+    }
+  }, [searchParams, conversas, loading, navigate]);
 
   useEffect(() => {
     if (conversaSelecionada) {

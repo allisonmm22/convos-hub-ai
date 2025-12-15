@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Calendar, Plus, Clock, Check, Loader2, ChevronLeft, ChevronRight, X, Pencil, Trash2, Video } from 'lucide-react';
+import { Calendar, Plus, Clock, Check, Loader2, ChevronLeft, ChevronRight, X, Pencil, Trash2, Video, MessageSquare } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -25,6 +26,7 @@ const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 export default function Agendamentos() {
   const { usuario } = useAuth();
+  const navigate = useNavigate();
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -571,10 +573,18 @@ export default function Agendamentos() {
                                   <Clock className="h-3 w-3" />
                                   {formatTime(agendamento.data_inicio)}
                                 </div>
-                                {agendamento.contatos && (
-                                  <span className="text-xs text-primary">
+                                {agendamento.contatos && agendamento.contato_id && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigate(`/conversas?contato=${agendamento.contato_id}`);
+                                    }}
+                                    className="flex items-center gap-1 text-xs text-primary hover:underline"
+                                    title="Abrir conversa"
+                                  >
+                                    <MessageSquare className="h-3 w-3" />
                                     {agendamento.contatos.nome}
-                                  </span>
+                                  </button>
                                 )}
                               </div>
                               {agendamento.google_meet_link && (
