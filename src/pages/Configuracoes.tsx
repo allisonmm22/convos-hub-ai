@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { User, Building, Save, Loader2 } from 'lucide-react';
+import { User, Building, Save, Loader2, Bell, Volume2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { useNotificationPreferences } from '@/hooks/useNotificationPreferences';
+import { requestNotificationPermission } from '@/lib/notificationSound';
 
 export default function Configuracoes() {
   const { usuario } = useAuth();
@@ -15,6 +17,13 @@ export default function Configuracoes() {
   const [contaData, setContaData] = useState({
     nome: '',
   });
+
+  const { 
+    soundEnabled, 
+    browserEnabled, 
+    setSoundEnabled, 
+    setBrowserEnabled 
+  } = useNotificationPreferences();
 
   useEffect(() => {
     if (usuario) {
@@ -70,6 +79,23 @@ export default function Configuracoes() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleBrowserNotificationToggle = async (enabled: boolean) => {
+    if (enabled) {
+      const granted = await requestNotificationPermission();
+      if (!granted) {
+        toast.error('Permissão de notificação negada pelo navegador');
+        return;
+      }
+    }
+    setBrowserEnabled(enabled);
+    toast.success(enabled ? 'Notificações do navegador ativadas' : 'Notificações do navegador desativadas');
+  };
+
+  const handleSoundToggle = (enabled: boolean) => {
+    setSoundEnabled(enabled);
+    toast.success(enabled ? 'Notificações sonoras ativadas' : 'Notificações sonoras desativadas');
   };
 
   return (
@@ -133,6 +159,71 @@ export default function Configuracoes() {
               </>
             )}
           </button>
+        </div>
+
+        {/* Notificações */}
+        <div className="p-6 rounded-xl bg-card border border-border space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20">
+              <Bell className="h-5 w-5 text-blue-500" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Notificações</h2>
+              <p className="text-sm text-muted-foreground">Configure alertas de novas mensagens</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {/* Som */}
+            <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center gap-3">
+                <Volume2 className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium text-foreground">Notificação Sonora</p>
+                  <p className="text-sm text-muted-foreground">Tocar som quando nova mensagem chegar</p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleSoundToggle(!soundEnabled)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  soundEnabled ? 'bg-primary' : 'bg-muted-foreground/30'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    soundEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Browser */}
+            <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center gap-3">
+                <Bell className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium text-foreground">Notificação do Navegador</p>
+                  <p className="text-sm text-muted-foreground">Mostrar notificação push no navegador</p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleBrowserNotificationToggle(!browserEnabled)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  browserEnabled ? 'bg-primary' : 'bg-muted-foreground/30'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    browserEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            As notificações são enviadas apenas para conversas atendidas por humanos.
+          </p>
         </div>
 
         {/* Conta */}

@@ -1,7 +1,12 @@
+import { getNotificationPreferences } from '@/hooks/useNotificationPreferences';
+
 // Notification sound utility using Web Audio API
 let audioContext: AudioContext | null = null;
 
 export const playNotificationSound = () => {
+  const { soundEnabled } = getNotificationPreferences();
+  if (!soundEnabled) return;
+
   try {
     // Create audio context on first use (browser requirement)
     if (!audioContext) {
@@ -79,6 +84,9 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
 
 // Show browser notification
 export const showBrowserNotification = (title: string, body: string, onClick?: () => void) => {
+  const { browserEnabled } = getNotificationPreferences();
+  if (!browserEnabled) return;
+  
   if (!('Notification' in window) || Notification.permission !== 'granted') {
     return;
   }
