@@ -1431,11 +1431,26 @@ export default function Conversas() {
                                 <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-border/50 bg-background hover:bg-muted text-sm transition-all">
                                   <div className="flex items-center gap-2">
                                     <Tag className="h-4 w-4 text-muted-foreground" />
-                                    <span className="text-foreground">
-                                      {tagsFilter.length > 0 
-                                        ? `${tagsFilter.length} tag(s)` 
-                                        : 'Selecionar tags'}
-                                    </span>
+                                    {tagsFilter.length > 0 ? (
+                                      <div className="flex items-center gap-1.5">
+                                        {tagsFilter.slice(0, 3).map((tagNome) => {
+                                          const tag = tagsDisponiveis.find(t => t.nome === tagNome);
+                                          return tag ? (
+                                            <div
+                                              key={tag.id}
+                                              className="h-4 w-4 rounded-full shrink-0 ring-2 ring-background"
+                                              style={{ backgroundColor: tag.cor }}
+                                              title={tag.nome}
+                                            />
+                                          ) : null;
+                                        })}
+                                        {tagsFilter.length > 3 && (
+                                          <span className="text-xs text-muted-foreground">+{tagsFilter.length - 3}</span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <span className="text-foreground">Selecionar tags</span>
+                                    )}
                                   </div>
                                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
                                 </button>

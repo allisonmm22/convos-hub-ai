@@ -169,11 +169,26 @@ export default function Contatos() {
               <PopoverTrigger asChild>
                 <button className="h-10 px-4 rounded-lg border border-border bg-card hover:bg-muted flex items-center gap-2 text-sm transition-all">
                   <Tag className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-foreground">
-                    {tagsSelecionadas.length > 0 
-                      ? `${tagsSelecionadas.length} tag(s) selecionada(s)` 
-                      : 'Filtrar por tags'}
-                  </span>
+                  {tagsSelecionadas.length > 0 ? (
+                    <div className="flex items-center gap-1.5">
+                      {tagsSelecionadas.slice(0, 4).map((tagNome) => {
+                        const tag = tagsDisponiveis.find(t => t.nome === tagNome);
+                        return tag ? (
+                          <div
+                            key={tag.id}
+                            className="h-4 w-4 rounded-full shrink-0 ring-2 ring-card"
+                            style={{ backgroundColor: tag.cor }}
+                            title={tag.nome}
+                          />
+                        ) : null;
+                      })}
+                      {tagsSelecionadas.length > 4 && (
+                        <span className="text-xs text-muted-foreground">+{tagsSelecionadas.length - 4}</span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-foreground">Filtrar por tags</span>
+                  )}
                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
                 </button>
               </PopoverTrigger>
