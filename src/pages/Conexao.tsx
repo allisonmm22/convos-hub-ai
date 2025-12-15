@@ -44,8 +44,11 @@ export default function Conexao() {
 
       if (data) {
         setConexao(data);
-        if (data.qrcode) {
+        // Só mostra QR code se NÃO estiver conectado
+        if (data.qrcode && data.status !== 'conectado') {
           setQrCode(data.qrcode);
+        } else {
+          setQrCode(null);
         }
       }
     } catch (error) {
@@ -369,7 +372,7 @@ export default function Conexao() {
         )}
 
         {/* QR Code - Se aguardando */}
-        {conexao && (conexao.status === 'aguardando' || qrCode) && qrCode && (
+        {conexao && conexao.status === 'aguardando' && qrCode && (
           <div className="p-6 rounded-xl bg-card border border-border space-y-4">
             <h2 className="text-lg font-semibold text-foreground text-center">
               Escaneie o QR Code
