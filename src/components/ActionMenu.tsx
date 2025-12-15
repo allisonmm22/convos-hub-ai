@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { 
-  ArrowRight, Tag, UserRound, Bell, XCircle, Layers, Search
+  ArrowRight, Tag, UserRound, Bell, XCircle, Layers, Search, UserPen
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,7 +14,7 @@ interface Estagio {
 
 interface ActionOption {
   id: string;
-  type: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar';
+  type: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome';
   label: string;
   description: string;
   icon: React.ElementType;
@@ -39,6 +39,13 @@ export function ActionMenu({ isOpen, onClose, onSelect, position, searchTerm }: 
 
   // Ações padrão
   const defaultActions: ActionOption[] = [
+    {
+      id: 'nome',
+      type: 'nome',
+      label: '@nome:',
+      description: 'Alterar nome do contato/lead',
+      icon: UserPen,
+    },
     {
       id: 'tag',
       type: 'tag',

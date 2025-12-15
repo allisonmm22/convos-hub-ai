@@ -25,13 +25,13 @@ interface AIResponse {
 }
 
 interface Acao {
-  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar';
+  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome';
   valor?: string;
 }
 
 // Parser de ações do prompt
 function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: Acao[] } {
-  const acoesRegex = /@(etapa|tag|transferir|notificar|finalizar)(?::([^\s@]+))?/gi;
+  const acoesRegex = /@(etapa|tag|transferir|notificar|finalizar|nome)(?::([^\s@]+))?/gi;
   const matches = [...texto.matchAll(acoesRegex)];
   
   const acoes: string[] = [];
@@ -512,6 +512,7 @@ serve(async (req) => {
       promptCompleto += '- @transferir:ia - Devolver a conversa para o agente IA\n';
       promptCompleto += '- @notificar - Enviar notificação para a equipe\n';
       promptCompleto += '- @finalizar - Encerrar a conversa\n';
+      promptCompleto += '- @nome:<novo nome> - Alterar o nome do contato/lead (use quando o cliente se identificar)\n';
       promptCompleto += '\nQuando identificar que uma ação deve ser executada baseado no contexto da conversa, use a ferramenta executar_acao.\n';
     }
 
@@ -545,18 +546,18 @@ serve(async (req) => {
         type: 'function',
         function: {
           name: 'executar_acao',
-          description: 'Executa uma ação automatizada como mover lead para etapa do CRM, adicionar tag, transferir conversa, etc.',
+          description: 'Executa uma ação automatizada como mover lead para etapa do CRM, adicionar tag, transferir conversa, alterar nome do contato, etc.',
           parameters: {
             type: 'object',
             properties: {
               tipo: {
                 type: 'string',
-                enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar'],
-                description: 'Tipo da ação a ser executada',
+                enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar', 'nome'],
+                description: 'Tipo da ação a ser executada. Use "nome" para alterar o nome do contato quando ele se identificar.',
               },
               valor: {
                 type: 'string',
-                description: 'Valor associado à ação (ID da etapa, nome da tag, destino da transferência)',
+                description: 'Valor associado à ação (ID da etapa, nome da tag, destino da transferência, novo nome do contato)',
               },
             },
             required: ['tipo'],
