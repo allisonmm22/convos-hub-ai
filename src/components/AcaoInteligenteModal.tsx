@@ -152,6 +152,7 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
   const [estagios, setEstagios] = useState<Estagio[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [agentes, setAgentes] = useState<{ id: string; nome: string }[]>([]);
+  const [calendarios, setCalendarios] = useState<{ id: string; nome: string }[]>([]);
   
   const [tagValue, setTagValue] = useState('');
   const [funilSelecionado, setFunilSelecionado] = useState('');
@@ -162,6 +163,7 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
   const [notificacaoValue, setNotificacaoValue] = useState('');
   const [produtoValue, setProdutoValue] = useState('');
   const [negociacaoValor, setNegociacaoValor] = useState('');
+  const [calendarioSelecionado, setCalendarioSelecionado] = useState('');
 
   useEffect(() => {
     if (!isOpen) {
@@ -175,6 +177,7 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
       setNotificacaoValue('');
       setProdutoValue('');
       setNegociacaoValor('');
+      setCalendarioSelecionado('');
     }
   }, [isOpen]);
 
@@ -187,7 +190,7 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [funisRes, usuariosRes, agentesRes] = await Promise.all([
+      const [funisRes, usuariosRes, agentesRes, calendariosRes] = await Promise.all([
         supabase
           .from('funis')
           .select('id, nome')
@@ -202,11 +205,17 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
           .select('id, nome')
           .eq('conta_id', usuario!.conta_id)
           .eq('tipo', 'secundario'),
+        supabase
+          .from('calendarios_google')
+          .select('id, nome')
+          .eq('conta_id', usuario!.conta_id)
+          .eq('ativo', true),
       ]);
 
       if (funisRes.data) setFunis(funisRes.data);
       if (usuariosRes.data) setUsuarios(usuariosRes.data);
       if (agentesRes.data) setAgentes(agentesRes.data);
+      if (calendariosRes.data) setCalendarios(calendariosRes.data);
 
       if (funisRes.data && funisRes.data.length > 0) {
         const { data: estagiosData } = await supabase
@@ -246,9 +255,10 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
         return produtoValue.trim().length > 0;
       case 'finalizar':
       case 'nome':
+        return true;
       case 'agenda-consultar':
       case 'agenda-criar':
-        return true;
+        return calendarioSelecionado !== '';
       default:
         return false;
     }
@@ -299,10 +309,16 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
         return '@finalizar';
       case 'nome':
         return '@nome';
-      case 'agenda-consultar':
-        return '@agenda:consultar';
-      case 'agenda-criar':
-        return '@agenda:criar';
+      case 'agenda-consultar': {
+        const cal = calendarios.find(c => c.id === calendarioSelecionado);
+        const calSlug = cal?.nome.toLowerCase().replace(/\s+/g, '-') || calendarioSelecionado;
+        return `@agenda:consultar:${calSlug}`;
+      }
+      case 'agenda-criar': {
+        const cal = calendarios.find(c => c.id === calendarioSelecionado);
+        const calSlug = cal?.nome.toLowerCase().replace(/\s+/g, '-') || calendarioSelecionado;
+        return `@agenda:criar:${calSlug}`;
+      }
       default:
         return '';
     }
@@ -600,26 +616,66 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
                 )}
 
                 {tipoSelecionado === 'agenda-consultar' && (
-                  <div className="p-4 rounded-lg bg-muted/50 border border-border">
-                    <p className="text-sm text-foreground mb-2">
-                      🔍 <strong>Consultar Disponibilidade</strong>
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      O agente IA irá consultar o Google Calendar para verificar 
-                      horários disponíveis e informar ao lead as opções de agendamento.
-                    </p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Selecione o Calendário</label>
+                      <select
+                        value={calendarioSelecionado}
+                        onChange={(e) => setCalendarioSelecionado(e.target.value)}
+                        className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">Selecione um calendário...</option>
+                        {calendarios.map(c => (
+                          <option key={c.id} value={c.id}>{c.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="p-4 rounded-lg bg-sky-100 dark:bg-sky-900/30 border border-sky-300 dark:border-sky-700">
+                      <p className="text-sm text-sky-700 dark:text-sky-300 mb-1">
+                        🔍 <strong>Consultar Disponibilidade</strong>
+                      </p>
+                      <p className="text-xs text-sky-600 dark:text-sky-400">
+                        O agente IA irá consultar o Google Calendar para verificar 
+                        horários disponíveis e informar ao lead as opções de agendamento.
+                      </p>
+                    </div>
+                    {calendarios.length === 0 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        ⚠️ Nenhum calendário conectado. Conecte um Google Calendar nas configurações.
+                      </p>
+                    )}
                   </div>
                 )}
 
                 {tipoSelecionado === 'agenda-criar' && (
-                  <div className="p-4 rounded-lg bg-muted/50 border border-border">
-                    <p className="text-sm text-foreground mb-2">
-                      📅 <strong>Criar Evento</strong>
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      O agente IA irá criar um evento no Google Calendar com os 
-                      detalhes do agendamento acordado com o lead durante a conversa.
-                    </p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Selecione o Calendário</label>
+                      <select
+                        value={calendarioSelecionado}
+                        onChange={(e) => setCalendarioSelecionado(e.target.value)}
+                        className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">Selecione um calendário...</option>
+                        {calendarios.map(c => (
+                          <option key={c.id} value={c.id}>{c.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="p-4 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-300 dark:border-emerald-700">
+                      <p className="text-sm text-emerald-700 dark:text-emerald-300 mb-1">
+                        📅 <strong>Criar Evento</strong>
+                      </p>
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                        O agente IA irá criar um evento no Google Calendar com os 
+                        detalhes do agendamento acordado com o lead durante a conversa.
+                      </p>
+                    </div>
+                    {calendarios.length === 0 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        ⚠️ Nenhum calendário conectado. Conecte um Google Calendar nas configurações.
+                      </p>
+                    )}
                   </div>
                 )}
 

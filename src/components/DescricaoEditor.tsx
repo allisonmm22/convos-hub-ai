@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
-import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen, Handshake, X } from 'lucide-react';
+import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen, Handshake, X, CalendarSearch, CalendarPlus } from 'lucide-react';
 
 interface DescricaoEditorProps {
   value: string;
@@ -131,6 +131,46 @@ function parseAcao(acao: string): ChipConfig {
     };
   }
   
+  // Agenda - Consultar
+  if (acaoLower.startsWith('@agenda:consultar:')) {
+    const valor = acao.replace(/^@agenda:consultar:/i, '');
+    return {
+      icon: CalendarSearch,
+      label: `Consultar Agenda: ${valor}`,
+      colorClass: 'text-sky-700 dark:text-sky-400',
+      bgClass: 'bg-sky-100 dark:bg-sky-900/40 border-sky-300 dark:border-sky-700',
+    };
+  }
+  
+  if (acaoLower === '@agenda:consultar') {
+    return {
+      icon: CalendarSearch,
+      label: 'Consultar Agenda',
+      colorClass: 'text-sky-700 dark:text-sky-400',
+      bgClass: 'bg-sky-100 dark:bg-sky-900/40 border-sky-300 dark:border-sky-700',
+    };
+  }
+  
+  // Agenda - Criar
+  if (acaoLower.startsWith('@agenda:criar:')) {
+    const valor = acao.replace(/^@agenda:criar:/i, '');
+    return {
+      icon: CalendarPlus,
+      label: `Criar Evento: ${valor}`,
+      colorClass: 'text-emerald-700 dark:text-emerald-400',
+      bgClass: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700',
+    };
+  }
+  
+  if (acaoLower === '@agenda:criar') {
+    return {
+      icon: CalendarPlus,
+      label: 'Criar Evento',
+      colorClass: 'text-emerald-700 dark:text-emerald-400',
+      bgClass: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700',
+    };
+  }
+  
   return {
     icon: Tag,
     label: acao,
@@ -140,7 +180,7 @@ function parseAcao(acao: string): ChipConfig {
 }
 
 // Regex para encontrar ações no texto
-const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao)(:[^\s@<>.,;!?]+)?/gi;
+const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao|agenda)(:[^\s@<>.,;!?]+)?/gi;
 
 // Componente ActionChip inline
 function ActionChip({ action, onRemove }: { action: string; onRemove?: () => void }) {
