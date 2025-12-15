@@ -978,7 +978,7 @@ export default function Conversas() {
 
   return (
     <MainLayout>
-      <div className="h-[calc(100vh-7rem)] flex rounded-xl overflow-hidden bg-card border border-border animate-fade-in">
+      <div className="h-[calc(100vh-3rem)] flex rounded-xl overflow-hidden bg-card border border-border animate-fade-in">
         {/* Lista de Conversas */}
         <div className="w-96 border-r border-border flex flex-col bg-card/50">
           {/* Header */}
