@@ -258,12 +258,13 @@ export default function Conexao() {
 
     setDeleting(true);
     try {
-      const { error } = await supabase
-        .from('conexoes_whatsapp')
-        .delete()
-        .eq('id', conexao.id);
+      // Chamar Edge Function que deleta da Evolution API e do banco
+      const { data, error } = await supabase.functions.invoke('evolution-delete-instance', {
+        body: { conexao_id: conexao.id }
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast.success('Conexão deletada com sucesso');
       setConexao(null);
