@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface Acao {
-  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao';
+  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda';
   valor?: string;
 }
 
@@ -36,6 +36,13 @@ function gerarMensagemSistema(tipo: string, valor: string | undefined, resultado
       return `✏️ Nome do contato alterado para "${valor}"`;
     case 'negociacao':
       return `💼 Nova negociação criada: ${valor || 'Lead'}`;
+    case 'agenda':
+      if (valor === 'consultar') {
+        return `📅 Agenda consultada para verificar disponibilidade`;
+      } else if (valor?.startsWith('criar:')) {
+        return `📅 Evento criado na agenda: ${valor.replace('criar:', '')}`;
+      }
+      return `📅 Ação de agenda executada`;
     default:
       return `⚙️ Ação executada: ${tipo}`;
   }
@@ -550,6 +557,100 @@ serve(async (req) => {
 
         if (error) throw error;
         resultado = { sucesso: true, mensagem: `Nova negociação criada: ${contato?.nome || 'Lead'}` };
+        break;
+      }
+
+      case 'agenda': {
+        // Ações do Google Calendar
+        const subacao = acaoObj.valor || '';
+        console.log('Executando ação de agenda:', subacao);
+        
+        // Buscar calendário ativo da conta
+        const { data: calendario } = await supabase
+          .from('calendarios_google')
+          .select('id')
+          .eq('conta_id', conta_id)
+          .eq('ativo', true)
+          .limit(1)
+          .single();
+        
+        if (!calendario) {
+          resultado = { sucesso: false, mensagem: 'Nenhum calendário Google conectado. Configure em Integrações.' };
+          break;
+        }
+        
+        if (subacao === 'consultar') {
+          // Consultar disponibilidade
+          const dataInicio = new Date().toISOString();
+          const dataFim = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+          
+          const calendarResponse = await fetch(`${supabaseUrl}/functions/v1/google-calendar-actions`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              operacao: 'consultar',
+              calendario_id: calendario.id,
+              dados: { data_inicio: dataInicio, data_fim: dataFim },
+            }),
+          });
+          
+          const calendarResult = await calendarResponse.json();
+          
+          if (calendarResult.error) {
+            resultado = { sucesso: false, mensagem: calendarResult.error };
+          } else {
+            resultado = { 
+              sucesso: true, 
+              mensagem: `Disponibilidade consultada: ${calendarResult.total || 0} eventos encontrados`,
+            };
+          }
+        } else if (subacao.startsWith('criar:')) {
+          // Criar evento
+          // Formato esperado: criar:titulo|data_inicio|data_fim
+          const dadosEvento = subacao.replace('criar:', '');
+          const [titulo, dataInicio, dataFim] = dadosEvento.split('|');
+          
+          // Buscar nome do contato para incluir no evento
+          const { data: contatoData } = await supabase
+            .from('contatos')
+            .select('nome, telefone')
+            .eq('id', contato_id)
+            .single();
+          
+          const calendarResponse = await fetch(`${supabaseUrl}/functions/v1/google-calendar-actions`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              operacao: 'criar',
+              calendario_id: calendario.id,
+              dados: {
+                titulo: titulo || `Reunião com ${contatoData?.nome || 'Lead'}`,
+                descricao: `Agendamento realizado via WhatsApp\nContato: ${contatoData?.nome || 'Lead'}\nTelefone: ${contatoData?.telefone || 'N/A'}`,
+                data_inicio: dataInicio || new Date().toISOString(),
+                data_fim: dataFim || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+              },
+            }),
+          });
+          
+          const calendarResult = await calendarResponse.json();
+          
+          if (calendarResult.error) {
+            resultado = { sucesso: false, mensagem: calendarResult.error };
+          } else {
+            resultado = { 
+              sucesso: true, 
+              mensagem: `Evento criado: ${titulo || 'Reunião'}`,
+            };
+          }
+        } else {
+          resultado = { sucesso: false, mensagem: 'Subação de agenda não reconhecida' };
+        }
         break;
       }
 

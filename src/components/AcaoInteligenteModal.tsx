@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   Tag, UserRound, Bot, Globe, Layers, Bell, Package, StopCircle,
-  Check, AlertCircle, Loader2, UserPen, Handshake
+  Check, AlertCircle, Loader2, UserPen, Handshake, CalendarSearch, CalendarPlus
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -125,6 +125,22 @@ const tiposAcao: AcaoTipo[] = [
     color: 'hsl(var(--chart-2))',
     bgColor: 'hsl(var(--chart-2) / 0.1)',
   },
+  {
+    id: 'agenda-consultar',
+    label: 'Consultar Agenda',
+    description: 'Verifica disponibilidade no Google Calendar',
+    icon: CalendarSearch,
+    color: 'hsl(200 80% 50%)',
+    bgColor: 'hsl(200 80% 50% / 0.1)',
+  },
+  {
+    id: 'agenda-criar',
+    label: 'Criar Evento',
+    description: 'Cria evento no Google Calendar',
+    icon: CalendarPlus,
+    color: 'hsl(150 80% 40%)',
+    bgColor: 'hsl(150 80% 40% / 0.1)',
+  },
 ];
 
 export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoInteligenteModalProps) {
@@ -230,6 +246,8 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
         return produtoValue.trim().length > 0;
       case 'finalizar':
       case 'nome':
+      case 'agenda-consultar':
+      case 'agenda-criar':
         return true;
       default:
         return false;
@@ -281,6 +299,10 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
         return '@finalizar';
       case 'nome':
         return '@nome';
+      case 'agenda-consultar':
+        return '@agenda:consultar';
+      case 'agenda-criar':
+        return '@agenda:criar';
       default:
         return '';
     }
@@ -573,6 +595,30 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
                     <p className="text-xs text-muted-foreground">
                       O agente IA irá extrair automaticamente o nome do lead quando ele 
                       se identificar durante a conversa e salvará no cadastro do contato.
+                    </p>
+                  </div>
+                )}
+
+                {tipoSelecionado === 'agenda-consultar' && (
+                  <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-sm text-foreground mb-2">
+                      🔍 <strong>Consultar Disponibilidade</strong>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      O agente IA irá consultar o Google Calendar para verificar 
+                      horários disponíveis e informar ao lead as opções de agendamento.
+                    </p>
+                  </div>
+                )}
+
+                {tipoSelecionado === 'agenda-criar' && (
+                  <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-sm text-foreground mb-2">
+                      📅 <strong>Criar Evento</strong>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      O agente IA irá criar um evento no Google Calendar com os 
+                      detalhes do agendamento acordado com o lead durante a conversa.
                     </p>
                   </div>
                 )}
