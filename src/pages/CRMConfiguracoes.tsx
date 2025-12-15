@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { ArrowLeft, Plus, Trash2, Edit2, GripVertical, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Edit2, GripVertical, Loader2, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 
 interface Estagio {
   id: string;
@@ -45,6 +46,7 @@ export default function CRMConfiguracoes() {
   const [funis, setFunis] = useState<Funil[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedFunil, setExpandedFunil] = useState<string | null>(null);
+  const [permitirMultiplas, setPermitirMultiplas] = useState(true);
   
   // Modal states
   const [funilModalOpen, setFunilModalOpen] = useState(false);
@@ -61,8 +63,40 @@ export default function CRMConfiguracoes() {
   useEffect(() => {
     if (usuario?.conta_id) {
       fetchFunis();
+      fetchContaConfig();
     }
   }, [usuario]);
+
+  const fetchContaConfig = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('contas')
+        .select('permitir_multiplas_negociacoes')
+        .eq('id', usuario!.conta_id)
+        .single();
+      
+      if (error) throw error;
+      setPermitirMultiplas(data?.permitir_multiplas_negociacoes ?? true);
+    } catch (error) {
+      console.error('Erro ao buscar config da conta:', error);
+    }
+  };
+
+  const handleToggleMultiplas = async (checked: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('contas')
+        .update({ permitir_multiplas_negociacoes: checked })
+        .eq('id', usuario!.conta_id);
+      
+      if (error) throw error;
+      setPermitirMultiplas(checked);
+      toast.success(checked ? 'Múltiplas negociações habilitadas' : 'Múltiplas negociações desabilitadas');
+    } catch (error) {
+      console.error('Erro ao atualizar config:', error);
+      toast.error('Erro ao atualizar configuração');
+    }
+  };
 
   const fetchFunis = async () => {
     try {
@@ -306,6 +340,27 @@ export default function CRMConfiguracoes() {
             <Plus className="h-4 w-4" />
             Novo Funil
           </Button>
+        </div>
+
+        {/* Configurações Gerais */}
+        <div className="border border-border rounded-xl bg-card p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Settings className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold text-foreground">Configurações Gerais</h2>
+          </div>
+          
+          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+            <div className="space-y-1">
+              <p className="font-medium text-foreground">Permitir múltiplas negociações por lead</p>
+              <p className="text-sm text-muted-foreground">
+                Se desativado, impede criar nova negociação quando o lead já possui uma em aberto
+              </p>
+            </div>
+            <Switch 
+              checked={permitirMultiplas} 
+              onCheckedChange={handleToggleMultiplas} 
+            />
+          </div>
         </div>
 
         {/* Lista de Funis */}

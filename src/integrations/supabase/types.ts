@@ -100,7 +100,6 @@ export type Database = {
           mensagem_fora_horario: string | null
           modelo: string | null
           nome: string | null
-          permitir_multiplas_negociacoes: boolean | null
           prompt_sistema: string | null
           temperatura: number | null
           tempo_espera_segundos: number | null
@@ -122,7 +121,6 @@ export type Database = {
           mensagem_fora_horario?: string | null
           modelo?: string | null
           nome?: string | null
-          permitir_multiplas_negociacoes?: boolean | null
           prompt_sistema?: string | null
           temperatura?: number | null
           tempo_espera_segundos?: number | null
@@ -144,7 +142,6 @@ export type Database = {
           mensagem_fora_horario?: string | null
           modelo?: string | null
           nome?: string | null
-          permitir_multiplas_negociacoes?: boolean | null
           prompt_sistema?: string | null
           temperatura?: number | null
           tempo_espera_segundos?: number | null
@@ -373,6 +370,7 @@ export type Database = {
           id: string
           nome: string
           openai_api_key: string | null
+          permitir_multiplas_negociacoes: boolean | null
           updated_at: string
         }
         Insert: {
@@ -380,6 +378,7 @@ export type Database = {
           id?: string
           nome: string
           openai_api_key?: string | null
+          permitir_multiplas_negociacoes?: boolean | null
           updated_at?: string
         }
         Update: {
@@ -387,6 +386,7 @@ export type Database = {
           id?: string
           nome?: string
           openai_api_key?: string | null
+          permitir_multiplas_negociacoes?: boolean | null
           updated_at?: string
         }
         Relationships: []
