@@ -11,6 +11,7 @@ interface Usuario {
   avatar_url: string | null;
   is_admin: boolean;
   role?: 'admin' | 'atendente';
+  assinatura_ativa?: boolean;
 }
 
 interface AuthContextType {
@@ -82,6 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUsuario({
           ...data,
           role: roleData?.role as 'admin' | 'atendente' | undefined,
+          assinatura_ativa: data.assinatura_ativa ?? true,
         });
       } else {
         setUsuario(null);
