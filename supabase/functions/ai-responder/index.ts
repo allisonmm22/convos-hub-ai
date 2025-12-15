@@ -350,12 +350,16 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { conversa_id, mensagem, conta_id } = await req.json();
+    const { conversa_id, mensagem, conta_id, mensagem_tipo, transcricao } = await req.json();
 
     console.log('=== AI RESPONDER ===');
     console.log('Conversa ID:', conversa_id);
     console.log('Conta ID:', conta_id);
     console.log('Mensagem recebida:', mensagem);
+    console.log('Tipo de mensagem:', mensagem_tipo || 'texto');
+    if (transcricao) {
+      console.log('Transcrição de áudio:', transcricao.substring(0, 100));
+    }
 
     // 1. Buscar API Key da OpenAI da conta (opcional agora)
     const { data: conta } = await supabase
@@ -554,6 +558,13 @@ serve(async (req) => {
     promptCompleto += `- Horário atual: ${hora}:${minuto} (horário de Brasília)\n`;
     promptCompleto += `- Período do dia: ${periodo}\n`;
     promptCompleto += `\nUse estas informações para cumprimentos apropriados (Bom dia/Boa tarde/Boa noite) e referências temporais.\n`;
+
+    // Adicionar contexto de mídia se for áudio com transcrição
+    if (mensagem_tipo === 'audio' && transcricao) {
+      promptCompleto += `\n\n## CONTEXTO DE MÍDIA\n`;
+      promptCompleto += `O lead enviou um áudio. Transcrição do áudio:\n"${transcricao}"\n\n`;
+      promptCompleto += `Responda naturalmente como se tivesse ouvido e compreendido o áudio. Não mencione que recebeu uma transcrição.\n`;
+    }
 
     if (etapas && etapas.length > 0) {
       promptCompleto += '\n\n## ETAPAS DE ATENDIMENTO\n';
