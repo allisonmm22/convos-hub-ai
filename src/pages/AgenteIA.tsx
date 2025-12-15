@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, Key, Save, Eye, EyeOff, Trash2, Play } from 'lucide-react';
+import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, Key, Save, Eye, EyeOff, Trash2, Play, MessageSquare } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { NovoAgenteModal } from '@/components/NovoAgenteModal';
 import { FollowUpRegraModal } from '@/components/FollowUpRegraModal';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -601,8 +603,129 @@ function FollowUpPage() {
   );
 }
 
-// Página de Sessões (placeholder)
+// Interface para Sessão/Conversa
+interface Sessao {
+  id: string;
+  status: string;
+  agente_ia_ativo: boolean;
+  ultima_mensagem: string | null;
+  ultima_mensagem_at: string | null;
+  created_at: string;
+  contato: {
+    id: string;
+    nome: string;
+    telefone: string;
+    avatar_url: string | null;
+  } | null;
+  agente: {
+    nome: string;
+  } | null;
+}
+
+type StatusFilter = 'todos' | 'em_atendimento' | 'encerrado';
+
+// Página de Sessões
 function SessoesPage() {
+  const { usuario } = useAuth();
+  const navigate = useNavigate();
+  const [sessoes, setSessoes] = useState<Sessao[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (usuario?.conta_id) {
+      fetchSessoes();
+    }
+  }, [usuario?.conta_id]);
+
+  const fetchSessoes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('conversas')
+        .select(`
+          id,
+          status,
+          agente_ia_ativo,
+          ultima_mensagem,
+          ultima_mensagem_at,
+          created_at,
+          contato:contatos(id, nome, telefone, avatar_url),
+          agente:agent_ia(nome)
+        `)
+        .eq('conta_id', usuario!.conta_id)
+        .order('ultima_mensagem_at', { ascending: false, nullsFirst: false });
+
+      if (error) throw error;
+      setSessoes(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar sessões:', error);
+      toast.error('Erro ao carregar sessões');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteSessao = async (id: string) => {
+    setDeletingId(id);
+    try {
+      // Primeiro deletar as mensagens
+      const { error: msgError } = await supabase
+        .from('mensagens')
+        .delete()
+        .eq('conversa_id', id);
+
+      if (msgError) throw msgError;
+
+      // Depois deletar a conversa
+      const { error } = await supabase
+        .from('conversas')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setSessoes(sessoes.filter(s => s.id !== id));
+      toast.success('Sessão excluída com sucesso');
+    } catch (error) {
+      console.error('Erro ao excluir sessão:', error);
+      toast.error('Erro ao excluir sessão');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const sessoesFiltradas = sessoes.filter(s => {
+    // Filtro de busca
+    const matchBusca = !busca || 
+      s.contato?.nome?.toLowerCase().includes(busca.toLowerCase()) ||
+      s.contato?.telefone?.includes(busca);
+    
+    // Filtro de status
+    const matchStatus = statusFilter === 'todos' || s.status === statusFilter;
+    
+    return matchBusca && matchStatus;
+  });
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'em_atendimento':
+        return <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500">Em atendimento</span>;
+      case 'encerrado':
+        return <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Encerrado</span>;
+      case 'aguardando_cliente':
+        return <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500">Aguardando cliente</span>;
+      default:
+        return <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{status}</span>;
+    }
+  };
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '-';
+    return format(new Date(dateStr), "dd/MM HH:mm", { locale: ptBR });
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -612,11 +735,178 @@ function SessoesPage() {
         </p>
       </div>
 
-      <div className="flex flex-col items-center justify-center p-12 rounded-xl bg-card border border-border">
-        <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />
-        <h3 className="font-medium text-foreground mb-1">Nenhuma sessão ativa</h3>
+      {/* Filtros */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por nome ou telefone..."
+            className="w-full h-10 pl-10 pr-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        <div className="flex gap-2">
+          {(['todos', 'em_atendimento', 'encerrado'] as StatusFilter[]).map((status) => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={`h-10 px-4 rounded-lg text-sm font-medium transition-colors ${
+                statusFilter === status
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {status === 'todos' ? 'Todos' : status === 'em_atendimento' ? 'Em Atendimento' : 'Encerrados'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Lista de Sessões */}
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : sessoesFiltradas.length === 0 ? (
+        <div className="flex flex-col items-center justify-center p-12 rounded-xl bg-card border border-border">
+          <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h3 className="font-medium text-foreground mb-1">
+            {busca || statusFilter !== 'todos' ? 'Nenhuma sessão encontrada' : 'Nenhuma sessão registrada'}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {busca || statusFilter !== 'todos' 
+              ? 'Tente ajustar os filtros de busca' 
+              : 'As sessões de atendimento aparecerão aqui'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {sessoesFiltradas.map((sessao) => (
+            <div
+              key={sessao.id}
+              className="group flex items-center justify-between p-4 rounded-lg bg-card border border-border hover:border-primary/30 transition-colors"
+            >
+              <div className="flex items-center gap-4 min-w-0 flex-1">
+                {/* Avatar */}
+                {sessao.contato?.avatar_url ? (
+                  <img 
+                    src={sessao.contato.avatar_url} 
+                    alt={sessao.contato.nome} 
+                    className="h-12 w-12 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                    <span className="text-lg font-semibold text-primary">
+                      {sessao.contato?.nome?.charAt(0).toUpperCase() || '?'}
+                    </span>
+                  </div>
+                )}
+
+                {/* Info */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => navigate(`/conversas?contato=${sessao.contato?.id}`)}
+                      className="font-medium text-foreground hover:text-primary hover:underline truncate"
+                    >
+                      {sessao.contato?.nome || 'Desconhecido'}
+                    </button>
+                    <span className="text-sm text-muted-foreground">
+                      {sessao.contato?.telefone}
+                    </span>
+                    {getStatusBadge(sessao.status)}
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                    <span className="truncate max-w-[300px]">
+                      {sessao.ultima_mensagem || 'Sem mensagens'}
+                    </span>
+                    <span className="text-xs">•</span>
+                    <span className="text-xs whitespace-nowrap">
+                      {formatDate(sessao.ultima_mensagem_at)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className={`text-xs ${sessao.agente_ia_ativo ? 'text-primary' : 'text-amber-500'}`}>
+                      {sessao.agente_ia_ativo ? (
+                        <>
+                          <Bot className="h-3 w-3 inline mr-1" />
+                          IA Ativa
+                        </>
+                      ) : (
+                        <>
+                          <Users className="h-3 w-3 inline mr-1" />
+                          Humano
+                        </>
+                      )}
+                    </span>
+                    {sessao.agente && (
+                      <>
+                        <span className="text-xs text-muted-foreground">•</span>
+                        <span className="text-xs text-muted-foreground">
+                          Agente: {sessao.agente.nome}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Ações */}
+              <div className="flex items-center gap-2 ml-4">
+                <button
+                  onClick={() => navigate(`/conversas?contato=${sessao.contato?.id}`)}
+                  className="p-2 rounded-lg hover:bg-muted transition-colors"
+                  title="Ver conversa"
+                >
+                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                </button>
+                
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button
+                      className="p-2 rounded-lg hover:bg-destructive/10 transition-colors"
+                      title="Excluir sessão"
+                      disabled={deletingId === sessao.id}
+                    >
+                      {deletingId === sessao.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      )}
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir sessão?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Esta ação não pode ser desfeita. A sessão de "{sessao.contato?.nome || 'Desconhecido'}" 
+                        será excluída permanentemente, incluindo todo o histórico de mensagens.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={() => deleteSessao(sessao.id)}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Excluir
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Info */}
+      <div className="p-4 rounded-lg bg-muted/30 border border-dashed border-border">
         <p className="text-sm text-muted-foreground">
-          As sessões de atendimento aparecerão aqui
+          <strong>{sessoesFiltradas.length}</strong> sessão(ões) encontrada(s)
+          {statusFilter !== 'todos' && ` com status "${statusFilter === 'em_atendimento' ? 'Em Atendimento' : 'Encerrado'}"`}
         </p>
       </div>
     </div>
