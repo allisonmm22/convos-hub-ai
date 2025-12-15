@@ -31,10 +31,14 @@ interface Props {
   onSave: () => void;
 }
 
+type UnidadeTempo = 'minutos' | 'horas';
+
 export function FollowUpRegraModal({ open, onOpenChange, regra, onSave }: Props) {
   const { usuario } = useAuth();
   const [saving, setSaving] = useState(false);
   const [agentes, setAgentes] = useState<Agent[]>([]);
+  const [unidadeTempoEspera, setUnidadeTempoEspera] = useState<UnidadeTempo>('minutos');
+  const [unidadeIntervalo, setUnidadeIntervalo] = useState<UnidadeTempo>('minutos');
   
   const [form, setForm] = useState<FollowupRegra>({
     nome: '',
@@ -42,37 +46,60 @@ export function FollowUpRegraModal({ open, onOpenChange, regra, onSave }: Props)
     mensagem_fixa: '',
     prompt_followup: 'Você é um assistente fazendo follow-up de uma conversa.\nAnalise o contexto e gere uma mensagem breve e amigável para retomar o contato.\nPergunte algo relacionado ao último assunto discutido.\nSeja direto e profissional. Máximo 2 frases.',
     quantidade_mensagens_contexto: 10,
-    horas_sem_resposta: 24,
+    horas_sem_resposta: 30, // 30 minutos default
     max_tentativas: 3,
-    intervalo_entre_tentativas: 24,
+    intervalo_entre_tentativas: 60, // 60 minutos default
     aplicar_ia_ativa: true,
     aplicar_ia_pausada: false,
     agent_ia_id: null,
   });
 
+  // Detectar se valor parece ser em horas (>= 60) ou minutos
+  const detectarUnidade = (valorMinutos: number): { valor: number; unidade: UnidadeTempo } => {
+    if (valorMinutos >= 60 && valorMinutos % 60 === 0) {
+      return { valor: valorMinutos / 60, unidade: 'horas' };
+    }
+    return { valor: valorMinutos, unidade: 'minutos' };
+  };
+
   useEffect(() => {
     if (regra) {
+      const tempoEspera = detectarUnidade(regra.horas_sem_resposta);
+      const intervalo = detectarUnidade(regra.intervalo_entre_tentativas);
+      
+      setUnidadeTempoEspera(tempoEspera.unidade);
+      setUnidadeIntervalo(intervalo.unidade);
+      
       setForm({
         ...regra,
         mensagem_fixa: regra.mensagem_fixa || '',
         prompt_followup: regra.prompt_followup || 'Você é um assistente fazendo follow-up de uma conversa.\nAnalise o contexto e gere uma mensagem breve e amigável para retomar o contato.\nPergunte algo relacionado ao último assunto discutido.\nSeja direto e profissional. Máximo 2 frases.',
+        horas_sem_resposta: tempoEspera.valor,
+        intervalo_entre_tentativas: intervalo.valor,
       });
     } else {
+      setUnidadeTempoEspera('minutos');
+      setUnidadeIntervalo('minutos');
       setForm({
         nome: '',
         tipo: 'texto_fixo',
         mensagem_fixa: '',
         prompt_followup: 'Você é um assistente fazendo follow-up de uma conversa.\nAnalise o contexto e gere uma mensagem breve e amigável para retomar o contato.\nPergunte algo relacionado ao último assunto discutido.\nSeja direto e profissional. Máximo 2 frases.',
         quantidade_mensagens_contexto: 10,
-        horas_sem_resposta: 24,
+        horas_sem_resposta: 30,
         max_tentativas: 3,
-        intervalo_entre_tentativas: 24,
+        intervalo_entre_tentativas: 60,
         aplicar_ia_ativa: true,
         aplicar_ia_pausada: false,
         agent_ia_id: null,
       });
     }
   }, [regra, open]);
+
+  // Converter para minutos antes de salvar
+  const converterParaMinutos = (valor: number, unidade: UnidadeTempo): number => {
+    return unidade === 'horas' ? valor * 60 : valor;
+  };
 
   useEffect(() => {
     if (usuario?.conta_id && open) {
@@ -115,9 +142,9 @@ export function FollowUpRegraModal({ open, onOpenChange, regra, onSave }: Props)
         mensagem_fixa: form.tipo === 'texto_fixo' ? form.mensagem_fixa : null,
         prompt_followup: form.tipo === 'contextual_ia' ? form.prompt_followup : null,
         quantidade_mensagens_contexto: form.quantidade_mensagens_contexto,
-        horas_sem_resposta: form.horas_sem_resposta,
+        horas_sem_resposta: converterParaMinutos(form.horas_sem_resposta, unidadeTempoEspera),
         max_tentativas: form.max_tentativas,
-        intervalo_entre_tentativas: form.intervalo_entre_tentativas,
+        intervalo_entre_tentativas: converterParaMinutos(form.intervalo_entre_tentativas, unidadeIntervalo),
         aplicar_ia_ativa: form.aplicar_ia_ativa,
         aplicar_ia_pausada: form.aplicar_ia_pausada,
         agent_ia_id: form.agent_ia_id,
@@ -284,43 +311,66 @@ export function FollowUpRegraModal({ open, onOpenChange, regra, onSave }: Props)
           )}
 
           {/* Configurações de Tempo */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Horas sem resposta
+                Tempo sem resposta
               </label>
-              <input
-                type="number"
-                min={1}
-                value={form.horas_sem_resposta}
-                onChange={(e) => setForm({ ...form, horas_sem_resposta: parseInt(e.target.value) || 1 })}
-                className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  value={form.horas_sem_resposta}
+                  onChange={(e) => setForm({ ...form, horas_sem_resposta: parseInt(e.target.value) || 1 })}
+                  className="flex-1 h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <select
+                  value={unidadeTempoEspera}
+                  onChange={(e) => setUnidadeTempoEspera(e.target.value as UnidadeTempo)}
+                  className="w-28 h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="minutos">minutos</option>
+                  <option value="horas">horas</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Máx. tentativas
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={10}
-                value={form.max_tentativas}
-                onChange={(e) => setForm({ ...form, max_tentativas: parseInt(e.target.value) || 1 })}
-                className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Intervalo (horas)
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={form.intervalo_entre_tentativas}
-                onChange={(e) => setForm({ ...form, intervalo_entre_tentativas: parseInt(e.target.value) || 1 })}
-                className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Máx. tentativas
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={form.max_tentativas}
+                  onChange={(e) => setForm({ ...form, max_tentativas: parseInt(e.target.value) || 1 })}
+                  className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Intervalo entre tentativas
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    value={form.intervalo_entre_tentativas}
+                    onChange={(e) => setForm({ ...form, intervalo_entre_tentativas: parseInt(e.target.value) || 1 })}
+                    className="flex-1 h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <select
+                    value={unidadeIntervalo}
+                    onChange={(e) => setUnidadeIntervalo(e.target.value as UnidadeTempo)}
+                    className="w-28 h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="minutos">minutos</option>
+                    <option value="horas">horas</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
 
