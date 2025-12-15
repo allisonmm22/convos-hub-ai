@@ -6,6 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const EVOLUTION_API_URL = 'https://evolution.cognityx.com.br';
+
 interface FollowupRegra {
   id: string;
   conta_id: string;
@@ -303,7 +305,9 @@ Seja direto e profissional. Máximo 2 frases.`;
 
         // Enviar mensagem via Evolution API
         const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
-        const evolutionUrl = `https://cloudzap.ws/message/sendText/${conexao.instance_name}`;
+        const evolutionUrl = `${EVOLUTION_API_URL}/message/sendText/${conexao.instance_name}`;
+        
+        console.log(`[processar-followups] Enviando follow-up para ${contato.telefone} via ${conexao.instance_name}`);
 
         try {
           const evolutionResponse = await fetch(evolutionUrl, {
