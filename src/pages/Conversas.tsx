@@ -22,6 +22,7 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
+  User,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -49,6 +50,7 @@ interface Conversa {
   contato_id: string;
   conexao_id: string | null;
   agente_ia_ativo: boolean | null;
+  atendente_id: string | null;
   ultima_mensagem: string | null;
   ultima_mensagem_at: string | null;
   nao_lidas: number | null;
@@ -350,15 +352,24 @@ export default function Conversas() {
 
       if (error) throw error;
 
-      // Atualizar conversa
+      // Atualizar conversa - desativar IA e atribuir atendente humano
       await supabase
         .from('conversas')
         .update({
           ultima_mensagem: novaMensagem,
           ultima_mensagem_at: new Date().toISOString(),
           status: 'aguardando_cliente',
+          agente_ia_ativo: false,
+          atendente_id: usuario!.id,
         })
         .eq('id', conversaSelecionada.id);
+
+      // Atualizar estado local
+      setConversaSelecionada(prev => prev ? {
+        ...prev,
+        agente_ia_ativo: false,
+        atendente_id: usuario!.id
+      } : null);
 
       // Usar conexao_id da conversa ou pegar a conexão ativa
       const conexaoIdToUse = conversaSelecionada.conexao_id || conexao?.id;
@@ -518,14 +529,23 @@ export default function Conversas() {
           enviada_por_ia: false,
         });
 
-        // Atualizar conversa
+        // Atualizar conversa - desativar IA e atribuir atendente humano
         await supabase
           .from('conversas')
           .update({
             ultima_mensagem: `📎 ${file.name}`,
             ultima_mensagem_at: new Date().toISOString(),
+            agente_ia_ativo: false,
+            atendente_id: usuario!.id,
           })
           .eq('id', conversaSelecionada.id);
+
+        // Atualizar estado local
+        setConversaSelecionada(prev => prev ? {
+          ...prev,
+          agente_ia_ativo: false,
+          atendente_id: usuario!.id
+        } : null);
 
         // Enviar via WhatsApp
         const conexaoIdToUse = conversaSelecionada.conexao_id || conexao?.id;
@@ -604,14 +624,23 @@ export default function Conversas() {
         enviada_por_ia: false,
       });
 
-      // Atualizar conversa
+      // Atualizar conversa - desativar IA e atribuir atendente humano
       await supabase
         .from('conversas')
         .update({
           ultima_mensagem: `🎤 Áudio (${durationFormatted})`,
           ultima_mensagem_at: new Date().toISOString(),
+          agente_ia_ativo: false,
+          atendente_id: usuario!.id,
         })
         .eq('id', conversaSelecionada.id);
+
+      // Atualizar estado local
+      setConversaSelecionada(prev => prev ? {
+        ...prev,
+        agente_ia_ativo: false,
+        atendente_id: usuario!.id
+      } : null);
 
       // Enviar via WhatsApp
       const conexaoIdToUse = conversaSelecionada.conexao_id || conexao?.id;
@@ -867,11 +896,15 @@ export default function Conversas() {
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold">
                       {conversa.contatos.nome.charAt(0).toUpperCase()}
                     </div>
-                    {conversa.agente_ia_ativo && (
+                    {conversa.agente_ia_ativo ? (
                       <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-primary flex items-center justify-center">
                         <Bot className="h-3 w-3 text-primary-foreground" />
                       </div>
-                    )}
+                    ) : conversa.atendente_id ? (
+                      <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-orange-500 flex items-center justify-center">
+                        <User className="h-3 w-3 text-white" />
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
@@ -940,11 +973,20 @@ export default function Conversas() {
                       'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
                       conversaSelecionada.agente_ia_ativo
                         ? 'bg-primary/20 text-primary'
-                        : 'bg-muted text-muted-foreground'
+                        : 'bg-orange-500/20 text-orange-500'
                     )}
                   >
-                    <Bot className="h-4 w-4" />
-                    IA {conversaSelecionada.agente_ia_ativo ? 'ON' : 'OFF'}
+                    {conversaSelecionada.agente_ia_ativo ? (
+                      <>
+                        <Bot className="h-4 w-4" />
+                        Agente IA
+                      </>
+                    ) : (
+                      <>
+                        <User className="h-4 w-4" />
+                        Humano
+                      </>
+                    )}
                   </button>
 
                   {/* Transferir */}
