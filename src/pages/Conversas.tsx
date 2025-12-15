@@ -106,7 +106,7 @@ interface Conexao {
   numero: string | null;
 }
 
-type StatusFilter = 'todos' | 'em_atendimento' | 'aguardando_cliente' | 'encerrado';
+type StatusFilter = 'todos' | 'abertos' | 'em_atendimento' | 'aguardando_cliente' | 'encerrado';
 type AtendenteFilter = 'todos' | 'agente_ia' | 'humano';
 
 export default function Conversas() {
@@ -842,7 +842,10 @@ export default function Conversas() {
 
   const filteredConversas = conversas.filter((c) => {
     const matchesSearch = c.contatos.nome.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'todos' || c.status === statusFilter;
+    const matchesStatus = 
+      statusFilter === 'todos' || 
+      (statusFilter === 'abertos' && (c.status === 'em_atendimento' || c.status === 'aguardando_cliente')) ||
+      c.status === statusFilter;
     const matchesAtendente = 
       atendenteFilter === 'todos' ||
       (atendenteFilter === 'agente_ia' && c.agente_ia_ativo === true) ||
@@ -1014,69 +1017,156 @@ export default function Conversas() {
                   )}
                 </div>
 
+                {/* Botões de Filtro Principais */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => { setStatusFilter('todos'); setAtendenteFilter('todos'); }}
+                    className={cn(
+                      'px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200',
+                      statusFilter === 'todos' && atendenteFilter === 'todos'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    )}
+                  >
+                    Todos
+                  </button>
+                  <button
+                    onClick={() => { setStatusFilter('abertos'); setAtendenteFilter('todos'); }}
+                    className={cn(
+                      'px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200',
+                      statusFilter === 'abertos'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    )}
+                  >
+                    Abertos
+                  </button>
+                </div>
+
                 {/* Botão Filtros com Popover */}
                 <Popover>
                   <PopoverTrigger asChild>
                     <button
                       className={cn(
                         'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 border',
-                        atendenteFilter !== 'todos'
+                        (atendenteFilter !== 'todos' || (statusFilter !== 'todos' && statusFilter !== 'abertos'))
                           ? 'bg-primary/20 text-primary border-primary/30'
                           : 'bg-muted/50 text-muted-foreground border-border/50 hover:bg-muted hover:text-foreground'
                       )}
                     >
                       <SlidersHorizontal className="h-3.5 w-3.5" />
                       Filtros
-                      {atendenteFilter !== 'todos' && (
+                      {(atendenteFilter !== 'todos' || (statusFilter !== 'todos' && statusFilter !== 'abertos')) && (
                         <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">
-                          1
+                          {(atendenteFilter !== 'todos' ? 1 : 0) + ((statusFilter !== 'todos' && statusFilter !== 'abertos') ? 1 : 0)}
                         </span>
                       )}
                     </button>
                   </PopoverTrigger>
                   <PopoverContent align="end" className="w-56 p-2">
-                    <div className="space-y-2">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 px-2">
-                        Atendente
-                      </span>
+                    <div className="space-y-3">
+                      {/* Status */}
                       <div className="space-y-1">
-                        <button
-                          onClick={() => setAtendenteFilter('todos')}
-                          className={cn(
-                            'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-                            atendenteFilter === 'todos'
-                              ? 'bg-primary text-primary-foreground'
-                              : 'text-foreground hover:bg-muted'
-                          )}
-                        >
-                          <Users className="h-4 w-4" />
-                          Todos
-                        </button>
-                        <button
-                          onClick={() => setAtendenteFilter('agente_ia')}
-                          className={cn(
-                            'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-                            atendenteFilter === 'agente_ia'
-                              ? 'bg-primary text-primary-foreground'
-                              : 'text-foreground hover:bg-muted'
-                          )}
-                        >
-                          <Bot className="h-4 w-4" />
-                          Agente IA
-                        </button>
-                        <button
-                          onClick={() => setAtendenteFilter('humano')}
-                          className={cn(
-                            'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-                            atendenteFilter === 'humano'
-                              ? 'bg-orange-500 text-white'
-                              : 'text-foreground hover:bg-muted'
-                          )}
-                        >
-                          <User className="h-4 w-4" />
-                          Humano
-                        </button>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 px-2">
+                          Status
+                        </span>
+                        <div className="space-y-1">
+                          <button
+                            onClick={() => setStatusFilter('em_atendimento')}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                              statusFilter === 'em_atendimento'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-foreground hover:bg-muted'
+                            )}
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                            Em Atendimento
+                          </button>
+                          <button
+                            onClick={() => setStatusFilter('aguardando_cliente')}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                              statusFilter === 'aguardando_cliente'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-foreground hover:bg-muted'
+                            )}
+                          >
+                            <Clock className="h-4 w-4" />
+                            Aguardando
+                          </button>
+                          <button
+                            onClick={() => setStatusFilter('encerrado')}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                              statusFilter === 'encerrado'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-foreground hover:bg-muted'
+                            )}
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            Encerrado
+                          </button>
+                        </div>
                       </div>
+
+                      <div className="h-px bg-border/50" />
+
+                      {/* Atendente */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 px-2">
+                          Atendente
+                        </span>
+                        <div className="space-y-1">
+                          <button
+                            onClick={() => setAtendenteFilter('todos')}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                              atendenteFilter === 'todos'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-foreground hover:bg-muted'
+                            )}
+                          >
+                            <Users className="h-4 w-4" />
+                            Todos
+                          </button>
+                          <button
+                            onClick={() => setAtendenteFilter('agente_ia')}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                              atendenteFilter === 'agente_ia'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-foreground hover:bg-muted'
+                            )}
+                          >
+                            <Bot className="h-4 w-4" />
+                            Agente IA
+                          </button>
+                          <button
+                            onClick={() => setAtendenteFilter('humano')}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                              atendenteFilter === 'humano'
+                                ? 'bg-orange-500 text-white'
+                                : 'text-foreground hover:bg-muted'
+                            )}
+                          >
+                            <User className="h-4 w-4" />
+                            Humano
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="h-px bg-border/50" />
+
+                      {/* Limpar Filtros */}
+                      <button
+                        onClick={() => { setStatusFilter('todos'); setAtendenteFilter('todos'); }}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
+                      >
+                        <X className="h-4 w-4" />
+                        Limpar Filtros
+                      </button>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -1091,33 +1181,6 @@ export default function Conversas() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full h-10 pl-10 pr-4 rounded-xl bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 input-glow transition-all duration-200"
               />
-            </div>
-            
-            {/* Filtros de Status */}
-            <div className="flex p-1 bg-muted/30 rounded-xl border border-border/50">
-              {([
-                { value: 'todos', label: 'Todos', icon: null },
-                { value: 'em_atendimento', label: 'Atendimento', icon: MessageCircle },
-                { value: 'aguardando_cliente', label: 'Aguardando', icon: Clock },
-                { value: 'encerrado', label: 'Encerrado', icon: CheckCircle2 },
-              ] as const).map((status, index) => (
-                <button
-                  key={status.value}
-                  onClick={() => setStatusFilter(status.value as StatusFilter)}
-                  className={cn(
-                    'flex-1 px-2 py-1.5 text-[11px] font-medium transition-all duration-200 flex items-center justify-center gap-1',
-                    index === 0 && 'rounded-l-lg',
-                    index === 3 && 'rounded-r-lg',
-                    index > 0 && index < 3 && 'rounded-none',
-                    statusFilter === status.value
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                  )}
-                >
-                  {status.icon && <status.icon className="h-3 w-3" />}
-                  <span className="hidden sm:inline">{status.label}</span>
-                </button>
-              ))}
             </div>
           </div>
 
