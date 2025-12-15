@@ -260,6 +260,51 @@ export type Database = {
           },
         ]
       }
+      calendarios_google: {
+        Row: {
+          access_token: string | null
+          ativo: boolean | null
+          calendar_id: string | null
+          conta_id: string
+          cor: string | null
+          created_at: string | null
+          email_google: string
+          id: string
+          nome: string
+          refresh_token: string | null
+          token_expiry: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          access_token?: string | null
+          ativo?: boolean | null
+          calendar_id?: string | null
+          conta_id: string
+          cor?: string | null
+          created_at?: string | null
+          email_google: string
+          id?: string
+          nome: string
+          refresh_token?: string | null
+          token_expiry?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          access_token?: string | null
+          ativo?: boolean | null
+          calendar_id?: string | null
+          conta_id?: string
+          cor?: string | null
+          created_at?: string | null
+          email_google?: string
+          id?: string
+          nome?: string
+          refresh_token?: string | null
+          token_expiry?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       conexoes_whatsapp: {
         Row: {
           conta_id: string
