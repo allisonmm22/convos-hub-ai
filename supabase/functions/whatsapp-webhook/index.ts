@@ -555,103 +555,54 @@ serve(async (req) => {
 
       console.log('Conversa atualizada com sucesso');
 
-      // Processar com IA se ativo e não for mensagem de saída
+      // Agendar resposta com debounce se IA ativa e não for mensagem de saída
       if (conversa?.agente_ia_ativo && !fromMe) {
-        console.log('=== PROCESSANDO COM IA ===');
+        console.log('=== AGENDANDO RESPOSTA COM DEBOUNCE ===');
         
         try {
-          const aiResponse = await fetch(
-            `${supabaseUrl}/functions/v1/ai-responder`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${supabaseKey}`,
-              },
-              body: JSON.stringify({
-                conversa_id: conversa.id,
-                mensagem: transcricaoAudio || messageContent,
-                conta_id: conexao.conta_id,
-                mensagem_tipo: messageType,
-                transcricao: transcricaoAudio,
-                descricao_imagem: descricaoImagem,
-              }),
+          // Buscar o agente para obter o tempo de espera configurado
+          const { data: conversaCompleta } = await supabase
+            .from('conversas')
+            .select('agente_ia_id')
+            .eq('id', conversa.id)
+            .single();
+
+          let tempoEspera = 5; // Default: 5 segundos
+          
+          if (conversaCompleta?.agente_ia_id) {
+            const { data: agente } = await supabase
+              .from('agent_ia')
+              .select('tempo_espera_segundos')
+              .eq('id', conversaCompleta.agente_ia_id)
+              .single();
+            
+            if (agente?.tempo_espera_segundos) {
+              tempoEspera = agente.tempo_espera_segundos;
             }
-          );
-
-          if (aiResponse.ok) {
-            const aiData = await aiResponse.json();
-            console.log('Resposta IA:', aiData);
-
-            if (aiData.should_respond && aiData.resposta) {
-              // Buscar token da conexão para enviar mensagem
-              const { data: conexaoCompleta } = await supabase
-                .from('conexoes_whatsapp')
-                .select('token, instance_name')
-                .eq('id', conexao.id)
-                .single();
-
-              if (conexaoCompleta) {
-                const evolutionApiUrl = 'https://evolution.cognityx.com.br';
-                
-                // Enviar mensagem via Evolution API
-                const sendResponse = await fetch(
-                  `${evolutionApiUrl}/message/sendText/${conexaoCompleta.instance_name}`,
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'apikey': conexaoCompleta.token,
-                    },
-                    body: JSON.stringify({
-                      number: telefone,
-                      text: aiData.resposta,
-                    }),
-                  }
-                );
-
-                if (sendResponse.ok) {
-                  console.log('Mensagem IA enviada com sucesso');
-
-                  // Salvar mensagem da IA no banco
-                  await supabase.from('mensagens').insert({
-                    conversa_id: conversa.id,
-                    contato_id: contato!.id,
-                    conteudo: aiData.resposta,
-                    direcao: 'saida',
-                    tipo: 'texto',
-                    enviada_por_ia: true,
-                  });
-
-                  // Atualizar conversa
-                  await fetch(
-                    `${supabaseUrl}/rest/v1/conversas?id=eq.${conversa.id}`,
-                    {
-                      method: 'PATCH',
-                      headers: {
-                        'apikey': supabaseKey,
-                        'Authorization': `Bearer ${supabaseKey}`,
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify({
-                        ultima_mensagem: aiData.resposta,
-                        ultima_mensagem_at: new Date().toISOString(),
-                        status: 'aguardando_cliente',
-                      }),
-                    }
-                  );
-
-                  console.log('Mensagem IA salva no banco');
-                } else {
-                  console.error('Erro ao enviar mensagem IA:', await sendResponse.text());
-                }
-              }
-            }
-          } else {
-            console.error('Erro na resposta do ai-responder:', await aiResponse.text());
           }
-        } catch (aiError) {
-          console.error('Erro ao processar com IA:', aiError);
+
+          const responderEm = new Date(Date.now() + tempoEspera * 1000);
+          
+          console.log(`Tempo de espera: ${tempoEspera}s, responder em: ${responderEm.toISOString()}`);
+
+          // Upsert na tabela de pendentes (atualiza timer se já existe)
+          const { error: upsertError } = await supabase
+            .from('respostas_pendentes')
+            .upsert(
+              {
+                conversa_id: conversa.id,
+                responder_em: responderEm.toISOString(),
+              },
+              { onConflict: 'conversa_id' }
+            );
+
+          if (upsertError) {
+            console.error('Erro ao agendar resposta:', upsertError);
+          } else {
+            console.log('Resposta agendada com sucesso');
+          }
+        } catch (scheduleError) {
+          console.error('Erro ao agendar resposta:', scheduleError);
         }
       }
 

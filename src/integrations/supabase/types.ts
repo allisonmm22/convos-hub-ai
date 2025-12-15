@@ -102,6 +102,7 @@ export type Database = {
           nome: string | null
           prompt_sistema: string | null
           temperatura: number | null
+          tempo_espera_segundos: number | null
           tipo: string | null
           updated_at: string
         }
@@ -122,6 +123,7 @@ export type Database = {
           nome?: string | null
           prompt_sistema?: string | null
           temperatura?: number | null
+          tempo_espera_segundos?: number | null
           tipo?: string | null
           updated_at?: string
         }
@@ -142,6 +144,7 @@ export type Database = {
           nome?: string | null
           prompt_sistema?: string | null
           temperatura?: number | null
+          tempo_espera_segundos?: number | null
           tipo?: string | null
           updated_at?: string
         }
@@ -867,6 +870,35 @@ export type Database = {
             columns: ["responsavel_id"]
             isOneToOne: false
             referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      respostas_pendentes: {
+        Row: {
+          conversa_id: string
+          created_at: string | null
+          id: string
+          responder_em: string
+        }
+        Insert: {
+          conversa_id: string
+          created_at?: string | null
+          id?: string
+          responder_em: string
+        }
+        Update: {
+          conversa_id?: string
+          created_at?: string | null
+          id?: string
+          responder_em?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "respostas_pendentes_conversa_id_fkey"
+            columns: ["conversa_id"]
+            isOneToOne: true
+            referencedRelation: "conversas"
             referencedColumns: ["id"]
           },
         ]

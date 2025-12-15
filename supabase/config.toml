@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.google-calendar-actions]
 verify_jwt = false
+
+[functions.processar-respostas-pendentes]
+verify_jwt = false

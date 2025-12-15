@@ -28,6 +28,7 @@ interface AgentConfig {
   gatilho: string | null;
   descricao: string | null;
   atender_24h: boolean;
+  tempo_espera_segundos: number;
 }
 
 type Tab = 'regras' | 'etapas' | 'perguntas' | 'horario' | 'configuracao';
@@ -119,6 +120,7 @@ export default function AgenteIAEditar() {
           temperatura: Number(data.temperatura),
           tipo: (data.tipo === 'secundario' ? 'secundario' : 'principal') as 'principal' | 'secundario',
           atender_24h: data.atender_24h ?? false,
+          tempo_espera_segundos: data.tempo_espera_segundos ?? 5,
         });
         setTempName(data.nome || '');
         
@@ -160,6 +162,7 @@ export default function AgenteIAEditar() {
           gatilho: config.gatilho,
           descricao: config.descricao,
           atender_24h: config.atender_24h,
+          tempo_espera_segundos: config.tempo_espera_segundos,
         })
         .eq('id', config.id);
 
@@ -1344,6 +1347,45 @@ function ConfiguracaoAPITab({
 }) {
   return (
     <div className="space-y-6 max-w-2xl">
+      {/* Tempo de Espera (Debounce) */}
+      <div className="rounded-xl bg-card border border-border p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
+            <Clock className="h-5 w-5 text-amber-500" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Tempo de Espera para Resposta</h2>
+            <p className="text-sm text-muted-foreground">
+              Aguarda o lead parar de digitar antes de responder
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-2">
+            Segundos de espera ({config.tempo_espera_segundos}s)
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="30"
+            step="1"
+            value={config.tempo_espera_segundos}
+            onChange={(e) => setConfig({ ...config, tempo_espera_segundos: parseInt(e.target.value) })}
+            className="w-full accent-primary"
+          />
+          <div className="flex justify-between text-xs text-muted-foreground mt-1">
+            <span>1s (rápido)</span>
+            <span>30s (aguarda muito)</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-3 p-3 bg-muted/50 rounded-lg">
+            💡 Se o lead enviar várias mensagens seguidas (ex: "Oi", "tudo bem?", "quero saber..."), 
+            o agente aguarda {config.tempo_espera_segundos} segundos após a última mensagem antes de responder, 
+            evitando múltiplas respostas.
+          </p>
+        </div>
+      </div>
+
       {/* Model Selection */}
       <div className="rounded-xl bg-card border border-border p-6">
         <div className="flex items-center gap-3 mb-4">
