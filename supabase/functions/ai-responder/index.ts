@@ -304,22 +304,31 @@ serve(async (req) => {
       .eq('agent_ia_id', agente.id)
       .order('ordem', { ascending: true });
 
-    // 5. Buscar histórico de mensagens da conversa (últimas 20)
-    const { data: historico } = await supabase
+    // 5. Buscar dados da conversa para obter contato_id e memoria_limpa_em
+    const { data: conversa } = await supabase
+      .from('conversas')
+      .select('contato_id, memoria_limpa_em')
+      .eq('id', conversa_id)
+      .single();
+
+    const contatoId = conversa?.contato_id;
+    const memoriaLimpaEm = conversa?.memoria_limpa_em;
+
+    // 6. Buscar histórico de mensagens da conversa (últimas 20, filtrando por memoria_limpa_em)
+    let historicoQuery = supabase
       .from('mensagens')
       .select('conteudo, direcao, created_at')
       .eq('conversa_id', conversa_id)
       .order('created_at', { ascending: true })
       .limit(20);
 
-    // 6. Buscar dados da conversa para obter contato_id
-    const { data: conversa } = await supabase
-      .from('conversas')
-      .select('contato_id')
-      .eq('id', conversa_id)
-      .single();
+    // Se há data de limpeza de memória, ignorar mensagens anteriores
+    if (memoriaLimpaEm) {
+      console.log('Filtrando mensagens após:', memoriaLimpaEm);
+      historicoQuery = historicoQuery.gt('created_at', memoriaLimpaEm);
+    }
 
-    const contatoId = conversa?.contato_id;
+    const { data: historico } = await historicoQuery;
 
     // 7. Parsear ações das etapas para construir ferramentas
     let todasAcoes: { etapaNum: number; acoes: string[] }[] = [];

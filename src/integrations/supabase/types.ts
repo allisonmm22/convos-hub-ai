@@ -359,6 +359,7 @@ export type Database = {
           contato_id: string
           created_at: string
           id: string
+          memoria_limpa_em: string | null
           nao_lidas: number | null
           status: Database["public"]["Enums"]["status_conversa"] | null
           ultima_mensagem: string | null
@@ -374,6 +375,7 @@ export type Database = {
           contato_id: string
           created_at?: string
           id?: string
+          memoria_limpa_em?: string | null
           nao_lidas?: number | null
           status?: Database["public"]["Enums"]["status_conversa"] | null
           ultima_mensagem?: string | null
@@ -389,6 +391,7 @@ export type Database = {
           contato_id?: string
           created_at?: string
           id?: string
+          memoria_limpa_em?: string | null
           nao_lidas?: number | null
           status?: Database["public"]["Enums"]["status_conversa"] | null
           ultima_mensagem?: string | null
