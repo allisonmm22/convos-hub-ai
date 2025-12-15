@@ -100,6 +100,7 @@ interface Conexao {
 }
 
 type StatusFilter = 'todos' | 'em_atendimento' | 'aguardando_cliente' | 'encerrado';
+type AtendenteFilter = 'todos' | 'agente_ia' | 'humano';
 
 export default function Conversas() {
   const { usuario } = useAuth();
@@ -113,6 +114,7 @@ export default function Conversas() {
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
+  const [atendenteFilter, setAtendenteFilter] = useState<AtendenteFilter>('todos');
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferType, setTransferType] = useState<'choice' | 'humano' | 'agente'>('choice');
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -771,7 +773,11 @@ export default function Conversas() {
   const filteredConversas = conversas.filter((c) => {
     const matchesSearch = c.contatos.nome.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'todos' || c.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesAtendente = 
+      atendenteFilter === 'todos' ||
+      (atendenteFilter === 'agente_ia' && c.agente_ia_ativo === true) ||
+      (atendenteFilter === 'humano' && c.agente_ia_ativo === false);
+    return matchesSearch && matchesStatus && matchesAtendente;
   });
 
   const renderMensagem = (msg: Mensagem) => {
@@ -945,6 +951,45 @@ export default function Conversas() {
                   {status === 'todos' ? 'Todos' : getStatusLabel(status)}
                 </button>
               ))}
+            </div>
+            
+            {/* Filtros de Atendente */}
+            <div className="flex gap-2 flex-wrap mt-2">
+              <button
+                onClick={() => setAtendenteFilter('todos')}
+                className={cn(
+                  'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+                  atendenteFilter === 'todos'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                )}
+              >
+                Todos
+              </button>
+              <button
+                onClick={() => setAtendenteFilter('agente_ia')}
+                className={cn(
+                  'px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1',
+                  atendenteFilter === 'agente_ia'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                )}
+              >
+                <Bot className="h-3 w-3" />
+                Agente IA
+              </button>
+              <button
+                onClick={() => setAtendenteFilter('humano')}
+                className={cn(
+                  'px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1',
+                  atendenteFilter === 'humano'
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                )}
+              >
+                <User className="h-3 w-3" />
+                Humano
+              </button>
             </div>
           </div>
 
