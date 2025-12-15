@@ -885,16 +885,25 @@ export default function Conversas() {
   const handleDeletarMensagem = async () => {
     if (!mensagemParaDeletar) return;
     
-    const { error } = await supabase
-      .from('mensagens')
-      .delete()
-      .eq('id', mensagemParaDeletar);
-      
-    if (error) {
+    try {
+      const { data, error } = await supabase.functions.invoke('deletar-mensagem', {
+        body: { mensagem_id: mensagemParaDeletar },
+      });
+
+      if (error) {
+        console.error('Erro ao deletar mensagem:', error);
+        toast.error('Erro ao deletar mensagem');
+      } else {
+        setMensagens(prev => prev.filter(m => m.id !== mensagemParaDeletar));
+        if (data?.whatsapp_deleted) {
+          toast.success('Mensagem deletada do WhatsApp e CRM');
+        } else {
+          toast.success('Mensagem deletada do CRM');
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao deletar mensagem:', error);
       toast.error('Erro ao deletar mensagem');
-    } else {
-      toast.success('Mensagem deletada');
-      setMensagens(prev => prev.filter(m => m.id !== mensagemParaDeletar));
     }
     setMensagemParaDeletar(null);
   };
@@ -1010,35 +1019,34 @@ export default function Conversas() {
           )}
         >
           <div className="relative">
-            {/* Menu de opções - aparece no hover */}
-            <div className={cn(
-              'absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity z-10',
-              msg.direcao === 'saida' ? '-left-8' : '-right-8'
-            )}>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="p-1 rounded-md bg-background/80 hover:bg-muted border border-border/50 shadow-sm">
-                    <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align={msg.direcao === 'saida' ? 'end' : 'start'} className="bg-popover">
-                  {/* Editar - apenas para mensagens de texto */}
-                  {(!msg.tipo || msg.tipo === 'texto') && (
-                    <DropdownMenuItem onClick={() => iniciarEdicao(msg)}>
-                      <Pencil className="h-4 w-4 mr-2" />
-                      Editar
+            {/* Menu de opções - aparece no hover apenas para mensagens de saída */}
+            {msg.direcao === 'saida' && (
+              <div className="absolute top-0 -left-8 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="p-1 rounded-md bg-background/80 hover:bg-muted border border-border/50 shadow-sm">
+                      <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-popover">
+                    {/* Editar - apenas para mensagens de texto */}
+                    {(!msg.tipo || msg.tipo === 'texto') && (
+                      <DropdownMenuItem onClick={() => iniciarEdicao(msg)}>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Editar
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem 
+                      onClick={() => setMensagemParaDeletar(msg.id)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Deletar
                     </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem 
-                    onClick={() => setMensagemParaDeletar(msg.id)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Deletar
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
 
             <div
               className={cn(

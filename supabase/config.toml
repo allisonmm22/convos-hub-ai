@@ -80,3 +80,6 @@ verify_jwt = false
 
 [functions.validar-limite-plano]
 verify_jwt = false
+
+[functions.deletar-mensagem]
+verify_jwt = false
