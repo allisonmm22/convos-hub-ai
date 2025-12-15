@@ -906,18 +906,18 @@ export default function Conversas() {
           <div className="flex-1 flex flex-col">
             {/* Header da Conversa */}
             <div className="flex items-center justify-between p-4 border-b border-border">
-              <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowContatoSidebar(true)}
+                className="flex items-center gap-3 hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors cursor-pointer text-left"
+              >
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold">
                   {conversaSelecionada.contatos.nome.charAt(0).toUpperCase()}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setShowContatoSidebar(true)}
-                      className="font-medium text-foreground hover:text-primary hover:underline transition-colors cursor-pointer"
-                    >
+                    <span className="font-medium text-foreground">
                       {conversaSelecionada.contatos.nome}
-                    </button>
+                    </span>
                     <span className={cn(
                       'px-2 py-0.5 rounded-full text-xs font-medium text-white',
                       getStatusColor(conversaSelecionada.status)
@@ -929,7 +929,7 @@ export default function Conversas() {
                     {conversaSelecionada.contatos.telefone}
                   </p>
                 </div>
-              </div>
+              </button>
               {!conversaEncerrada ? (
                 <div className="flex items-center gap-2">
                   {/* Toggle Agente IA */}
