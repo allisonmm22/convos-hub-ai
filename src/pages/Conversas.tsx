@@ -31,6 +31,8 @@ import {
   MessageCircle,
   Clock,
   CheckCircle2,
+  Trash2,
+  Pencil,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -42,6 +44,29 @@ import { ContatoSidebar } from '@/components/ContatoSidebar';
 import { notifyNewMessage, requestNotificationPermission } from '@/lib/notificationSound';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface Contato {
   id: string;
@@ -139,6 +164,9 @@ export default function Conversas() {
   const [imagemExpandida, setImagemExpandida] = useState<string | null>(null);
   const [showContatoSidebar, setShowContatoSidebar] = useState(false);
   const [agentesDisponiveis, setAgentesDisponiveis] = useState<AgenteIA[]>([]);
+  const [mensagemParaDeletar, setMensagemParaDeletar] = useState<string | null>(null);
+  const [mensagemParaEditar, setMensagemParaEditar] = useState<Mensagem | null>(null);
+  const [conteudoEditado, setConteudoEditado] = useState('');
   
   // Ref para manter a conversa selecionada atualizada no realtime
   const conversaSelecionadaRef = useRef<Conversa | null>(null);
@@ -854,6 +882,50 @@ export default function Conversas() {
     return null;
   };
 
+  const handleDeletarMensagem = async () => {
+    if (!mensagemParaDeletar) return;
+    
+    const { error } = await supabase
+      .from('mensagens')
+      .delete()
+      .eq('id', mensagemParaDeletar);
+      
+    if (error) {
+      toast.error('Erro ao deletar mensagem');
+    } else {
+      toast.success('Mensagem deletada');
+      setMensagens(prev => prev.filter(m => m.id !== mensagemParaDeletar));
+    }
+    setMensagemParaDeletar(null);
+  };
+
+  const handleEditarMensagem = async () => {
+    if (!mensagemParaEditar || !conteudoEditado.trim()) return;
+    
+    const { error } = await supabase
+      .from('mensagens')
+      .update({ conteudo: conteudoEditado })
+      .eq('id', mensagemParaEditar.id);
+      
+    if (error) {
+      toast.error('Erro ao editar mensagem');
+    } else {
+      toast.success('Mensagem editada');
+      setMensagens(prev => prev.map(m => 
+        m.id === mensagemParaEditar.id 
+          ? { ...m, conteudo: conteudoEditado } 
+          : m
+      ));
+    }
+    setMensagemParaEditar(null);
+    setConteudoEditado('');
+  };
+
+  const iniciarEdicao = (msg: Mensagem) => {
+    setMensagemParaEditar(msg);
+    setConteudoEditado(msg.conteudo);
+  };
+
   const filteredConversas = conversas.filter((c) => {
     const matchesSearch = c.contatos.nome.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = 
@@ -933,95 +1005,127 @@ export default function Conversas() {
         )}
         <div
           className={cn(
-            'flex mb-1',
+            'flex mb-1 group',
             msg.direcao === 'saida' ? 'justify-end' : 'justify-start'
           )}
         >
-          <div
-            className={cn(
-              'max-w-[70%] rounded-2xl px-4 py-2.5 message-bubble',
-              msg.direcao === 'saida'
-                ? 'message-bubble-sent text-primary-foreground rounded-br-md'
-                : 'message-bubble-received text-foreground rounded-bl-md'
-            )}
-          >
-            {/* Nome do participante em grupos */}
-            {isGrupo && msg.direcao === 'entrada' && participanteNome && (
-              <div className={cn(
-                'text-xs font-semibold mb-1',
-                getParticipantColor(participanteTelefone)
-              )}>
-                {participanteNome}
-              </div>
-            )}
-            
-            {msg.direcao === 'saida' && (msg.enviada_por_ia || msg.enviada_por_dispositivo) && (
-              <div className="flex items-center gap-1.5 text-xs opacity-80 mb-1.5 font-medium">
-                {msg.enviada_por_ia ? (
-                  <>
-                    <Bot className="h-3.5 w-3.5" />
-                    <span>Agente IA</span>
-                  </>
-                ) : msg.enviada_por_dispositivo ? (
-                  <>
-                    <Phone className="h-3.5 w-3.5" />
-                    <span>Via dispositivo</span>
-                  </>
-                ) : null}
-              </div>
-            )}
-            
-            {isMedia ? (
-              <div className="space-y-2">
-                {msg.tipo === 'imagem' && (
-                  <img 
-                    src={msg.media_url!} 
-                    alt="Imagem"
-                    className="max-w-[200px] max-h-[200px] object-cover rounded-xl cursor-pointer hover:opacity-90 hover:scale-[1.02] transition-all duration-200 shadow-md"
-                    onClick={() => setImagemExpandida(msg.media_url)}
-                  />
-                )}
-                {msg.tipo === 'audio' && (
-                  <AudioPlayer 
-                    src={msg.media_url!} 
-                    variant={msg.direcao === 'saida' ? 'sent' : 'received'}
-                  />
-                )}
-                {msg.tipo === 'documento' && (
-                  <a 
-                    href={msg.media_url!} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 underline hover:opacity-80 transition-opacity"
+          <div className="relative">
+            {/* Menu de opções - aparece no hover */}
+            <div className={cn(
+              'absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity z-10',
+              msg.direcao === 'saida' ? '-left-8' : '-right-8'
+            )}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="p-1 rounded-md bg-background/80 hover:bg-muted border border-border/50 shadow-sm">
+                    <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align={msg.direcao === 'saida' ? 'end' : 'start'} className="bg-popover">
+                  {/* Editar - apenas para mensagens de texto */}
+                  {(!msg.tipo || msg.tipo === 'texto') && (
+                    <DropdownMenuItem onClick={() => iniciarEdicao(msg)}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Editar
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem 
+                    onClick={() => setMensagemParaDeletar(msg.id)}
+                    className="text-destructive focus:text-destructive"
                   >
-                    <FileText className="h-4 w-4" />
-                    {msg.conteudo}
-                  </a>
-                )}
-                {msg.tipo === 'video' && (
-                  <video controls className="max-w-full rounded-xl shadow-md">
-                    <source src={msg.media_url!} />
-                  </video>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.conteudo}</p>
-            )}
-            
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Deletar
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
             <div
               className={cn(
-                'flex items-center gap-1.5 mt-1.5',
-                msg.direcao === 'saida' ? 'justify-end' : 'justify-start'
+                'max-w-[70%] rounded-2xl px-4 py-2.5 message-bubble',
+                msg.direcao === 'saida'
+                  ? 'message-bubble-sent text-primary-foreground rounded-br-md'
+                  : 'message-bubble-received text-foreground rounded-bl-md'
               )}
             >
-              <span className="text-[11px] opacity-70">{formatTime(msg.created_at)}</span>
-              {msg.direcao === 'saida' && (
-                msg.lida ? (
-                  <CheckCheck className="h-3.5 w-3.5 text-blue-300" />
-                ) : (
-                  <Check className="h-3.5 w-3.5 opacity-70" />
-                )
+              {/* Nome do participante em grupos */}
+              {isGrupo && msg.direcao === 'entrada' && participanteNome && (
+                <div className={cn(
+                  'text-xs font-semibold mb-1',
+                  getParticipantColor(participanteTelefone)
+                )}>
+                  {participanteNome}
+                </div>
               )}
+              
+              {msg.direcao === 'saida' && (msg.enviada_por_ia || msg.enviada_por_dispositivo) && (
+                <div className="flex items-center gap-1.5 text-xs opacity-80 mb-1.5 font-medium">
+                  {msg.enviada_por_ia ? (
+                    <>
+                      <Bot className="h-3.5 w-3.5" />
+                      <span>Agente IA</span>
+                    </>
+                  ) : msg.enviada_por_dispositivo ? (
+                    <>
+                      <Phone className="h-3.5 w-3.5" />
+                      <span>Via dispositivo</span>
+                    </>
+                  ) : null}
+                </div>
+              )}
+              
+              {isMedia ? (
+                <div className="space-y-2">
+                  {msg.tipo === 'imagem' && (
+                    <img 
+                      src={msg.media_url!} 
+                      alt="Imagem"
+                      className="max-w-[200px] max-h-[200px] object-cover rounded-xl cursor-pointer hover:opacity-90 hover:scale-[1.02] transition-all duration-200 shadow-md"
+                      onClick={() => setImagemExpandida(msg.media_url)}
+                    />
+                  )}
+                  {msg.tipo === 'audio' && (
+                    <AudioPlayer 
+                      src={msg.media_url!} 
+                      variant={msg.direcao === 'saida' ? 'sent' : 'received'}
+                    />
+                  )}
+                  {msg.tipo === 'documento' && (
+                    <a 
+                      href={msg.media_url!} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 underline hover:opacity-80 transition-opacity"
+                    >
+                      <FileText className="h-4 w-4" />
+                      {msg.conteudo}
+                    </a>
+                  )}
+                  {msg.tipo === 'video' && (
+                    <video controls className="max-w-full rounded-xl shadow-md">
+                      <source src={msg.media_url!} />
+                    </video>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.conteudo}</p>
+              )}
+              
+              <div
+                className={cn(
+                  'flex items-center gap-1.5 mt-1.5',
+                  msg.direcao === 'saida' ? 'justify-end' : 'justify-start'
+                )}
+              >
+                <span className="text-[11px] opacity-70">{formatTime(msg.created_at)}</span>
+                {msg.direcao === 'saida' && (
+                  msg.lida ? (
+                    <CheckCheck className="h-3.5 w-3.5 text-blue-300" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5 opacity-70" />
+                  )
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1784,6 +1888,57 @@ export default function Conversas() {
             }}
           />
         )}
+
+        {/* Modal de Confirmação de Exclusão */}
+        <AlertDialog open={!!mensagemParaDeletar} onOpenChange={() => setMensagemParaDeletar(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Deletar mensagem?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação não pode ser desfeita. A mensagem será removida permanentemente.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleDeletarMensagem}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Deletar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Modal de Edição de Mensagem */}
+        <Dialog open={!!mensagemParaEditar} onOpenChange={() => { setMensagemParaEditar(null); setConteudoEditado(''); }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Editar mensagem</DialogTitle>
+            </DialogHeader>
+            <textarea
+              value={conteudoEditado}
+              onChange={(e) => setConteudoEditado(e.target.value)}
+              className="w-full min-h-[120px] p-3 rounded-lg border border-border bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder="Digite a mensagem..."
+            />
+            <DialogFooter>
+              <button
+                onClick={() => { setMensagemParaEditar(null); setConteudoEditado(''); }}
+                className="px-4 py-2 rounded-lg border border-border hover:bg-muted transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleEditarMensagem}
+                disabled={!conteudoEditado.trim()}
+                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                Salvar
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   );
