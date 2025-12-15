@@ -228,6 +228,38 @@ export type Database = {
           },
         ]
       }
+      atendente_config: {
+        Row: {
+          created_at: string | null
+          id: string
+          updated_at: string | null
+          usuario_id: string
+          ver_todas_conversas: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          usuario_id: string
+          ver_todas_conversas?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          usuario_id?: string
+          ver_todas_conversas?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "atendente_config_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: true
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conexoes_whatsapp: {
         Row: {
           conta_id: string
@@ -717,6 +749,27 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       usuarios: {
         Row: {
           avatar_url: string | null
@@ -766,9 +819,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      atendente_ver_todas: { Args: { _usuario_id: string }; Returns: boolean }
+      get_current_usuario_id: { Args: never; Returns: string }
       get_user_conta_id: { Args: never; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
+      app_role: "admin" | "atendente"
       direcao_mensagem: "entrada" | "saida"
       status_conexao: "conectado" | "desconectado" | "aguardando"
       status_conversa: "em_atendimento" | "aguardando_cliente" | "encerrado"
@@ -908,6 +971,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "atendente"],
       direcao_mensagem: ["entrada", "saida"],
       status_conexao: ["conectado", "desconectado", "aguardando"],
       status_conversa: ["em_atendimento", "aguardando_cliente", "encerrado"],

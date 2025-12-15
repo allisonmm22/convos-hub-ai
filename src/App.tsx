@@ -14,6 +14,7 @@ import CRMConfiguracoes from "./pages/CRMConfiguracoes";
 import Agendamentos from "./pages/Agendamentos";
 import Prospeccao from "./pages/Prospeccao";
 import Contatos from "./pages/Contatos";
+import Usuarios from "./pages/Usuarios";
 import Conexao from "./pages/Conexao";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
@@ -75,6 +76,7 @@ const App = () => (
             <Route path="/agendamentos" element={<ProtectedRoute><Agendamentos /></ProtectedRoute>} />
             <Route path="/prospeccao" element={<ProtectedRoute><Prospeccao /></ProtectedRoute>} />
             <Route path="/contatos" element={<ProtectedRoute><Contatos /></ProtectedRoute>} />
+            <Route path="/usuarios" element={<ProtectedRoute><Usuarios /></ProtectedRoute>} />
             <Route path="/conexao" element={<ProtectedRoute><Conexao /></ProtectedRoute>} />
             <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />

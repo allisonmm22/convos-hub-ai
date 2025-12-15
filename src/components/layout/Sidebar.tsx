@@ -8,6 +8,7 @@ import {
   Calendar,
   Target,
   Users,
+  UserCog,
   Plug,
   Settings,
   ChevronLeft,
@@ -25,6 +26,7 @@ const menuItems = [
   { icon: Calendar, label: 'Agendamentos', path: '/agendamentos' },
   { icon: Target, label: 'Prospecção', path: '/prospeccao' },
   { icon: Users, label: 'Contatos', path: '/contatos' },
+  { icon: UserCog, label: 'Usuários', path: '/usuarios' },
   { icon: Plug, label: 'Conexão', path: '/conexao' },
   { icon: Settings, label: 'Configurações', path: '/configuracoes' },
 ];

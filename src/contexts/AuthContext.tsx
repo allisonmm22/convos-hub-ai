@@ -10,6 +10,7 @@ interface Usuario {
   email: string;
   avatar_url: string | null;
   is_admin: boolean;
+  role?: 'admin' | 'atendente';
 }
 
 interface AuthContextType {
@@ -69,7 +70,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
 
       if (error) throw error;
-      setUsuario(data);
+      
+      // Buscar role do usuário
+      if (data) {
+        const { data: roleData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId)
+          .maybeSingle();
+        
+        setUsuario({
+          ...data,
+          role: roleData?.role as 'admin' | 'atendente' | undefined,
+        });
+      } else {
+        setUsuario(null);
+      }
     } catch (error) {
       console.error('Erro ao buscar usuário:', error);
     } finally {
