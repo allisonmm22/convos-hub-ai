@@ -6,6 +6,7 @@ interface DescricaoEditorProps {
   onChange: (value: string) => void;
   placeholder?: string;
   onAcaoClick?: (cursorPosition: number) => void;
+  onCursorChange?: (position: number) => void;
 }
 
 interface ChipConfig {
@@ -192,7 +193,7 @@ function htmlToText(html: string): string {
   return temp.textContent || '';
 }
 
-export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: DescricaoEditorProps) {
+export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick, onCursorChange }: DescricaoEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [isFocused, setIsFocused] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -390,8 +391,10 @@ export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: D
   // Atualizar posição do cursor a cada seleção
   const handleSelectionChange = useCallback(() => {
     if (!editorRef.current || !isFocused) return;
-    lastCursorPositionRef.current = getCurrentCursorPosition();
-  }, [getCurrentCursorPosition, isFocused]);
+    const pos = getCurrentCursorPosition();
+    lastCursorPositionRef.current = pos;
+    onCursorChange?.(pos);
+  }, [getCurrentCursorPosition, isFocused, onCursorChange]);
 
   // Listener para mudanças de seleção
   useEffect(() => {

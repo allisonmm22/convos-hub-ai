@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { 
   Bot, Save, Clock, Loader2, Sparkles, ArrowLeft, Pencil, Check, X,
@@ -486,6 +486,9 @@ function EtapasAtendimentoTab({
     etapaId: '',
     cursorPosition: 0,
   });
+  
+  // Guardar posição do cursor por etapa
+  const cursorPositionsByEtapa = useRef<Record<string, number>>({});
 
   // Calcular e reportar total de caracteres das etapas
   useEffect(() => {
@@ -770,7 +773,10 @@ function EtapasAtendimentoTab({
                       <div className="flex-1" />
                       <button 
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary/15 text-primary hover:bg-primary/25 transition-colors"
-                        onClick={() => abrirModalDecisao(etapa.id)}
+                        onClick={() => {
+                          const savedPos = cursorPositionsByEtapa.current[etapa.id] ?? etapa.descricao.length;
+                          abrirModalDecisao(etapa.id, savedPos);
+                        }}
                       >
                         <Sparkles className="h-3 w-3" />
                         @ Ação
@@ -783,6 +789,9 @@ function EtapasAtendimentoTab({
                       onChange={(value) => updateEtapa(etapa.id, 'descricao', value)}
                       placeholder="Descreva o comportamento desta etapa..."
                       onAcaoClick={(cursorPos) => abrirModalDecisao(etapa.id, cursorPos)}
+                      onCursorChange={(pos) => {
+                        cursorPositionsByEtapa.current[etapa.id] = pos;
+                      }}
                     />
                     <p className="text-xs text-muted-foreground mt-2">
                       💡 Clique em <span className="text-primary font-medium">@ Ação</span> ou digite <span className="text-primary font-medium">@</span> para inserir ações inteligentes
