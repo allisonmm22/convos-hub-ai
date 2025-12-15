@@ -74,3 +74,6 @@ verify_jwt = false
 
 [functions.evolution-delete-instance]
 verify_jwt = false
+
+[functions.registrar-log]
+verify_jwt = false

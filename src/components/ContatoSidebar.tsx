@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { registrarLog } from '@/lib/logAtividade';
 import {
   Select,
   SelectContent,
@@ -232,6 +233,20 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
             titulo: `Negociação movida para ${estagioNovo.nome}`,
             mensagem: `${negociacao?.titulo || 'Negociação'} foi movida${estagioAnterior ? ` de "${estagioAnterior.nome}"` : ''} para "${estagioNovo.nome}"`,
             link: '/crm',
+          });
+
+          // Registrar log de atividade
+          registrarLog({
+            contaId: usuario.conta_id,
+            usuarioId: usuario.id,
+            tipo: 'negociacao_movida',
+            descricao: `${usuario.nome} moveu "${negociacao?.titulo}" ${estagioAnterior ? `de "${estagioAnterior.nome}"` : ''} para "${estagioNovo.nome}"`,
+            metadata: {
+              negociacao_id: negociacaoId,
+              negociacao_titulo: negociacao?.titulo,
+              estagio_anterior: estagioAnterior?.nome,
+              estagio_novo: estagioNovo.nome,
+            },
           });
         }
 

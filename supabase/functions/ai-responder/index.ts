@@ -1067,7 +1067,7 @@ serve(async (req) => {
 
     console.log('Resposta gerada via', result.provider + ':', result.resposta.substring(0, 100) + '...');
 
-    // 12. Salvar uso de tokens
+    // 12. Salvar uso de tokens e log de atividade
     if (result.tokens && result.tokens.total_tokens > 0) {
       console.log('Salvando uso de tokens:', result.tokens);
       try {
@@ -1080,6 +1080,19 @@ serve(async (req) => {
           completion_tokens: result.tokens.completion_tokens,
           total_tokens: result.tokens.total_tokens,
           custo_estimado: calcularCustoEstimado(result.provider, modelo, result.tokens),
+        });
+
+        // Log de atividade para resposta IA
+        await supabase.from('logs_atividade').insert({
+          conta_id,
+          tipo: 'ia_resposta',
+          descricao: `IA respondeu via ${result.provider} (${result.tokens.total_tokens} tokens)`,
+          metadata: {
+            provider: result.provider,
+            modelo,
+            tokens: result.tokens,
+            conversa_id,
+          },
         });
       } catch (tokenError) {
         console.error('Erro ao salvar uso de tokens:', tokenError);
