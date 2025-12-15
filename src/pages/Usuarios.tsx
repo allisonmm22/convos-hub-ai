@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Shield, MessageSquare, Eye, EyeOff, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -135,24 +136,29 @@ export default function Usuarios() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
+      <MainLayout>
+        <div className="flex items-center justify-center h-full">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      </MainLayout>
     );
   }
 
   if (!isAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4">
-        <Shield className="h-16 w-16 text-muted-foreground" />
-        <h2 className="text-xl font-semibold text-foreground">Acesso Restrito</h2>
-        <p className="text-muted-foreground">Apenas administradores podem acessar esta página.</p>
-      </div>
+      <MainLayout>
+        <div className="flex flex-col items-center justify-center h-full gap-4">
+          <Shield className="h-16 w-16 text-muted-foreground" />
+          <h2 className="text-xl font-semibold text-foreground">Acesso Restrito</h2>
+          <p className="text-muted-foreground">Apenas administradores podem acessar esta página.</p>
+        </div>
+      </MainLayout>
     );
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <MainLayout>
+      <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Usuários</h1>
@@ -276,6 +282,7 @@ export default function Usuarios() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+      </div>
+    </MainLayout>
   );
 }
