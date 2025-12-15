@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
-  X, Tag, UserRound, Bot, Globe, Layers, Bell, Package, StopCircle,
-  Check, AlertCircle, Loader2, UserPen
+  Tag, UserRound, Bot, Globe, Layers, Bell, Package, StopCircle,
+  Check, AlertCircle, Loader2, UserPen, Handshake
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-interface DecisaoInteligenteModalProps {
+interface AcaoInteligenteModalProps {
   isOpen: boolean;
   onClose: () => void;
   onInsert: (action: string) => void;
@@ -35,7 +35,7 @@ interface Usuario {
   nome: string;
 }
 
-interface DecisaoTipo {
+interface AcaoTipo {
   id: string;
   label: string;
   description: string;
@@ -44,7 +44,7 @@ interface DecisaoTipo {
   bgColor: string;
 }
 
-const tiposDecisao: DecisaoTipo[] = [
+const tiposAcao: AcaoTipo[] = [
   {
     id: 'tag',
     label: 'Adicionar Tag',
@@ -52,6 +52,14 @@ const tiposDecisao: DecisaoTipo[] = [
     icon: Tag,
     color: 'hsl(var(--chart-4))',
     bgColor: 'hsl(var(--chart-4) / 0.1)',
+  },
+  {
+    id: 'negociacao',
+    label: 'Criar Negociação',
+    description: 'Cria uma negociação no CRM',
+    icon: Handshake,
+    color: 'hsl(var(--chart-1))',
+    bgColor: 'hsl(var(--chart-1) / 0.1)',
   },
   {
     id: 'transferir-agente',
@@ -82,8 +90,8 @@ const tiposDecisao: DecisaoTipo[] = [
     label: 'Transferir para Estágio',
     description: 'Move o lead no CRM',
     icon: Layers,
-    color: 'hsl(var(--chart-1))',
-    bgColor: 'hsl(var(--chart-1) / 0.1)',
+    color: 'hsl(var(--chart-5))',
+    bgColor: 'hsl(var(--chart-5) / 0.1)',
   },
   {
     id: 'notificar',
@@ -98,8 +106,8 @@ const tiposDecisao: DecisaoTipo[] = [
     label: 'Atribuir Produto',
     description: 'Associa um produto ao lead',
     icon: Package,
-    color: 'hsl(var(--chart-5))',
-    bgColor: 'hsl(var(--chart-5) / 0.1)',
+    color: 'hsl(var(--chart-3))',
+    bgColor: 'hsl(var(--chart-3) / 0.1)',
   },
   {
     id: 'finalizar',
@@ -114,23 +122,21 @@ const tiposDecisao: DecisaoTipo[] = [
     label: 'Alterar Nome',
     description: 'Altera o nome do contato',
     icon: UserPen,
-    color: 'hsl(var(--chart-3))',
-    bgColor: 'hsl(var(--chart-3) / 0.1)',
+    color: 'hsl(var(--chart-2))',
+    bgColor: 'hsl(var(--chart-2) / 0.1)',
   },
 ];
 
-export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoInteligenteModalProps) {
+export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoInteligenteModalProps) {
   const { usuario } = useAuth();
   const [tipoSelecionado, setTipoSelecionado] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   
-  // Estados para os dados
   const [funis, setFunis] = useState<Funil[]>([]);
   const [estagios, setEstagios] = useState<Estagio[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [agentes, setAgentes] = useState<{ id: string; nome: string }[]>([]);
   
-  // Estados para seleção
   const [tagValue, setTagValue] = useState('');
   const [funilSelecionado, setFunilSelecionado] = useState('');
   const [estagioSelecionado, setEstagioSelecionado] = useState('');
@@ -139,8 +145,8 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
   const [fonteValue, setFonteValue] = useState('');
   const [notificacaoValue, setNotificacaoValue] = useState('');
   const [produtoValue, setProdutoValue] = useState('');
+  const [negociacaoValor, setNegociacaoValor] = useState('');
 
-  // Reset ao fechar
   useEffect(() => {
     if (!isOpen) {
       setTipoSelecionado(null);
@@ -152,10 +158,10 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
       setFonteValue('');
       setNotificacaoValue('');
       setProdutoValue('');
+      setNegociacaoValor('');
     }
   }, [isOpen]);
 
-  // Carregar dados quando abrir
   useEffect(() => {
     if (isOpen && usuario?.conta_id) {
       fetchData();
@@ -165,7 +171,6 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Buscar funis e estágios
       const [funisRes, usuariosRes, agentesRes] = await Promise.all([
         supabase
           .from('funis')
@@ -187,7 +192,6 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
       if (usuariosRes.data) setUsuarios(usuariosRes.data);
       if (agentesRes.data) setAgentes(agentesRes.data);
 
-      // Buscar estágios se houver funis
       if (funisRes.data && funisRes.data.length > 0) {
         const { data: estagiosData } = await supabase
           .from('estagios')
@@ -204,7 +208,6 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
     }
   };
 
-  // Verificar se está pronto para inserir
   const isProntoParaInserir = (): boolean => {
     if (!tipoSelecionado) return false;
 
@@ -213,6 +216,8 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
         return tagValue.trim().length > 0;
       case 'etapa':
         return estagioSelecionado !== '';
+      case 'negociacao':
+        return funilSelecionado !== '' && estagioSelecionado !== '';
       case 'transferir-usuario':
         return usuarioSelecionado !== '';
       case 'transferir-agente':
@@ -231,7 +236,6 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
     }
   };
 
-  // Gerar ação
   const gerarAcao = (): string => {
     switch (tipoSelecionado) {
       case 'tag':
@@ -240,15 +244,25 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
         const estagio = estagios.find(e => e.id === estagioSelecionado);
         const funil = funis.find(f => f.id === funilSelecionado);
         
-        // Se funil selecionado, usar formato funil/estagio para precisão
         if (funil && estagio) {
           const funilSlug = funil.nome.toLowerCase().replace(/\s+/g, '-');
           const estagioSlug = estagio.nome.toLowerCase().replace(/\s+/g, '-');
           return `@etapa:${funilSlug}/${estagioSlug}`;
         }
         
-        // Fallback para formato antigo se não selecionou funil
         return `@etapa:${estagio?.nome.toLowerCase().replace(/\s+/g, '-') || estagioSelecionado}`;
+      }
+      case 'negociacao': {
+        const funil = funis.find(f => f.id === funilSelecionado);
+        const estagio = estagios.find(e => e.id === estagioSelecionado);
+        
+        if (funil && estagio) {
+          const funilSlug = funil.nome.toLowerCase().replace(/\s+/g, '-');
+          const estagioSlug = estagio.nome.toLowerCase().replace(/\s+/g, '-');
+          const valorParte = negociacaoValor ? `:${negociacaoValor}` : '';
+          return `@negociacao:${funilSlug}/${estagioSlug}${valorParte}`;
+        }
+        return '';
       }
       case 'transferir-usuario':
         if (usuarioSelecionado === 'humano') return '@transferir:humano';
@@ -256,7 +270,6 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
         return `@transferir:usuario:${user?.nome.toLowerCase().replace(/\s+/g, '-') || usuarioSelecionado}`;
       case 'transferir-agente':
         if (agenteSelecionado === 'ia') return '@transferir:ia';
-        // Usar o ID do agente para garantir precisão na transferência
         return `@transferir:agente:${agenteSelecionado}`;
       case 'fonte':
         return `@fonte:${fonteValue.toLowerCase().replace(/\s+/g, '-')}`;
@@ -285,14 +298,12 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
     ? estagios.filter(e => e.funil_id === funilSelecionado)
     : estagios;
 
-  const tipoAtual = tiposDecisao.find(t => t.id === tipoSelecionado);
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 py-4 border-b border-border">
           <DialogTitle className="text-lg font-semibold">
-            Adicionar Decisão Inteligente
+            Adicionar Ação Inteligente
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
             Configure ações automáticas baseadas em condições
@@ -300,13 +311,12 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
         </DialogHeader>
 
         <div className="flex min-h-[400px]">
-          {/* Coluna Esquerda - Tipos de Decisão */}
           <div className="w-1/2 border-r border-border p-4 overflow-auto">
             <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-              Tipo de Decisão
+              Tipo de Ação
             </h3>
             <div className="space-y-1">
-              {tiposDecisao.map((tipo) => (
+              {tiposAcao.map((tipo) => (
                 <button
                   key={tipo.id}
                   onClick={() => setTipoSelecionado(tipo.id)}
@@ -318,22 +328,13 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
                 >
                   <div 
                     className="flex items-center justify-center h-9 w-9 rounded-lg"
-                    style={{ 
-                      backgroundColor: tipo.bgColor,
-                    }}
+                    style={{ backgroundColor: tipo.bgColor }}
                   >
-                    <tipo.icon 
-                      className="h-4 w-4" 
-                      style={{ color: tipo.color }}
-                    />
+                    <tipo.icon className="h-4 w-4" style={{ color: tipo.color }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-foreground text-sm">
-                      {tipo.label}
-                    </div>
-                    <div className="text-xs text-muted-foreground truncate">
-                      {tipo.description}
-                    </div>
+                    <div className="font-medium text-foreground text-sm">{tipo.label}</div>
+                    <div className="text-xs text-muted-foreground truncate">{tipo.description}</div>
                   </div>
                   {tipoSelecionado === tipo.id && (
                     <Check className="h-4 w-4 text-primary flex-shrink-0" />
@@ -343,7 +344,6 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
             </div>
           </div>
 
-          {/* Coluna Direita - Configuração */}
           <div className="w-1/2 p-4 overflow-auto bg-muted/30">
             <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
               Configuração
@@ -359,17 +359,14 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
                   <Layers className="h-6 w-6 text-muted-foreground" />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Selecione um tipo de decisão para configurar
+                  Selecione um tipo de ação para configurar
                 </p>
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Adicionar Tag */}
                 {tipoSelecionado === 'tag' && (
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Nome da Tag
-                    </label>
+                    <label className="block text-sm font-medium text-foreground mb-2">Nome da Tag</label>
                     <input
                       type="text"
                       value={tagValue}
@@ -378,18 +375,63 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
                       className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                     <p className="text-xs text-muted-foreground mt-2">
-                      💡 A tag será adicionada automaticamente ao contato quando a condição for atendida
+                      💡 A tag será adicionada automaticamente ao contato
                     </p>
                   </div>
                 )}
 
-                {/* Transferir para Estágio */}
+                {tipoSelecionado === 'negociacao' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Selecione o Funil</label>
+                      <select
+                        value={funilSelecionado}
+                        onChange={(e) => {
+                          setFunilSelecionado(e.target.value);
+                          setEstagioSelecionado('');
+                        }}
+                        className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">Selecione um funil...</option>
+                        {funis.map(f => (
+                          <option key={f.id} value={f.id}>{f.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Estágio Inicial</label>
+                      <select
+                        value={estagioSelecionado}
+                        onChange={(e) => setEstagioSelecionado(e.target.value)}
+                        disabled={!funilSelecionado}
+                        className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                      >
+                        <option value="">Selecione um estágio...</option>
+                        {estagiosFiltrados.map(e => (
+                          <option key={e.id} value={e.id}>{e.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Valor (opcional)</label>
+                      <input
+                        type="number"
+                        value={negociacaoValor}
+                        onChange={(e) => setNegociacaoValor(e.target.value)}
+                        placeholder="Ex: 1500"
+                        className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      💼 O agente criará automaticamente uma negociação com os dados do contato
+                    </p>
+                  </>
+                )}
+
                 {tipoSelecionado === 'etapa' && (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Selecione o Funil
-                      </label>
+                      <label className="block text-sm font-medium text-foreground mb-2">Selecione o Funil</label>
                       <select
                         value={funilSelecionado}
                         onChange={(e) => {
@@ -405,9 +447,7 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Selecione o Estágio
-                      </label>
+                      <label className="block text-sm font-medium text-foreground mb-2">Selecione o Estágio</label>
                       <select
                         value={estagioSelecionado}
                         onChange={(e) => setEstagioSelecionado(e.target.value)}
@@ -425,12 +465,9 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
                   </>
                 )}
 
-                {/* Transferir para Usuário */}
                 {tipoSelecionado === 'transferir-usuario' && (
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Selecione o Atendente
-                    </label>
+                    <label className="block text-sm font-medium text-foreground mb-2">Selecione o Atendente</label>
                     <select
                       value={usuarioSelecionado}
                       onChange={(e) => setUsuarioSelecionado(e.target.value)}
@@ -448,12 +485,9 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
                   </div>
                 )}
 
-                {/* Transferir para Agente */}
                 {tipoSelecionado === 'transferir-agente' && (
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Selecione o Agente IA
-                    </label>
+                    <label className="block text-sm font-medium text-foreground mb-2">Selecione o Agente IA</label>
                     <select
                       value={agenteSelecionado}
                       onChange={(e) => setAgenteSelecionado(e.target.value)}
@@ -471,12 +505,9 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
                   </div>
                 )}
 
-                {/* Atribuir Fonte */}
                 {tipoSelecionado === 'fonte' && (
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Nome da Fonte
-                    </label>
+                    <label className="block text-sm font-medium text-foreground mb-2">Nome da Fonte</label>
                     <input
                       type="text"
                       value={fonteValue}
@@ -490,12 +521,9 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
                   </div>
                 )}
 
-                {/* Fazer Notificação */}
                 {tipoSelecionado === 'notificar' && (
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Mensagem da Notificação
-                    </label>
+                    <label className="block text-sm font-medium text-foreground mb-2">Mensagem da Notificação</label>
                     <textarea
                       value={notificacaoValue}
                       onChange={(e) => setNotificacaoValue(e.target.value)}
@@ -509,12 +537,9 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
                   </div>
                 )}
 
-                {/* Atribuir Produto */}
                 {tipoSelecionado === 'produto' && (
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Nome do Produto
-                    </label>
+                    <label className="block text-sm font-medium text-foreground mb-2">Nome do Produto</label>
                     <input
                       type="text"
                       value={produtoValue}
@@ -528,7 +553,6 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
                   </div>
                 )}
 
-                {/* Interromper Agente */}
                 {tipoSelecionado === 'finalizar' && (
                   <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20">
                     <div className="flex items-center gap-3 mb-2">
@@ -537,12 +561,10 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
                     </div>
                     <p className="text-sm text-muted-foreground">
                       O agente irá encerrar a conversa automaticamente quando esta condição for atendida.
-                      O status da conversa será alterado para "Encerrado".
                     </p>
                   </div>
                 )}
 
-                {/* Alterar Nome */}
                 {tipoSelecionado === 'nome' && (
                   <div className="p-4 rounded-lg bg-muted/50 border border-border">
                     <p className="text-sm text-foreground mb-2">
@@ -555,7 +577,6 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
                   </div>
                 )}
 
-                {/* Preview da ação */}
                 {isProntoParaInserir() && (
                   <div className="mt-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
                     <div className="text-xs text-muted-foreground mb-1">Ação gerada:</div>
@@ -567,7 +588,6 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-muted/30">
           <div className="flex items-center gap-2">
             {isProntoParaInserir() ? (
@@ -579,7 +599,7 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
               <>
                 <AlertCircle className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm text-muted-foreground">
-                  {tipoSelecionado ? 'Configure as opções necessárias' : 'Selecione um tipo de decisão'}
+                  {tipoSelecionado ? 'Configure as opções necessárias' : 'Selecione um tipo de ação'}
                 </span>
               </>
             )}
@@ -596,7 +616,7 @@ export function DecisaoInteligenteModal({ isOpen, onClose, onInsert }: DecisaoIn
               disabled={!isProntoParaInserir()}
               className="h-10 px-6 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Inserir Decisão
+              Inserir Ação
             </button>
           </div>
         </div>

@@ -25,13 +25,13 @@ interface AIResponse {
 }
 
 interface Acao {
-  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome';
+  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao';
   valor?: string;
 }
 
 // Parser de ações do prompt
 function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: Acao[] } {
-  const acoesRegex = /@(etapa|tag|transferir|notificar|finalizar|nome)(?::([^\s@]+))?/gi;
+  const acoesRegex = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao)(?::([^\s@]+))?/gi;
   const matches = [...texto.matchAll(acoesRegex)];
   
   const acoes: string[] = [];
@@ -606,6 +606,7 @@ serve(async (req) => {
       promptCompleto += 'Você pode executar as seguintes ações quando apropriado:\n';
       promptCompleto += '- @etapa:<nome> - Mover o lead para uma etapa específica do CRM\n';
       promptCompleto += '- @tag:<nome> - Adicionar uma tag ao contato\n';
+      promptCompleto += '- @negociacao:<funil/estagio> ou @negociacao:<funil/estagio>:<valor> - Criar uma nova negociação no CRM\n';
       promptCompleto += '- @transferir:humano - Transferir a conversa para um atendente humano\n';
       promptCompleto += '- @transferir:ia - Devolver a conversa para o agente IA principal\n';
       promptCompleto += '- @transferir:agente:<id_ou_nome> - Transferir a conversa para outro agente IA específico\n';
@@ -664,8 +665,8 @@ serve(async (req) => {
             properties: {
               tipo: {
                 type: 'string',
-                enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar', 'nome'],
-                description: 'Tipo da ação a ser executada. Use "nome" para alterar o nome do contato quando ele se identificar.',
+                enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar', 'nome', 'negociacao'],
+                description: 'Tipo da ação a ser executada. Use "nome" para alterar o nome do contato quando ele se identificar. Use "negociacao" para criar uma nova negociação no CRM.',
               },
               valor: {
                 type: 'string',
@@ -755,7 +756,7 @@ serve(async (req) => {
 
     // Limpar comandos @ que possam ter vazado para o texto da resposta
     let respostaFinal = result.resposta;
-    respostaFinal = respostaFinal.replace(/@(etapa|tag|transferir|notificar|finalizar|nome)(?::[^\s@.,!?]+)?/gi, '').trim();
+    respostaFinal = respostaFinal.replace(/@(etapa|tag|transferir|notificar|finalizar|nome|negociacao)(?::[^\s@.,!?]+)?/gi, '').trim();
     respostaFinal = respostaFinal.replace(/\s{2,}/g, ' ').trim();
     
     // Remover menções de transferência que possam ter escapado

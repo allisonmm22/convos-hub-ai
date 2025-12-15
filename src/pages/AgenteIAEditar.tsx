@@ -8,7 +8,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { DecisaoInteligenteModal } from '@/components/DecisaoInteligenteModal';
+import { AcaoInteligenteModal } from '@/components/AcaoInteligenteModal';
 import { DescricaoEditor } from '@/components/DescricaoEditor';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -616,7 +616,7 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
   return (
     <div className="space-y-6">
       {/* Modal de Decisão Inteligente */}
-      <DecisaoInteligenteModal
+      <AcaoInteligenteModal
         isOpen={modalDecisao.isOpen}
         onClose={() => setModalDecisao(prev => ({ ...prev, isOpen: false }))}
         onInsert={handleDecisaoInsert}
@@ -764,7 +764,7 @@ function EtapasAtendimentoTab({ agentId }: { agentId: string }) {
                       value={etapa.descricao}
                       onChange={(value) => updateEtapa(etapa.id, 'descricao', value)}
                       placeholder="Descreva o comportamento desta etapa..."
-                      onDecisaoClick={(cursorPos) => abrirModalDecisao(etapa.id, cursorPos)}
+                      onAcaoClick={(cursorPos) => abrirModalDecisao(etapa.id, cursorPos)}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
                       💡 Clique em <span className="text-primary font-medium">@ Decisão</span> ou digite <span className="text-primary font-medium">@</span> para inserir ações como mover para estágio do CRM, adicionar tag, transferir, etc.

@@ -1,11 +1,11 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen } from 'lucide-react';
+import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen, Handshake } from 'lucide-react';
 
 interface DescricaoEditorProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  onDecisaoClick?: (cursorPosition: number) => void;
+  onAcaoClick?: (cursorPosition: number) => void;
 }
 
 interface ChipConfig {
@@ -29,13 +29,32 @@ function parseAcao(acao: string): ChipConfig {
     };
   }
   
+  if (acaoLower === '@nome') {
+    return {
+      icon: UserPen,
+      label: 'Capturar Nome',
+      colorClass: 'text-amber-700 dark:text-amber-400',
+      bgClass: 'bg-amber-100 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700',
+    };
+  }
+  
   if (acaoLower.startsWith('@tag:')) {
     const valor = acao.replace(/^@tag:/i, '');
     return {
       icon: Tag,
-      label: `Adicionar Tag #1001 - ${valor.toUpperCase()}`,
+      label: `Adicionar Tag: ${valor}`,
       colorClass: 'text-blue-700 dark:text-blue-400',
       bgClass: 'bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700',
+    };
+  }
+  
+  if (acaoLower.startsWith('@negociacao:')) {
+    const valor = acao.replace(/^@negociacao:/i, '');
+    return {
+      icon: Handshake,
+      label: `Criar Negociação: ${valor}`,
+      colorClass: 'text-orange-700 dark:text-orange-400',
+      bgClass: 'bg-orange-100 dark:bg-orange-900/40 border-orange-300 dark:border-orange-700',
     };
   }
   
@@ -121,7 +140,7 @@ function parseAcao(acao: string): ChipConfig {
 }
 
 // Regex para encontrar ações no texto (exclui pontuação final)
-const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar)(:[^\s@<>.,;!?]+)?/gi;
+const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao)(:[^\s@<>.,;!?]+)?/gi;
 
 // Converter texto com ações para HTML com chips
 function textToHtml(text: string): string {
@@ -173,7 +192,7 @@ function htmlToText(html: string): string {
   return temp.textContent || '';
 }
 
-export function DescricaoEditor({ value, onChange, placeholder, onDecisaoClick }: DescricaoEditorProps) {
+export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: DescricaoEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [isFocused, setIsFocused] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -332,14 +351,14 @@ export function DescricaoEditor({ value, onChange, placeholder, onDecisaoClick }
 
   // Handler para tecla @
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === '@' && onDecisaoClick) {
+    if (e.key === '@' && onAcaoClick) {
       e.preventDefault();
       // Guardar posição ANTES de abrir o modal
       const cursorPos = getCurrentCursorPosition();
       lastCursorPositionRef.current = cursorPos;
-      onDecisaoClick(cursorPos);
+      onAcaoClick(cursorPos);
     }
-  }, [onDecisaoClick, getCurrentCursorPosition]);
+  }, [onAcaoClick, getCurrentCursorPosition]);
 
   // Atualizar posição do cursor a cada seleção
   const handleSelectionChange = useCallback(() => {
