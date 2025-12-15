@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.processar-respostas-pendentes]
 verify_jwt = false
+
+[functions.processar-resposta-agora]
+verify_jwt = false
