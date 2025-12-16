@@ -42,6 +42,7 @@ import {
   File as FileIcon,
   Download,
   ChevronLeft,
+  Instagram,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -131,6 +132,7 @@ interface Conversa {
   nao_lidas: number | null;
   status?: string | null;
   etapa_ia_atual?: string | null;
+  canal?: string | null;
   contatos: Contato;
   agent_ia?: AgenteIA | null;
   etapa_ia?: EtapaIA | null;
@@ -188,6 +190,7 @@ interface MetaTemplate {
 type StatusFilter = 'todos' | 'abertos' | 'em_atendimento' | 'aguardando_cliente' | 'encerrado';
 type AtendenteFilter = 'todos' | 'agente_ia' | 'humano';
 type TipoFilter = 'todos' | 'individual' | 'grupo';
+type CanalFilter = 'todos' | 'whatsapp' | 'instagram';
 
 const FILTERS_STORAGE_KEY = 'conversas_filters';
 
@@ -200,7 +203,7 @@ const getInitialFilters = () => {
   } catch (e) {
     console.error('Erro ao ler filtros do localStorage:', e);
   }
-  return { status: 'abertos', atendente: 'todos', tipo: 'todos', tags: [] as string[] };
+  return { status: 'abertos', atendente: 'todos', tipo: 'todos', tags: [] as string[], canal: 'todos' };
 };
 
 export default function Conversas() {
@@ -221,6 +224,7 @@ export default function Conversas() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialFilters.status);
   const [atendenteFilter, setAtendenteFilter] = useState<AtendenteFilter>(initialFilters.atendente);
   const [tipoFilter, setTipoFilter] = useState<TipoFilter>(initialFilters.tipo);
+  const [canalFilter, setCanalFilter] = useState<CanalFilter>(initialFilters.canal || 'todos');
   const [tagsFilter, setTagsFilter] = useState<string[]>(initialFilters.tags || []);
   const [tagsDisponiveis, setTagsDisponiveis] = useState<TagItem[]>([]);
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -264,10 +268,11 @@ export default function Conversas() {
       status: statusFilter,
       atendente: atendenteFilter,
       tipo: tipoFilter,
+      canal: canalFilter,
       tags: tagsFilter
     };
     localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
-  }, [statusFilter, atendenteFilter, tipoFilter, tagsFilter]);
+  }, [statusFilter, atendenteFilter, tipoFilter, canalFilter, tagsFilter]);
 
   // Buscar conexão WhatsApp
   const fetchConexao = useCallback(async () => {

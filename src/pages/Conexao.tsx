@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Plug, PlugZap, RefreshCw, Check, Loader2, QrCode, Power, Plus, Smartphone, Trash2, Globe, Zap, Info, ExternalLink, Copy, CheckCircle2 } from 'lucide-react';
+import { Plug, PlugZap, RefreshCw, Check, Loader2, QrCode, Power, Plus, Smartphone, Trash2, Globe, Zap, Info, ExternalLink, Copy, CheckCircle2, Instagram } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOnboarding } from '@/contexts/OnboardingContext';
@@ -9,7 +9,7 @@ import { validarEExibirErro } from '@/hooks/useValidarLimitePlano';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { OnboardingTooltip } from '@/components/onboarding/OnboardingTooltip';
 
-type TipoProvedor = 'evolution' | 'meta';
+type TipoProvedor = 'evolution' | 'meta' | 'instagram';
 
 interface Conexao {
   id: string;
@@ -25,6 +25,7 @@ interface Conexao {
   meta_business_account_id: string | null;
   meta_access_token: string | null;
   meta_webhook_verify_token: string | null;
+  tipo_canal?: string | null;
 }
 
 export default function Conexao() {
@@ -51,6 +52,8 @@ export default function Conexao() {
   const [metaWebhookVerifyToken, setMetaWebhookVerifyToken] = useState('');
   const [savingMeta, setSavingMeta] = useState(false);
   const [copiedWebhook, setCopiedWebhook] = useState(false);
+  const [creatingInstagram, setCreatingInstagram] = useState(false);
+  const [connectingInstagram, setConnectingInstagram] = useState(false);
 
   const fetchConexao = useCallback(async () => {
     if (!usuario?.conta_id) return;
@@ -200,6 +203,84 @@ export default function Conexao() {
       toast.error('Erro ao criar conexão Meta API');
     } finally {
       setCreating(false);
+    }
+  };
+
+  // Criar conexão Instagram via Evolution API
+  const handleCreateInstagramConnection = async () => {
+    if (!instanceName.trim()) {
+      toast.error('Digite o nome da conexão');
+      return;
+    }
+
+    setCreatingInstagram(true);
+    try {
+      const permitido = await validarEExibirErro(usuario!.conta_id, 'conexoes');
+      if (!permitido) {
+        setCreatingInstagram(false);
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('evolution-create-instance-instagram', {
+        body: {
+          nome: instanceName.trim(),
+          conta_id: usuario!.conta_id,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      toast.success('Conexão Instagram criada! Agora conecte sua conta.');
+      setInstanceName('');
+      await fetchConexao();
+
+      // Se retornou URL de OAuth, abrir em nova janela
+      if (data.oauth_url) {
+        window.open(data.oauth_url, '_blank');
+      }
+    } catch (error) {
+      console.error('Erro ao criar conexão Instagram:', error);
+      toast.error('Erro ao criar conexão Instagram');
+    } finally {
+      setCreatingInstagram(false);
+    }
+  };
+
+  // Conectar Instagram (OAuth)
+  const handleConnectInstagram = async () => {
+    if (!conexao) return;
+
+    setConnectingInstagram(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('instagram-connect', {
+        body: { conexao_id: conexao.id },
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      if (data.oauth_url) {
+        window.open(data.oauth_url, '_blank');
+        toast.success('Complete a autenticação na janela que abriu');
+      } else {
+        toast.info('Processando conexão...');
+      }
+
+      await fetchConexao();
+    } catch (error) {
+      console.error('Erro ao conectar Instagram:', error);
+      toast.error('Erro ao conectar Instagram');
+    } finally {
+      setConnectingInstagram(false);
     }
   };
 
@@ -492,8 +573,11 @@ export default function Conexao() {
                   {conexao.tipo_provedor === 'meta' && (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">Meta API</span>
                   )}
-                  {conexao.tipo_provedor === 'evolution' && (
+                  {conexao.tipo_provedor === 'evolution' && !conexao.tipo_canal?.includes('instagram') && (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">Evolution</span>
+                  )}
+                  {(conexao.tipo_provedor === 'instagram' || conexao.tipo_canal === 'instagram') && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-pink-400">Instagram</span>
                   )}
                 </div>
               )}
@@ -521,7 +605,7 @@ export default function Conexao() {
             </div>
 
             {/* Seletor de Tipo de Provedor */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <button
                 onClick={() => setTipoProvedor('evolution')}
                 className={`p-4 rounded-xl border-2 text-left transition-all ${
@@ -567,6 +651,30 @@ export default function Conexao() {
                   <li className="flex items-center gap-1"><Check className="h-3 w-3 text-blue-500" /> API Oficial</li>
                   <li className="flex items-center gap-1"><Check className="h-3 w-3 text-blue-500" /> Zero risco de ban</li>
                   <li className="flex items-center gap-1"><Info className="h-3 w-3 text-amber-500" /> Pago por mensagem</li>
+                </ul>
+              </button>
+
+              <button
+                onClick={() => setTipoProvedor('instagram')}
+                className={`p-4 rounded-xl border-2 text-left transition-all ${
+                  tipoProvedor === 'instagram'
+                    ? 'border-pink-500 bg-pink-500/10'
+                    : 'border-border hover:border-muted-foreground/50'
+                }`}
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                    <Instagram className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">Instagram Direct</h3>
+                    <p className="text-xs text-muted-foreground">Via Evolution API</p>
+                  </div>
+                </div>
+                <ul className="text-xs text-muted-foreground space-y-1 ml-13">
+                  <li className="flex items-center gap-1"><Check className="h-3 w-3 text-pink-500" /> Mensagens do Direct</li>
+                  <li className="flex items-center gap-1"><Check className="h-3 w-3 text-pink-500" /> Mesmo AI Agent</li>
+                  <li className="flex items-center gap-1"><Check className="h-3 w-3 text-pink-500" /> Inbox unificado</li>
                 </ul>
               </button>
             </div>
@@ -675,7 +783,22 @@ export default function Conexao() {
                 ) : (
                   <>
                     <Zap className="h-5 w-5" />
-                    Criar Instância Evolution
+                    Criar Instância Evolution (WhatsApp)
+                  </>
+                )}
+              </button>
+            ) : tipoProvedor === 'instagram' ? (
+              <button
+                onClick={handleCreateInstagramConnection}
+                disabled={creatingInstagram || !instanceName.trim()}
+                className="w-full h-11 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium flex items-center justify-center gap-2 hover:from-purple-700 hover:to-pink-700 transition-colors disabled:opacity-50"
+              >
+                {creatingInstagram ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <Instagram className="h-5 w-5" />
+                    Criar Conexão Instagram
                   </>
                 )}
               </button>
