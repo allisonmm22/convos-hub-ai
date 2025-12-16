@@ -588,6 +588,7 @@ export default function Conversas() {
           telefone: conversaSelecionada.contatos.telefone,
           template_name: selectedTemplate.name,
           template_params: templateParams.filter(p => p.trim()),
+          template_language: selectedTemplate.language || 'en_US',
         },
       });
       
