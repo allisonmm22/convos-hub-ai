@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { 
   Plus, DollarSign, User, MoreVertical, GripVertical, Loader2, Settings, 
@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Link, useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useSwipe } from '@/hooks/useSwipe';
 import {
   Select,
   SelectContent,
@@ -106,6 +107,25 @@ export default function CRM() {
   const [detalheModalOpen, setDetalheModalOpen] = useState(false);
 
   const selectedFunil = funis.find(f => f.id === selectedFunilId) || null;
+
+  // Swipe handlers for mobile stage navigation
+  const handleSwipeLeft = useCallback(() => {
+    if (selectedFunil && activeStageIndex < selectedFunil.estagios.length - 1) {
+      setActiveStageIndex(prev => prev + 1);
+    }
+  }, [selectedFunil, activeStageIndex]);
+
+  const handleSwipeRight = useCallback(() => {
+    if (activeStageIndex > 0) {
+      setActiveStageIndex(prev => prev - 1);
+    }
+  }, [activeStageIndex]);
+
+  const [swipeHandlers, swipeState] = useSwipe({
+    onSwipeLeft: handleSwipeLeft,
+    onSwipeRight: handleSwipeRight,
+    threshold: 60,
+  });
 
   // Negociações filtradas por busca
   const negociacoesFiltradas = useMemo(() => {
@@ -698,11 +718,16 @@ export default function CRM() {
         {selectedFunil ? (
           <div 
             className={cn(
-              "pb-4 pt-2",
+              "pb-4 pt-2 relative",
               !isMobile && "flex gap-5 overflow-x-auto",
-              !isMobile && "px-0"
+              !isMobile && "px-0",
+              isMobile && swipeState.swiping && "select-none"
             )}
-            style={!isMobile ? { transform: 'rotateX(180deg)' } : undefined}
+            style={!isMobile ? { transform: 'rotateX(180deg)' } : {
+              transform: swipeState.swiping ? `translateX(${swipeState.deltaX * 0.3}px)` : undefined,
+              transition: swipeState.swiping ? 'none' : 'transform 0.3s ease-out',
+            }}
+            {...(isMobile ? swipeHandlers : {})}
           >
             {(isMobile 
               ? [selectedFunil.estagios[activeStageIndex]].filter(Boolean)
