@@ -260,8 +260,17 @@ export function NegociacaoDetalheModal({
 
       if (error) throw error;
       
+      const novaData = new Date().toISOString();
       setResumo(data.resumo);
-      setResumoGeradoEm(new Date().toISOString());
+      setResumoGeradoEm(novaData);
+      
+      // Update parent state with new summary
+      onUpdate({
+        ...negociacao,
+        resumo_ia: data.resumo,
+        resumo_gerado_em: novaData,
+      });
+      
       toast.success('Resumo gerado com sucesso!');
     } catch (error) {
       console.error('Erro ao gerar resumo:', error);
