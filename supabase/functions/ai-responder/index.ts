@@ -7,20 +7,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Mapeamento de modelos OpenAI para Lovable AI
-const modelMapping: Record<string, string> = {
-  'gpt-4o-mini': 'google/gemini-2.5-flash',
-  'gpt-4o': 'google/gemini-2.5-pro',
-  'gpt-4.1-mini-2025-04-14': 'google/gemini-2.5-flash',
-  'gpt-4.1-2025-04-14': 'google/gemini-2.5-pro',
-  'gpt-5-2025-08-07': 'openai/gpt-5',
-  'gpt-5-mini-2025-08-07': 'openai/gpt-5-mini',
-  'gpt-5-nano-2025-08-07': 'openai/gpt-5-nano',
-};
-
 interface AIResponse {
   resposta: string;
-  provider: 'openai' | 'lovable';
+  provider: 'openai';
   acoes?: Acao[];
   tokens?: {
     prompt_tokens: number;
@@ -491,154 +480,7 @@ async function callOpenAI(
   return { resposta, provider: 'openai', acoes: acoes.length > 0 ? acoes : undefined, tokens };
 }
 
-async function callLovableAI(
-  messages: { role: string; content: string }[],
-  modelo: string,
-  tools?: any[],
-  executarAgendaFn?: (valor: string) => Promise<{ sucesso: boolean; mensagem: string; dados?: any }>
-): Promise<AIResponse> {
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-  
-  if (!LOVABLE_API_KEY) {
-    throw new Error('LOVABLE_API_KEY não configurada');
-  }
-
-  // Mapear modelo OpenAI para equivalente Lovable AI
-  const lovableModel = modelMapping[modelo] || 'google/gemini-2.5-flash';
-
-  console.log('Usando Lovable AI com modelo:', lovableModel);
-
-  const requestBody: any = {
-    model: lovableModel,
-    messages,
-  };
-
-  if (tools && tools.length > 0) {
-    requestBody.tools = tools;
-    requestBody.tool_choice = 'auto';
-  }
-
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestBody),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Lovable AI error ${response.status}: ${errorText}`);
-  }
-
-  const data = await response.json();
-  
-  // Verificar se há tool calls
-  const message = data.choices?.[0]?.message;
-  const toolCalls = message?.tool_calls;
-  
-  let resposta = message?.content || '';
-  let acoes: Acao[] = [];
-  
-  if (toolCalls && toolCalls.length > 0) {
-    // Processar tool calls e obter resultados
-    const toolResults: { tool_call_id: string; content: string }[] = [];
-    
-    for (const toolCall of toolCalls) {
-      if (toolCall.function?.name === 'executar_acao') {
-        try {
-          const args = JSON.parse(toolCall.function.arguments);
-          acoes.push(args);
-          
-          // Se for ação de agenda:consultar, executar e guardar resultado
-          if (args.tipo === 'agenda' && args.valor?.startsWith('consultar') && executarAgendaFn) {
-            const resultado = await executarAgendaFn(args.valor);
-            toolResults.push({
-              tool_call_id: toolCall.id,
-              content: JSON.stringify(resultado),
-            });
-          } else {
-            toolResults.push({
-              tool_call_id: toolCall.id,
-              content: JSON.stringify({ sucesso: true, mensagem: 'Ação será executada automaticamente' }),
-            });
-          }
-        } catch (e) {
-          console.error('Erro ao parsear argumentos da ação:', e);
-          toolResults.push({
-            tool_call_id: toolCall.id,
-            content: JSON.stringify({ sucesso: false, mensagem: 'Erro ao processar ação' }),
-          });
-        }
-      }
-    }
-    
-    // Se há ações, fazer segunda chamada com os resultados
-    if (acoes.length > 0) {
-      console.log('Tool call detectado (Lovable AI), fazendo segunda chamada com resultados...');
-      
-      // Montar mensagens com o resultado do tool call
-      const toolResultMessages: any[] = [
-        ...messages,
-        message, // Mensagem original com tool_calls
-      ];
-      
-      // Adicionar resultado de cada tool call
-      for (const result of toolResults) {
-        toolResultMessages.push({
-          role: 'tool',
-          tool_call_id: result.tool_call_id,
-          content: result.content,
-        });
-      }
-      
-      // Segunda chamada para obter resposta textual com os resultados
-      const continuationBody: any = {
-        model: lovableModel,
-        messages: toolResultMessages,
-      };
-      
-      try {
-        const continuationResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(continuationBody),
-        });
-        
-        if (continuationResponse.ok) {
-          const continuationData = await continuationResponse.json();
-          resposta = continuationData.choices?.[0]?.message?.content || '';
-          console.log('Resposta da continuação (Lovable):', resposta.substring(0, 100));
-        }
-      } catch (e) {
-        console.error('Erro na segunda chamada Lovable AI:', e);
-      }
-      
-      // Fallback se ainda não houver resposta
-      if (!resposta) {
-        resposta = 'Entendido! Estou processando sua solicitação.';
-      }
-    }
-  }
-
-  if (!resposta && acoes.length === 0) {
-    throw new Error('Resposta vazia da Lovable AI');
-  }
-
-  // Extrair informações de tokens
-  const usage = data.usage || {};
-  const tokens = {
-    prompt_tokens: usage.prompt_tokens || 0,
-    completion_tokens: usage.completion_tokens || 0,
-    total_tokens: usage.total_tokens || 0,
-  };
-
-  return { resposta, provider: 'lovable', acoes: acoes.length > 0 ? acoes : undefined, tokens };
-}
+// Removido: callLovableAI - sistema agora EXIGE chave OpenAI do cliente
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -1069,7 +911,18 @@ serve(async (req) => {
       },
     ] : undefined;
 
-    // 11. Chamar API com fallback inteligente
+    // 11. Verificar se chave OpenAI está configurada (OBRIGATÓRIO)
+    if (!hasOpenAIKey) {
+      console.log('❌ Chave OpenAI não configurada - agente não pode responder');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Chave OpenAI não configurada. Configure a chave da API OpenAI em Integrações para o agente IA funcionar.', 
+          should_respond: false 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const modelo = agente.modelo || 'gpt-4o-mini';
     const maxTokens = agente.max_tokens || 1000;
     const temperatura = agente.temperatura || 0.7;
@@ -1081,42 +934,18 @@ serve(async (req) => {
 
     let result: AIResponse;
 
-    // Tentar OpenAI primeiro se tiver chave configurada
-    if (hasOpenAIKey) {
-      try {
-        console.log('Tentando OpenAI com modelo:', modelo);
-        result = await callOpenAI(conta.openai_api_key, messages, modelo, maxTokens, temperatura, tools, executarAgendaFn);
-        console.log('✅ Resposta via OpenAI');
-      } catch (openaiError: any) {
-        const errorMsg = openaiError.message || '';
-        console.error('❌ Erro OpenAI:', errorMsg);
-        
-        // Fallback para Lovable AI em caso de erro
-        console.log('⚡ Fallback para Lovable AI...');
-        try {
-          result = await callLovableAI(messages, modelo, tools, executarAgendaFn);
-          console.log('✅ Resposta via Lovable AI (fallback)');
-        } catch (lovableError: any) {
-          console.error('❌ Erro Lovable AI:', lovableError.message);
-          return new Response(
-            JSON.stringify({ error: `Erro em ambos provedores: OpenAI - ${errorMsg}, Lovable AI - ${lovableError.message}`, should_respond: false }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-      }
-    } else {
-      // Usar Lovable AI diretamente se não tiver chave OpenAI
-      console.log('Usando Lovable AI diretamente (sem chave OpenAI configurada)');
-      try {
-        result = await callLovableAI(messages, modelo, tools, executarAgendaFn);
-        console.log('✅ Resposta via Lovable AI');
-      } catch (lovableError: any) {
-        console.error('❌ Erro Lovable AI:', lovableError.message);
-        return new Response(
-          JSON.stringify({ error: lovableError.message, should_respond: false }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+    // Usar OpenAI (único provedor suportado)
+    try {
+      console.log('Usando OpenAI com modelo:', modelo);
+      result = await callOpenAI(conta.openai_api_key, messages, modelo, maxTokens, temperatura, tools, executarAgendaFn);
+      console.log('✅ Resposta via OpenAI');
+    } catch (openaiError: any) {
+      const errorMsg = openaiError.message || '';
+      console.error('❌ Erro OpenAI:', errorMsg);
+      return new Response(
+        JSON.stringify({ error: `Erro OpenAI: ${errorMsg}`, should_respond: false }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     console.log('Resposta gerada via', result.provider + ':', result.resposta.substring(0, 100) + '...');
