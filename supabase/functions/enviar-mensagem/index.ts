@@ -210,6 +210,123 @@ async function enviarViaMeta(
   });
 }
 
+// Função para enviar via Instagram API
+async function enviarViaInstagram(
+  conexao: any,
+  recipientId: string, // Instagram Scoped User ID (IGSID)
+  mensagem: string,
+  tipo: string,
+  mediaUrl: string | null,
+  supabase: any
+): Promise<Response> {
+  console.log('=== ENVIANDO VIA INSTAGRAM API ===');
+
+  // Instagram usa os mesmos campos: meta_phone_number_id (Page ID) e meta_access_token
+  if (!conexao.meta_phone_number_id || !conexao.meta_access_token) {
+    return new Response(JSON.stringify({ error: 'Credenciais Instagram não configuradas' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const pageId = conexao.meta_phone_number_id;
+  const accessToken = conexao.meta_access_token;
+
+  let body: Record<string, unknown>;
+
+  switch (tipo) {
+    case 'imagem':
+      if (!mediaUrl) {
+        return new Response(JSON.stringify({ error: 'URL da imagem é obrigatória' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      body = {
+        recipient: { id: recipientId },
+        message: {
+          attachment: {
+            type: 'image',
+            payload: { url: mediaUrl, is_reusable: true }
+          }
+        }
+      };
+      break;
+    case 'audio':
+      if (!mediaUrl) {
+        return new Response(JSON.stringify({ error: 'URL do áudio é obrigatória' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      body = {
+        recipient: { id: recipientId },
+        message: {
+          attachment: {
+            type: 'audio',
+            payload: { url: mediaUrl, is_reusable: true }
+          }
+        }
+      };
+      break;
+    case 'documento':
+      if (!mediaUrl) {
+        return new Response(JSON.stringify({ error: 'URL do documento é obrigatória' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      body = {
+        recipient: { id: recipientId },
+        message: {
+          attachment: {
+            type: 'file',
+            payload: { url: mediaUrl, is_reusable: true }
+          }
+        }
+      };
+      break;
+    default:
+      body = {
+        recipient: { id: recipientId },
+        message: { text: mensagem }
+      };
+  }
+
+  console.log('Enviando para Instagram API:', JSON.stringify(body, null, 2));
+
+  const response = await fetch(`${META_API_URL}/${pageId}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const result = await response.json();
+  console.log('Resposta Instagram API:', JSON.stringify(result, null, 2));
+
+  if (!response.ok) {
+    await supabase.from('logs_atividade').insert({
+      conta_id: conexao.conta_id,
+      tipo: 'erro_whatsapp',
+      descricao: `Erro ao enviar mensagem via Instagram para ${recipientId}`,
+      metadata: { erro: result, status_code: response.status, tipo_mensagem: tipo },
+    });
+
+    return new Response(JSON.stringify({ error: 'Erro ao enviar mensagem', details: result }), {
+      status: response.status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const instaMsgId = result?.message_id;
+  return new Response(JSON.stringify({ success: true, result, instagram_msg_id: instaMsgId }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -239,10 +356,14 @@ serve(async (req) => {
       });
     }
 
-    // ===== ROTEADOR: META API vs EVOLUTION API =====
+    // ===== ROTEADOR: META API vs INSTAGRAM vs EVOLUTION API =====
     if (conexao.tipo_provedor === 'meta') {
-      // Enviar via Meta API
       return await enviarViaMeta(conexao, telefone, mensagem, tipo, media_url, supabase);
+    }
+
+    if (conexao.tipo_provedor === 'instagram') {
+      // Para Instagram, o "telefone" é o Instagram Scoped User ID (IGSID)
+      return await enviarViaInstagram(conexao, telefone, mensagem, tipo, media_url, supabase);
     }
 
     // ===== CÓDIGO EVOLUTION (100% ORIGINAL ABAIXO) =====
