@@ -1064,7 +1064,7 @@ export default function Conversas() {
               <span>{formatDateSeparator(msg.created_at)}</span>
             </div>
           )}
-          <div className="flex justify-center my-3">
+          <div className="flex justify-center my-1">
             <div className="glass rounded-lg px-4 py-2 flex items-center gap-2 max-w-[80%]">
               <Activity className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
               <span className="text-xs text-muted-foreground">{msg.conteudo}</span>
