@@ -763,7 +763,7 @@ serve(async (req) => {
       
       // Usar fetch direto para a API REST do Supabase com header para ignorar cache
       const conversaResponse = await fetch(
-        `${supabaseUrl}/rest/v1/conversas?conta_id=eq.${conexao.conta_id}&contato_id=eq.${contato!.id}&arquivada=eq.false&select=id,agente_ia_ativo,nao_lidas,agente_ia_id,status`,
+        `${supabaseUrl}/rest/v1/conversas?conta_id=eq.${conexao.conta_id}&contato_id=eq.${contato!.id}&arquivada=eq.false&select=id,agente_ia_ativo,nao_lidas,agente_ia_id,status,conexao_id`,
         {
           headers: {
             'apikey': supabaseKey,
@@ -775,13 +775,22 @@ serve(async (req) => {
         }
       );
 
-      let conversa: { id: string; agente_ia_ativo: boolean; nao_lidas: number; agente_ia_id: string | null; status: string | null } | null = null;
+      let conversa: { id: string; agente_ia_ativo: boolean; nao_lidas: number; agente_ia_id: string | null; status: string | null; conexao_id: string | null } | null = null;
       
       if (conversaResponse.ok) {
         const conversaData = await conversaResponse.json();
         if (conversaData && !conversaData.code) {
           conversa = conversaData;
           console.log('Conversa encontrada:', conversa?.id, 'status:', conversa?.status);
+          
+          // Atualizar conexao_id se estiver nulo (conversas antigas)
+          if (conversa && !conversa.conexao_id) {
+            console.log('Atualizando conexao_id para conversa existente:', conversa.id);
+            await supabase
+              .from('conversas')
+              .update({ conexao_id: conexao.id })
+              .eq('id', conversa.id);
+          }
         }
       }
 
