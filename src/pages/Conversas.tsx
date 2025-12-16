@@ -1327,12 +1327,33 @@ export default function Conversas() {
                       }
                     };
                     
+                    const handleDownload = async () => {
+                      try {
+                        const response = await fetch(msg.media_url!);
+                        const blob = await response.blob();
+                        const blobUrl = URL.createObjectURL(blob);
+                        
+                        const link = document.createElement('a');
+                        link.href = blobUrl;
+                        link.download = fileName;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        
+                        URL.revokeObjectURL(blobUrl);
+                        toast.success('Download iniciado!');
+                      } catch (error) {
+                        console.error('Erro ao baixar arquivo:', error);
+                        toast.error('Erro ao baixar. Abrindo em nova aba...');
+                        window.open(msg.media_url!, '_blank');
+                      }
+                    };
+                    
                     return (
-                      <a 
-                        href={msg.media_url!} 
-                        download={fileName}
+                      <button 
+                        onClick={handleDownload}
                         className={cn(
-                          "flex items-center gap-3 p-3 rounded-xl border transition-all hover:shadow-md",
+                          "flex items-center gap-3 p-3 rounded-xl border transition-all hover:shadow-md cursor-pointer text-left w-full",
                           msg.direcao === 'saida' 
                             ? "bg-background/30 border-primary-foreground/20 hover:bg-background/50" 
                             : "bg-muted/50 border-border hover:bg-muted"
@@ -1348,7 +1369,7 @@ export default function Conversas() {
                         <div className="flex-shrink-0">
                           <Download className="h-5 w-5 opacity-60" />
                         </div>
-                      </a>
+                      </button>
                     );
                   })()}
                   {msg.tipo === 'video' && (
