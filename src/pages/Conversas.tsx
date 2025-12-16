@@ -528,7 +528,15 @@ export default function Conversas() {
 
   // Buscar templates Meta
   const fetchTemplates = async () => {
-    if (!conexao?.id || conexao.tipo_provedor !== 'meta') return;
+    if (!conexao?.id) {
+      toast.error('Conexão não encontrada');
+      return;
+    }
+    
+    if (conexao.tipo_provedor !== 'meta') {
+      toast.error('Templates disponíveis apenas para WhatsApp Oficial (Meta API)');
+      return;
+    }
     
     setLoadingTemplates(true);
     try {
@@ -536,8 +544,18 @@ export default function Conversas() {
         body: { conexao_id: conexao.id },
       });
       
-      if (error) throw error;
-      if (data?.templates) setTemplates(data.templates);
+      if (error) {
+        console.error('Erro ao buscar templates:', error);
+        toast.error('Erro ao buscar templates');
+        return;
+      }
+      
+      if (data?.templates) {
+        setTemplates(data.templates);
+        if (data.templates.length === 0) {
+          toast.info('Nenhum template aprovado encontrado');
+        }
+      }
     } catch (error) {
       console.error('Erro ao buscar templates:', error);
       toast.error('Erro ao buscar templates');
@@ -2187,26 +2205,23 @@ export default function Conversas() {
                           </div>
                           Áudio
                         </button>
-                        
-                        {/* Botão Template - apenas para Meta API */}
-                        {conexao?.tipo_provedor === 'meta' && (
-                          <button
-                            onClick={() => {
-                              setShowAttachMenu(false);
-                              fetchTemplates();
-                              setShowTemplateModal(true);
-                            }}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted rounded-lg transition-all duration-200 text-sm group"
-                          >
-                            <div className="p-1.5 rounded-lg bg-purple-500/20 group-hover:bg-purple-500/30 transition-colors">
-                              <FileSpreadsheet className="h-4 w-4 text-purple-400" />
-                            </div>
-                            Template
-                          </button>
-                        )}
                       </div>
                     )}
                   </div>
+                  
+                  {/* Botão Template separado - apenas para Meta API */}
+                  {conexao?.tipo_provedor === 'meta' && (
+                    <button
+                      onClick={() => {
+                        fetchTemplates();
+                        setShowTemplateModal(true);
+                      }}
+                      className="p-2.5 rounded-xl hover:bg-muted transition-all duration-200 flex items-center gap-2 border border-border hover:border-purple-500/50"
+                      title="Enviar Template"
+                    >
+                      <FileSpreadsheet className="h-5 w-5 text-purple-400" />
+                    </button>
+                  )}
                   
                   <input
                     type="file"
