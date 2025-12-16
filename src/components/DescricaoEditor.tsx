@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState, useMemo, memo, useLayoutEffect } from 'react';
+import { useRef, useCallback, useEffect, useState, useMemo, memo, forwardRef } from 'react';
 import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen, Handshake, X, CalendarSearch, CalendarPlus } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -7,6 +7,7 @@ interface DescricaoEditorProps {
   onChange: (value: string) => void;
   placeholder?: string;
   onAcaoClick?: (cursorPosition: number) => void;
+  onCursorChange?: (position: number) => void;
 }
 
 interface ChipConfig {
@@ -14,18 +15,6 @@ interface ChipConfig {
   label: string;
   colorClass: string;
   bgClass: string;
-}
-
-// Custom hook for debounced value
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-
-  return debouncedValue;
 }
 
 // Parse ação para config visual - memoizado por ação
@@ -180,14 +169,11 @@ function parseAcao(acao: string): ChipConfig {
   return config;
 }
 
-// Componente ActionChip memoizado
-const ActionChip = memo(function ActionChip({ 
-  action, 
-  onRemove 
-}: { 
+// Componente ActionChip memoizado com forwardRef
+const ActionChip = memo(forwardRef<HTMLSpanElement, { 
   action: string; 
   onRemove?: () => void;
-}) {
+}>(function ActionChip({ action, onRemove }, ref) {
   const config = parseAcao(action);
   const Icon = config.icon;
   
@@ -196,6 +182,7 @@ const ActionChip = memo(function ActionChip({
       <Tooltip>
         <TooltipTrigger asChild>
           <span 
+            ref={ref}
             className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs font-medium whitespace-nowrap cursor-default ${config.bgClass} ${config.colorClass}`}
             style={{ verticalAlign: 'middle' }}
           >
@@ -209,7 +196,7 @@ const ActionChip = memo(function ActionChip({
                   e.stopPropagation();
                   onRemove();
                 }}
-                className="flex-shrink-0 hover:opacity-70 text-current pointer-events-auto"
+                className="flex-shrink-0 hover:opacity-70 text-current"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -222,7 +209,9 @@ const ActionChip = memo(function ActionChip({
       </Tooltip>
     </TooltipProvider>
   );
-});
+}));
+
+ActionChip.displayName = 'ActionChip';
 
 // Shared styles constant
 const SHARED_STYLES: React.CSSProperties = {
@@ -235,80 +224,68 @@ const SHARED_STYLES: React.CSSProperties = {
   overflowWrap: 'break-word',
 };
 
-export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: DescricaoEditorProps) {
+// Regex pattern for matching actions
+const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao|agenda)(:[^\s@<>.,;!?]+)?/gi;
+
+export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick, onCursorChange }: DescricaoEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef<number | null>(null);
+  const viewRef = useRef<HTMLDivElement>(null);
+  const lastCursorRef = useRef(0);
   
-  // Estado local para edição fluida
-  const [localValue, setLocalValue] = useState(value);
+  // Estado para controle de modo
   const [isFocused, setIsFocused] = useState(false);
-  
+  const [localValue, setLocalValue] = useState(value);
+
   // Sincronizar quando value externo muda (ex: inserção de ação via modal)
   useEffect(() => {
-    if (value !== localValue) {
-      setLocalValue(value);
-    }
+    setLocalValue(value);
   }, [value]);
-  
-  // Debounce para sincronizar com pai - só quando usuário está digitando
-  const debouncedLocalValue = useDebounce(localValue, 150);
-  
-  useEffect(() => {
-    if (debouncedLocalValue !== value) {
-      onChange(debouncedLocalValue);
-    }
-  }, [debouncedLocalValue, onChange, value]);
 
-  // Debounce maior para renderização de chips (evita lag durante digitação)
-  const debouncedValueForChips = useDebounce(localValue, 300);
-  
-  // Handler de mudança otimizado - atualiza apenas estado local
+  // Handler de mudança - atualiza local e propaga para pai
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setLocalValue(e.target.value);
-  }, []);
+    const newValue = e.target.value;
+    setLocalValue(newValue);
+    onChange(newValue);
+  }, [onChange]);
 
-  // Sincronizar scroll entre textarea e overlay
-  const syncScroll = useCallback(() => {
-    if (textareaRef.current && overlayRef.current) {
-      overlayRef.current.scrollTop = textareaRef.current.scrollTop;
-      overlayRef.current.scrollLeft = textareaRef.current.scrollLeft;
+  // Track cursor position
+  const handleSelect = useCallback(() => {
+    if (textareaRef.current) {
+      lastCursorRef.current = textareaRef.current.selectionStart;
+      onCursorChange?.(lastCursorRef.current);
     }
-  }, []);
-
-  // Auto-resize otimizado com requestAnimationFrame
-  useLayoutEffect(() => {
-    if (!textareaRef.current) return;
-    
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-    }
-    
-    rafRef.current = requestAnimationFrame(() => {
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-        textareaRef.current.style.height = Math.max(160, textareaRef.current.scrollHeight) + 'px';
-      }
-    });
-    
-    return () => {
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-      }
-    };
-  }, [localValue]);
+  }, [onCursorChange]);
 
   // Handler para tecla @
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === '@' && onAcaoClick) {
       e.preventDefault();
       const pos = textareaRef.current?.selectionStart ?? localValue.length;
+      lastCursorRef.current = pos;
+      onCursorChange?.(pos);
       onAcaoClick(pos);
     }
-  }, [onAcaoClick, localValue.length]);
+  }, [onAcaoClick, onCursorChange, localValue.length]);
 
-  // Remover ação por posição no texto - memoizado
+  // Entrar em modo edição
+  const handleFocus = useCallback(() => {
+    setIsFocused(true);
+  }, []);
+
+  // Sair de modo edição
+  const handleBlur = useCallback(() => {
+    setIsFocused(false);
+  }, []);
+
+  // Clicar na view para entrar em edição
+  const handleViewClick = useCallback(() => {
+    setIsFocused(true);
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 0);
+  }, []);
+
+  // Remover ação por posição no texto
   const handleRemoveAction = useCallback((startIndex: number, endIndex: number) => {
     const before = localValue.slice(0, startIndex);
     const after = localValue.slice(endIndex);
@@ -322,29 +299,29 @@ export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: D
     onChange(trimmed);
   }, [localValue, onChange]);
 
-  // Renderizar chips memoizado - usa valor debounced
-  const renderedChips = useMemo(() => {
-    if (!debouncedValueForChips) return null;
+  // Renderizar conteúdo com chips para modo visualização
+  const renderedContent = useMemo(() => {
+    if (!localValue) return null;
     
     const parts: React.ReactNode[] = [];
     let lastIndex = 0;
     
-    // Usar matchAll ao invés de exec para evitar problemas com lastIndex global
-    const regex = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao|agenda)(:[^\s@<>.,;!?]+)?/gi;
-    const matches = Array.from(debouncedValueForChips.matchAll(regex));
+    const matches = Array.from(localValue.matchAll(new RegExp(ACTION_REGEX.source, 'gi')));
     
     for (const match of matches) {
       const matchIndex = match.index!;
       
+      // Texto antes da ação
       if (matchIndex > lastIndex) {
-        const textBefore = debouncedValueForChips.slice(lastIndex, matchIndex);
+        const textBefore = localValue.slice(lastIndex, matchIndex);
         parts.push(
-          <span key={`text-${lastIndex}`} className="text-foreground">
+          <span key={`text-${lastIndex}`} className="text-foreground whitespace-pre-wrap">
             {textBefore}
           </span>
         );
       }
       
+      // Chip da ação
       const matchStart = matchIndex;
       const matchEnd = matchIndex + match[0].length;
       parts.push(
@@ -358,74 +335,68 @@ export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: D
       lastIndex = matchEnd;
     }
     
-    if (lastIndex < debouncedValueForChips.length) {
+    // Texto restante
+    if (lastIndex < localValue.length) {
       parts.push(
-        <span key={`text-${lastIndex}`} className="text-foreground">
-          {debouncedValueForChips.slice(lastIndex)}
+        <span key={`text-${lastIndex}`} className="text-foreground whitespace-pre-wrap">
+          {localValue.slice(lastIndex)}
         </span>
       );
     }
     
     return parts.length > 0 ? parts : null;
-  }, [debouncedValueForChips, handleRemoveAction]);
+  }, [localValue, handleRemoveAction]);
 
-  // Verificar se há ações - usa valor debounced para consistência visual
-  const hasActions = useMemo(() => {
-    const regex = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao|agenda)(:[^\s@<>.,;!?]+)?/i;
-    return regex.test(debouncedValueForChips);
-  }, [debouncedValueForChips]);
+  // Auto-resize textarea quando focado
+  useEffect(() => {
+    if (isFocused && textareaRef.current) {
+      const textarea = textareaRef.current;
+      textarea.style.height = 'auto';
+      textarea.style.height = Math.max(160, textarea.scrollHeight) + 'px';
+    }
+  }, [localValue, isFocused]);
 
   return (
-    <div 
-      ref={containerRef}
-      className="relative w-full"
-      onClick={() => textareaRef.current?.focus()}
-    >
-      {/* Overlay com chips visuais */}
-      {hasActions && (
-        <div
-          ref={overlayRef}
-          className="absolute inset-0 rounded-xl pointer-events-none overflow-hidden"
-          style={{
-            ...SHARED_STYLES,
-            color: 'transparent',
-            background: 'transparent',
-          }}
-          aria-hidden="true"
-        >
-          <div>{renderedChips}</div>
-        </div>
-      )}
+    <div className="relative w-full">
+      {/* Modo Visualização - mostra chips visuais */}
+      <div
+        ref={viewRef}
+        onClick={handleViewClick}
+        className={`
+          w-full min-h-[160px] rounded-xl bg-input border border-border
+          text-sm leading-7 cursor-text transition-all duration-150
+          hover:border-primary/50
+          ${isFocused ? 'opacity-0 pointer-events-none absolute inset-0 z-0' : 'opacity-100 relative z-10'}
+        `}
+        style={SHARED_STYLES}
+      >
+        {renderedContent || (
+          <span className="text-muted-foreground">{placeholder}</span>
+        )}
+      </div>
 
-      {/* Textarea real */}
+      {/* Modo Edição - textarea normal */}
       <textarea
         ref={textareaRef}
         value={localValue}
         onChange={handleChange}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onSelect={handleSelect}
         onKeyDown={handleKeyDown}
-        onScroll={syncScroll}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
         placeholder={placeholder}
-        className={`w-full min-h-[160px] rounded-xl bg-input border text-sm leading-7 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary focus:shadow-lg transition-all duration-200 resize-none ${
-          isFocused ? 'border-primary' : 'border-border'
-        } ${hasActions ? 'text-transparent caret-foreground' : 'text-foreground'}`}
+        className={`
+          w-full min-h-[160px] rounded-xl bg-input border text-sm leading-7
+          focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary
+          transition-all duration-150 resize-none
+          text-foreground placeholder:text-muted-foreground
+          ${isFocused ? 'opacity-100 relative z-10 border-primary' : 'opacity-0 pointer-events-none absolute inset-0 z-0'}
+        `}
         style={{
           ...SHARED_STYLES,
-          WebkitTextFillColor: hasActions ? 'transparent' : undefined,
           caretColor: 'hsl(var(--foreground))',
         }}
       />
-
-      {/* Placeholder personalizado */}
-      {!localValue && !isFocused && placeholder && (
-        <div 
-          className="absolute inset-0 rounded-xl pointer-events-none text-muted-foreground text-sm"
-          style={SHARED_STYLES}
-        >
-          {placeholder}
-        </div>
-      )}
     </div>
   );
 }
