@@ -373,6 +373,7 @@ export type Database = {
           openai_api_key: string | null
           permitir_multiplas_negociacoes: boolean | null
           plano_id: string | null
+          reabrir_com_ia: boolean | null
           updated_at: string
         }
         Insert: {
@@ -383,6 +384,7 @@ export type Database = {
           openai_api_key?: string | null
           permitir_multiplas_negociacoes?: boolean | null
           plano_id?: string | null
+          reabrir_com_ia?: boolean | null
           updated_at?: string
         }
         Update: {
@@ -393,6 +395,7 @@ export type Database = {
           openai_api_key?: string | null
           permitir_multiplas_negociacoes?: boolean | null
           plano_id?: string | null
+          reabrir_com_ia?: boolean | null
           updated_at?: string
         }
         Relationships: [
