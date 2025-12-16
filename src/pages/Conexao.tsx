@@ -67,9 +67,8 @@ export default function Conexao() {
   const [copiedVerifyToken, setCopiedVerifyToken] = useState(false);
   const [creatingInstagram, setCreatingInstagram] = useState(false);
   const [connectingInstagram, setConnectingInstagram] = useState(false);
-  const [instagramOAuthLoading, setInstagramOAuthLoading] = useState(false);
   
-  // Estados para Instagram (mantidos para compatibilidade com conexões existentes)
+  // Estados para Instagram
   const [instagramPageId, setInstagramPageId] = useState('');
   const [instagramAccessToken, setInstagramAccessToken] = useState('');
   const [savingInstagram, setSavingInstagram] = useState(false);
@@ -107,27 +106,6 @@ export default function Conexao() {
 
   useEffect(() => {
     fetchConexoes();
-  }, [fetchConexoes]);
-
-  // Detectar retorno do OAuth do Instagram via URL params
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const instagramOAuth = params.get('instagram_oauth');
-    
-    if (instagramOAuth === 'success') {
-      toast.success('Instagram conectado com sucesso!');
-      setShowNovaConexao(false);
-      setInstagramOAuthLoading(false);
-      // Limpar URL params
-      window.history.replaceState({}, '', '/conexao');
-      fetchConexoes();
-    } else if (instagramOAuth === 'error') {
-      const errorMessage = params.get('message') || 'Erro ao conectar Instagram';
-      toast.error(decodeURIComponent(errorMessage));
-      setInstagramOAuthLoading(false);
-      // Limpar URL params
-      window.history.replaceState({}, '', '/conexao');
-    }
   }, [fetchConexoes]);
 
   // Auto-refresh status quando aguardando (apenas para Evolution)
@@ -242,51 +220,6 @@ export default function Conexao() {
     }
   };
 
-  // Função para iniciar OAuth do Instagram (redirecionamento de página completa)
-  const handleInstagramOAuth = async () => {
-    if (!usuario?.conta_id) {
-      toast.error('Usuário não autenticado');
-      return;
-    }
-
-    setInstagramOAuthLoading(true);
-    try {
-      const permitido = await validarEExibirErro(usuario.conta_id, 'conexoes');
-      if (!permitido) {
-        setInstagramOAuthLoading(false);
-        return;
-      }
-
-      // Passar URL base sem query params para o redirect
-      const baseUrl = `${window.location.origin}/conexao`;
-      
-      const { data, error } = await supabase.functions.invoke('instagram-oauth-auth', {
-        body: { 
-          conta_id: usuario.conta_id,
-          redirect_url: baseUrl
-        },
-      });
-
-      if (error) throw error;
-
-      if (data.error) {
-        toast.error(data.error);
-        setInstagramOAuthLoading(false);
-        return;
-      }
-
-      if (data.auth_url) {
-        // Redirecionamento de página completa (não popup)
-        window.location.href = data.auth_url;
-      }
-    } catch (error) {
-      console.error('Erro ao iniciar OAuth Instagram:', error);
-      toast.error('Erro ao iniciar conexão com Instagram');
-      setInstagramOAuthLoading(false);
-    }
-  };
-
-  // Função legada para criar conexão Instagram manualmente (mantida para compatibilidade)
   const handleCreateInstagramConnection = async () => {
     if (!instanceName.trim()) {
       toast.error('Digite o nome da conexão');
@@ -1062,21 +995,19 @@ export default function Conexao() {
                 </button>
               </div>
 
-              {/* Nome da Conexão - oculto para Instagram (nome auto-gerado) */}
-              {tipoProvedor !== 'instagram' && (
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Nome da Conexão
-                  </label>
-                  <input
-                    type="text"
-                    value={instanceName}
-                    onChange={(e) => setInstanceName(e.target.value)}
-                    placeholder="Ex: WhatsApp Vendas"
-                    className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-              )}
+              {/* Nome da Conexão */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Nome da Conexão
+                </label>
+                <input
+                  type="text"
+                  value={instanceName}
+                  onChange={(e) => setInstanceName(e.target.value)}
+                  placeholder="Ex: WhatsApp Vendas"
+                  className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
 
               {/* Campos Meta API */}
               {tipoProvedor === 'meta' && (
@@ -1137,53 +1068,54 @@ export default function Conexao() {
                 </div>
               )}
 
-              {/* Seção Instagram - OAuth Simplificado */}
+              {/* Campos Instagram */}
               {tipoProvedor === 'instagram' && (
                 <div className="space-y-4 pt-2 border-t border-border">
-                  <div className="p-4 rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-pink-500/20">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Instagram className="h-8 w-8 text-pink-500" />
-                      <div>
-                        <h4 className="font-medium text-foreground">Login com Instagram</h4>
-                        <p className="text-xs text-muted-foreground">Conecte sua conta comercial do Instagram</p>
-                      </div>
-                    </div>
-                    
-                    <button
-                      onClick={handleInstagramOAuth}
-                      disabled={instagramOAuthLoading}
-                      className="w-full h-12 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium flex items-center justify-center gap-2 hover:from-purple-700 hover:to-pink-700 transition-all disabled:opacity-50"
-                    >
-                      {instagramOAuthLoading ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      ) : (
-                        <>
-                          <Instagram className="h-5 w-5" />
-                          Entrar com Instagram
-                        </>
-                      )}
-                    </button>
+                  <div className="flex items-center gap-2 text-sm text-pink-400">
+                    <Info className="h-4 w-4" />
+                    <span>Configure as credenciais do Instagram Business</span>
                   </div>
 
-                  <div className="text-xs text-muted-foreground space-y-2">
-                    <p className="flex items-center gap-2">
-                      <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                      Conta comercial do Instagram necessária
-                    </p>
-                    <p className="flex items-center gap-2">
-                      <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                      Página do Facebook conectada ao Instagram
-                    </p>
-                    <p className="flex items-center gap-2">
-                      <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                      Após login, configure o webhook no Meta Dashboard
-                    </p>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Instagram Page ID *
+                    </label>
+                    <input
+                      type="text"
+                      value={instagramPageId}
+                      onChange={(e) => setInstagramPageId(e.target.value)}
+                      placeholder="Ex: 123456789012345"
+                      className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Access Token *
+                    </label>
+                    <input
+                      type="password"
+                      value={instagramAccessToken}
+                      onChange={(e) => setInstagramAccessToken(e.target.value)}
+                      placeholder="Token de acesso do Instagram"
+                      className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+
+                  <a 
+                    href="https://developers.facebook.com/docs/instagram-api/getting-started"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-pink-400 hover:text-pink-300"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Guia de configuração Instagram API
+                  </a>
                 </div>
               )}
 
-              {/* Botão de Criar - só para Evolution e Meta (Instagram usa OAuth acima) */}
-              {tipoProvedor === 'evolution' && (
+              {/* Botão de Criar */}
+              {tipoProvedor === 'evolution' ? (
                 <button
                   onClick={handleCreateInstance}
                   disabled={creating || !instanceName.trim()}
@@ -1198,9 +1130,22 @@ export default function Conexao() {
                     </>
                   )}
                 </button>
-              )}
-              
-              {tipoProvedor === 'meta' && (
+              ) : tipoProvedor === 'instagram' ? (
+                <button
+                  onClick={handleCreateInstagramConnection}
+                  disabled={creatingInstagram || !instanceName.trim() || !instagramPageId.trim() || !instagramAccessToken.trim()}
+                  className="w-full h-11 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium flex items-center justify-center gap-2 hover:from-purple-700 hover:to-pink-700 transition-colors disabled:opacity-50"
+                >
+                  {creatingInstagram ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Instagram className="h-5 w-5" />
+                      Criar Conexão Instagram
+                    </>
+                  )}
+                </button>
+              ) : (
                 <button
                   onClick={handleCreateMetaConnection}
                   disabled={creating || !instanceName.trim() || !metaPhoneNumberId.trim() || !metaAccessToken.trim()}

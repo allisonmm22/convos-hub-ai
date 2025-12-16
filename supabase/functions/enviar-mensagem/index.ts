@@ -8,7 +8,6 @@ const corsHeaders = {
 
 const EVOLUTION_API_URL = 'https://evolution.cognityx.com.br';
 const META_API_URL = 'https://graph.facebook.com/v18.0';
-const INSTAGRAM_API_URL = 'https://graph.instagram.com/v21.0';
 
 // Função para fazer upload de mídia para Meta
 async function uploadMediaToMeta(
@@ -294,16 +293,9 @@ async function enviarViaInstagram(
       };
   }
 
-  console.log('Instagram Config:', {
-    endpoint: `${INSTAGRAM_API_URL}/me/messages`,
-    recipientId: recipientId,
-    tokenLength: accessToken?.length,
-    tokenPreview: accessToken?.substring(0, 20) + '...'
-  });
-
   console.log('Enviando para Instagram API:', JSON.stringify(body, null, 2));
 
-  const response = await fetch(`${INSTAGRAM_API_URL}/me/messages`, {
+  const response = await fetch(`${META_API_URL}/${pageId}/messages`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -371,9 +363,7 @@ serve(async (req) => {
 
     if (conexao.tipo_provedor === 'instagram') {
       // Para Instagram, o "telefone" é o Instagram Scoped User ID (IGSID)
-      // Remove o prefixo "ig_" se existir, pois a API espera apenas o ID numérico
-      const instagramUserId = telefone.startsWith('ig_') ? telefone.replace('ig_', '') : telefone;
-      return await enviarViaInstagram(conexao, instagramUserId, mensagem, tipo, media_url, supabase);
+      return await enviarViaInstagram(conexao, telefone, mensagem, tipo, media_url, supabase);
     }
 
     // ===== CÓDIGO EVOLUTION (100% ORIGINAL ABAIXO) =====
