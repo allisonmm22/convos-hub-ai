@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, Key, Save, Eye, EyeOff, Trash2, Play, MessageSquare, RefreshCw, User } from 'lucide-react';
+import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, Key, Save, Eye, EyeOff, Trash2, Play, MessageSquare, RefreshCw, User, Sparkles, Crown, Zap, Power, PowerOff } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -10,6 +10,8 @@ import { FollowUpRegraModal } from '@/components/FollowUpRegraModal';
 import { validarEExibirErro } from '@/hooks/useValidarLimitePlano';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +31,7 @@ interface Agent {
   ativo: boolean;
   gatilho: string | null;
   descricao: string | null;
+  created_at?: string;
 }
 
 type SubPage = 'agentes' | 'followup' | 'sessoes' | 'configuracao';
@@ -52,7 +55,7 @@ export default function AgenteIA() {
     try {
       const { data, error } = await supabase
         .from('agent_ia')
-        .select('id, nome, tipo, ativo, gatilho, descricao')
+        .select('id, nome, tipo, ativo, gatilho, descricao, created_at')
         .eq('conta_id', usuario!.conta_id)
         .order('tipo', { ascending: true })
         .order('nome', { ascending: true });
@@ -146,9 +149,10 @@ export default function AgenteIA() {
 
   const agentesPrincipais = agentesFiltrados.filter(a => a.tipo === 'principal');
   const agentesSecundarios = agentesFiltrados.filter(a => a.tipo === 'secundario');
+  const agentesAtivos = agentes.filter(a => a.ativo).length;
 
   const subNavItems = [
-    { id: 'agentes' as SubPage, label: 'Agentes', icon: Bot },
+    { id: 'agentes' as SubPage, label: 'Agentes', icon: Bot, count: agentes.length },
     { id: 'followup' as SubPage, label: 'Follow-up', icon: Clock },
     { id: 'sessoes' as SubPage, label: 'Sessões', icon: Users },
     { id: 'configuracao' as SubPage, label: 'Configuração', icon: Key },
@@ -161,12 +165,12 @@ export default function AgenteIA() {
         <div className="w-56 border-r border-border bg-card/50 flex flex-col">
           <div className="p-4 border-b border-border">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20">
-                <Bot className="h-5 w-5 text-primary" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/60 shadow-lg shadow-primary/25">
+                <Bot className="h-5 w-5 text-primary-foreground" />
               </div>
               <div>
-                <h2 className="font-semibold text-foreground">Agentes</h2>
-                <p className="text-xs text-muted-foreground">Gerenciamento de agentes</p>
+                <h2 className="font-semibold text-foreground">Agentes IA</h2>
+                <p className="text-xs text-muted-foreground">Automação inteligente</p>
               </div>
             </div>
           </div>
@@ -176,25 +180,81 @@ export default function AgenteIA() {
               <button
                 key={item.id}
                 onClick={() => setSubPage(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   subPage === item.id
-                    ? 'bg-primary/10 text-primary'
+                    ? 'bg-primary/10 text-primary shadow-sm'
                     : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                 }`}
               >
-                <item.icon className="h-4 w-4" />
-                {item.label}
+                <div className="flex items-center gap-3">
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </div>
+                {item.count !== undefined && (
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    subPage === item.id 
+                      ? 'bg-primary/20 text-primary' 
+                      : 'bg-muted text-muted-foreground'
+                  }`}>
+                    {item.count}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
         </div>
 
         {/* Conteúdo Principal */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto bg-muted/30">
           {subPage === 'agentes' && (
             <div className="p-6 space-y-6">
-              {/* Header */}
-              <div className="flex items-center justify-between">
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="bg-gradient-to-br from-card to-card/80 border-border/50 hover:shadow-lg transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total de Agentes</p>
+                        <p className="text-2xl font-bold text-foreground">{agentes.length}</p>
+                      </div>
+                      <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                        <Bot className="h-6 w-6 text-primary" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-gradient-to-br from-card to-card/80 border-border/50 hover:shadow-lg transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Agentes Ativos</p>
+                        <p className="text-2xl font-bold text-emerald-500">{agentesAtivos}</p>
+                      </div>
+                      <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                        <Zap className="h-6 w-6 text-emerald-500" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="bg-gradient-to-br from-card to-card/80 border-border/50 hover:shadow-lg transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Inativos</p>
+                        <p className="text-2xl font-bold text-muted-foreground">{agentes.length - agentesAtivos}</p>
+                      </div>
+                      <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center">
+                        <PowerOff className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Header com busca */}
+              <div className="flex items-center justify-between gap-4">
                 <div className="relative flex-1 max-w-md">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <input
@@ -202,12 +262,12 @@ export default function AgenteIA() {
                     value={busca}
                     onChange={(e) => setBusca(e.target.value)}
                     placeholder="Buscar por nome ou gatilho..."
-                    className="w-full h-10 pl-10 pr-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full h-10 pl-10 pr-4 rounded-xl bg-card border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
                   />
                 </div>
                 <button
                   onClick={() => setShowNovoAgenteModal(true)}
-                  className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+                  className="flex items-center gap-2 h-10 px-5 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground font-medium hover:shadow-lg hover:shadow-primary/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
                 >
                   <Plus className="h-4 w-4" />
                   Novo Agente
@@ -221,22 +281,36 @@ export default function AgenteIA() {
               />
 
               {loading ? (
-                <div className="flex items-center justify-center h-64">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <Skeleton className="h-4 w-40" />
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {[1, 2, 3].map(i => (
+                        <Skeleton key={i} className="h-48 rounded-xl" />
+                      ))}
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-8">
                   {/* Agentes Principais */}
-                  <div className="space-y-3">
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Agentes Principais ({agentesPrincipais.length})
-                    </h3>
-                    {agentesPrincipais.length === 0 ? (
-                      <div className="p-4 rounded-lg bg-card border border-border text-center text-muted-foreground text-sm">
-                        Nenhum agente principal configurado
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10">
+                        <Crown className="h-4 w-4 text-amber-500" />
+                        <span className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+                          Agentes Principais
+                        </span>
                       </div>
+                      <span className="text-sm text-muted-foreground">
+                        ({agentesPrincipais.length})
+                      </span>
+                    </div>
+                    
+                    {agentesPrincipais.length === 0 ? (
+                      <EmptyAgentState type="principal" onCreate={() => setShowNovoAgenteModal(true)} />
                     ) : (
-                      <div className="grid gap-3 md:grid-cols-2">
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                         {agentesPrincipais.map((agente) => (
                           <AgentCard
                             key={agente.id}
@@ -250,17 +324,27 @@ export default function AgenteIA() {
                     )}
                   </div>
 
+                  {/* Divider */}
+                  <div className="border-t border-border/50" />
+
                   {/* Agentes Secundários */}
-                  <div className="space-y-3">
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Agentes Secundários ({agentesSecundarios.length})
-                    </h3>
-                    {agentesSecundarios.length === 0 ? (
-                      <div className="p-4 rounded-lg bg-card border border-border text-center text-muted-foreground text-sm">
-                        Nenhum agente secundário configurado
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10">
+                        <Sparkles className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-semibold text-primary">
+                          Agentes Secundários
+                        </span>
                       </div>
+                      <span className="text-sm text-muted-foreground">
+                        ({agentesSecundarios.length})
+                      </span>
+                    </div>
+                    
+                    {agentesSecundarios.length === 0 ? (
+                      <EmptyAgentState type="secundario" onCreate={() => setShowNovoAgenteModal(true)} />
                     ) : (
-                      <div className="grid gap-3 md:grid-cols-2">
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                         {agentesSecundarios.map((agente) => (
                           <AgentCard
                             key={agente.id}
@@ -295,7 +379,36 @@ export default function AgenteIA() {
   );
 }
 
-// Componente AgentCard
+// Empty State Component
+function EmptyAgentState({ type, onCreate }: { type: 'principal' | 'secundario'; onCreate: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center p-8 rounded-2xl bg-card border border-dashed border-border/70">
+      <div className={`h-16 w-16 rounded-2xl flex items-center justify-center mb-4 ${
+        type === 'principal' ? 'bg-amber-500/10' : 'bg-primary/10'
+      }`}>
+        <Bot className={`h-8 w-8 ${type === 'principal' ? 'text-amber-500' : 'text-primary'}`} />
+      </div>
+      <h3 className="text-lg font-semibold text-foreground mb-1">
+        Nenhum agente {type}
+      </h3>
+      <p className="text-sm text-muted-foreground text-center mb-4 max-w-sm">
+        {type === 'principal' 
+          ? 'Crie um agente principal para atender automaticamente seus clientes'
+          : 'Agentes secundários podem ser usados para tarefas específicas ou transferências'
+        }
+      </p>
+      <button
+        onClick={onCreate}
+        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium"
+      >
+        <Plus className="h-4 w-4" />
+        Criar Agente
+      </button>
+    </div>
+  );
+}
+
+// Componente AgentCard Redesenhado
 function AgentCard({ 
   agente, 
   onToggle, 
@@ -307,70 +420,108 @@ function AgentCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const isPrincipal = agente.tipo === 'principal';
+  
   return (
-    <div className="flex items-center justify-between p-4 rounded-lg bg-card border border-border hover:border-primary/30 transition-colors">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-          <Bot className="h-5 w-5 text-muted-foreground" />
+    <Card className={`group relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-primary/5 hover:border-primary/30 ${
+      agente.ativo ? 'border-emerald-500/30 bg-gradient-to-br from-card to-emerald-500/5' : 'bg-card'
+    }`}>
+      {/* Status Badge */}
+      <div className="absolute top-3 right-3 z-10">
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+          agente.ativo 
+            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' 
+            : 'bg-muted text-muted-foreground'
+        }`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${agente.ativo ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
+          {agente.ativo ? 'Ativo' : 'Inativo'}
+        </span>
+      </div>
+
+      <CardContent className="p-5">
+        {/* Header */}
+        <div className="flex items-start gap-4 mb-4">
+          <div className={`flex h-14 w-14 items-center justify-center rounded-2xl shrink-0 transition-transform group-hover:scale-105 ${
+            isPrincipal 
+              ? 'bg-gradient-to-br from-amber-500/20 to-amber-500/5' 
+              : 'bg-gradient-to-br from-primary/20 to-primary/5'
+          }`}>
+            <Bot className={`h-7 w-7 ${isPrincipal ? 'text-amber-500' : 'text-primary'}`} />
+          </div>
+          <div className="flex-1 min-w-0 pt-1">
+            <h3 className="font-semibold text-foreground truncate text-lg">{agente.nome}</h3>
+            <p className={`text-xs font-medium ${isPrincipal ? 'text-amber-600 dark:text-amber-400' : 'text-primary'}`}>
+              {isPrincipal ? 'Principal' : 'Secundário'}
+            </p>
+          </div>
         </div>
-        <span className="font-medium text-foreground">{agente.nome}</span>
-      </div>
-      
-      <div className="flex items-center gap-2">
-        {/* Botão Editar */}
-        <button
-          onClick={onEdit}
-          className="p-2 rounded-lg bg-muted hover:bg-primary/20 hover:text-primary transition-all"
-          title="Editar agente"
-        >
-          <Pencil className="h-4 w-4" />
-        </button>
-        
-        {/* Botão Excluir */}
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
+
+        {/* Description */}
+        <p className="text-sm text-muted-foreground line-clamp-2 mb-4 min-h-[40px]">
+          {agente.descricao || agente.gatilho || 'Sem descrição configurada'}
+        </p>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-4 border-t border-border/50">
+          <div className="flex items-center gap-1">
+            {/* Botão Editar */}
             <button
-              className="p-2 rounded-lg bg-muted hover:bg-destructive/20 hover:text-destructive transition-all"
-              title="Excluir agente"
+              onClick={onEdit}
+              className="p-2 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary transition-all"
+              title="Editar agente"
             >
-              <Trash2 className="h-4 w-4" />
+              <Pencil className="h-4 w-4" />
             </button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Excluir agente?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Esta ação não pode ser desfeita. O agente "{agente.nome}" será 
-                excluído permanentemente junto com suas etapas e perguntas.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction 
-                onClick={onDelete}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Excluir
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-        
-        {/* Toggle Ativo/Inativo */}
-        <button
-          onClick={onToggle}
-          className={`relative h-6 w-11 rounded-full transition-colors ${
-            agente.ativo ? 'bg-primary' : 'bg-muted'
-          }`}
-        >
-          <div
-            className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-              agente.ativo ? 'translate-x-5' : ''
+            
+            {/* Botão Excluir */}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button
+                  className="p-2 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
+                  title="Excluir agente"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir agente?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação não pode ser desfeita. O agente "{agente.nome}" será 
+                    excluído permanentemente junto com suas etapas e perguntas.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={onDelete}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Excluir
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+          
+          {/* Toggle Ativo/Inativo */}
+          <button
+            onClick={onToggle}
+            className={`relative h-7 w-12 rounded-full transition-all ${
+              agente.ativo 
+                ? 'bg-emerald-500 shadow-lg shadow-emerald-500/25' 
+                : 'bg-muted hover:bg-muted/80'
             }`}
-          />
-        </button>
-      </div>
-    </div>
+          >
+            <div
+              className={`absolute top-1 left-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                agente.ativo ? 'translate-x-5' : ''
+              }`}
+            />
+          </button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
