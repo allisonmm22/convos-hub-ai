@@ -8,6 +8,7 @@ const corsHeaders = {
 
 const EVOLUTION_API_URL = 'https://evolution.cognityx.com.br';
 const META_API_URL = 'https://graph.facebook.com/v18.0';
+const INSTAGRAM_API_URL = 'https://graph.instagram.com/v18.0';
 
 // Função para fazer upload de mídia para Meta
 async function uploadMediaToMeta(
@@ -295,7 +296,7 @@ async function enviarViaInstagram(
 
   console.log('Enviando para Instagram API:', JSON.stringify(body, null, 2));
 
-  const response = await fetch(`${META_API_URL}/${pageId}/messages`, {
+  const response = await fetch(`${INSTAGRAM_API_URL}/${pageId}/messages`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
