@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Plus, DollarSign, User, MoreVertical, GripVertical, Loader2, Settings, Calendar, Percent, Bell, BellOff } from 'lucide-react';
+import { Plus, DollarSign, User, MoreVertical, GripVertical, Loader2, Settings, Calendar, Percent, Bell, BellOff, Edit2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Select,
   SelectContent,
@@ -21,6 +21,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -69,6 +75,7 @@ interface Contato {
 
 export default function CRM() {
   const { usuario } = useAuth();
+  const navigate = useNavigate();
   const [funis, setFunis] = useState<Funil[]>([]);
   const [selectedFunilId, setSelectedFunilId] = useState<string | null>(null);
   const [negociacoes, setNegociacoes] = useState<Negociacao[]>([]);
@@ -276,6 +283,31 @@ export default function CRM() {
     return getNegociacoesPorEstagio(estagioId).reduce((acc, n) => acc + Number(n.valor), 0);
   };
 
+  const handleToggleFollowup = async (estagio: Estagio) => {
+    const novoValor = !(estagio.followup_ativo ?? true);
+    try {
+      const { error } = await supabase
+        .from('estagios')
+        .update({ followup_ativo: novoValor })
+        .eq('id', estagio.id);
+
+      if (error) throw error;
+
+      // Atualizar estado local
+      setFunis(prev => prev.map(funil => ({
+        ...funil,
+        estagios: funil.estagios.map(e => 
+          e.id === estagio.id ? { ...e, followup_ativo: novoValor } : e
+        )
+      })));
+
+      toast.success(novoValor ? 'Follow-up ativado' : 'Follow-up desativado');
+    } catch (error) {
+      console.error('Erro ao atualizar follow-up:', error);
+      toast.error('Erro ao atualizar follow-up');
+    }
+  };
+
   if (loading) {
     return (
       <MainLayout>
@@ -461,9 +493,32 @@ export default function CRM() {
                       </span>
                     )}
                   </div>
-                  <button className="p-1 rounded hover:bg-muted transition-colors">
-                    <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="p-1 rounded hover:bg-muted transition-colors">
+                        <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => navigate('/crm/configuracoes')}>
+                        <Edit2 className="h-4 w-4 mr-2" />
+                        Editar etapa
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleToggleFollowup(estagio)}>
+                        {estagio.followup_ativo === false ? (
+                          <>
+                            <Bell className="h-4 w-4 mr-2" />
+                            Ativar follow-up
+                          </>
+                        ) : (
+                          <>
+                            <BellOff className="h-4 w-4 mr-2" />
+                            Desativar follow-up
+                          </>
+                        )}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
                 {/* Total */}
