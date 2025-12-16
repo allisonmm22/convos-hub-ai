@@ -67,6 +67,11 @@ export default function Conexao() {
   const [copiedVerifyToken, setCopiedVerifyToken] = useState(false);
   const [creatingInstagram, setCreatingInstagram] = useState(false);
   const [connectingInstagram, setConnectingInstagram] = useState(false);
+  
+  // Estados para Instagram
+  const [instagramPageId, setInstagramPageId] = useState('');
+  const [instagramAccessToken, setInstagramAccessToken] = useState('');
+  const [savingInstagram, setSavingInstagram] = useState(false);
 
   const fetchConexoes = useCallback(async () => {
     if (!usuario?.conta_id) return;
@@ -120,6 +125,8 @@ export default function Conexao() {
     setMetaPhoneNumberId('');
     setMetaBusinessAccountId('');
     setMetaAccessToken('');
+    setInstagramPageId('');
+    setInstagramAccessToken('');
   };
 
   const handleCreateInstance = async () => {
@@ -219,6 +226,11 @@ export default function Conexao() {
       return;
     }
 
+    if (!instagramPageId.trim() || !instagramAccessToken.trim()) {
+      toast.error('Preencha Instagram Page ID e Access Token');
+      return;
+    }
+
     setCreatingInstagram(true);
     try {
       const permitido = await validarEExibirErro(usuario!.conta_id, 'conexoes');
@@ -227,28 +239,30 @@ export default function Conexao() {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('evolution-create-instance-instagram', {
-        body: {
+      const instanceKey = `ig_${usuario!.conta_id.slice(0, 8)}_${Date.now().toString(36)}`;
+      const verifyToken = `verify_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+
+      const { error } = await supabase
+        .from('conexoes_whatsapp')
+        .insert({
           nome: instanceName.trim(),
+          instance_name: instanceKey,
+          token: 'instagram-api',
           conta_id: usuario!.conta_id,
-        },
-      });
+          tipo_provedor: 'instagram',
+          tipo_canal: 'instagram',
+          status: 'conectado',
+          meta_phone_number_id: instagramPageId.trim(),
+          meta_access_token: instagramAccessToken.trim(),
+          meta_webhook_verify_token: verifyToken,
+        });
 
       if (error) throw error;
 
-      if (data.error) {
-        toast.error(data.error);
-        return;
-      }
-
-      toast.success('Conexão Instagram criada! Agora conecte sua conta.');
+      toast.success('Conexão Instagram criada com sucesso!');
       resetFormulario();
       setShowNovaConexao(false);
       await fetchConexoes();
-
-      if (data.oauth_url) {
-        window.open(data.oauth_url, '_blank');
-      }
     } catch (error) {
       console.error('Erro ao criar conexão Instagram:', error);
       toast.error('Erro ao criar conexão Instagram');
@@ -312,6 +326,35 @@ export default function Conexao() {
       toast.error('Erro ao salvar credenciais');
     } finally {
       setSavingMeta(false);
+    }
+  };
+
+  const handleSaveInstagramCredentials = async (conexao: Conexao) => {
+    if (!instagramPageId.trim() || !instagramAccessToken.trim()) {
+      toast.error('Preencha Instagram Page ID e Access Token');
+      return;
+    }
+
+    setSavingInstagram(true);
+    try {
+      const { error } = await supabase
+        .from('conexoes_whatsapp')
+        .update({
+          meta_phone_number_id: instagramPageId.trim(),
+          meta_access_token: instagramAccessToken.trim(),
+          status: 'conectado',
+        })
+        .eq('id', conexao.id);
+
+      if (error) throw error;
+
+      toast.success('Credenciais Instagram atualizadas!');
+      await fetchConexoes();
+    } catch (error) {
+      console.error('Erro ao salvar credenciais Instagram:', error);
+      toast.error('Erro ao salvar credenciais');
+    } finally {
+      setSavingInstagram(false);
     }
   };
 
@@ -670,6 +713,10 @@ export default function Conexao() {
                           setMetaBusinessAccountId(conexao.meta_business_account_id || '');
                           setMetaAccessToken(conexao.meta_access_token || '');
                         }
+                        if (conexao.tipo_provedor === 'instagram') {
+                          setInstagramPageId(conexao.meta_phone_number_id || '');
+                          setInstagramAccessToken(conexao.meta_access_token || '');
+                        }
                       }}
                       className="p-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
                       title="Gerenciar"
@@ -809,7 +856,76 @@ export default function Conexao() {
                             disabled={savingMeta}
                             className="h-10 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
                           >
-                            {savingMeta ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Salvar Credenciais'}
+                          {savingMeta ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Salvar Credenciais'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Configurações Instagram */}
+                    {conexao.tipo_provedor === 'instagram' && (
+                      <div className="space-y-4">
+                        <div className="p-4 rounded-lg bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-pink-500/20">
+                          <h4 className="text-sm font-medium text-pink-400 mb-3">Configuração do Webhook</h4>
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-xs text-muted-foreground">URL do Webhook</label>
+                              <div className="flex items-center gap-2 mt-1">
+                                <code className="flex-1 text-xs bg-background p-2 rounded truncate">
+                                  {getMetaWebhookUrl()}
+                                </code>
+                                <button
+                                  onClick={copyMetaWebhookUrl}
+                                  className="p-2 rounded bg-background hover:bg-muted transition-colors"
+                                >
+                                  {copiedWebhook ? <CheckCircle2 className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+                                </button>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-xs text-muted-foreground">Token de Verificação</label>
+                              <div className="flex items-center gap-2 mt-1">
+                                <code className="flex-1 text-xs bg-background p-2 rounded truncate">
+                                  {conexao.meta_webhook_verify_token}
+                                </code>
+                                <button
+                                  onClick={() => copyVerifyToken(conexao)}
+                                  className="p-2 rounded bg-background hover:bg-muted transition-colors"
+                                >
+                                  {copiedVerifyToken ? <CheckCircle2 className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3">
+                          <div>
+                            <label className="text-sm text-muted-foreground">Instagram Page ID</label>
+                            <input
+                              type="text"
+                              value={instagramPageId}
+                              onChange={(e) => setInstagramPageId(e.target.value)}
+                              placeholder="ID da página do Instagram"
+                              className="w-full mt-1 h-10 px-3 rounded-lg bg-input border border-border text-foreground text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm text-muted-foreground">Access Token</label>
+                            <input
+                              type="password"
+                              value={instagramAccessToken}
+                              onChange={(e) => setInstagramAccessToken(e.target.value)}
+                              placeholder="Token de acesso do Instagram"
+                              className="w-full mt-1 h-10 px-3 rounded-lg bg-input border border-border text-foreground text-sm"
+                            />
+                          </div>
+                          <button
+                            onClick={() => handleSaveInstagramCredentials(conexao)}
+                            disabled={savingInstagram}
+                            className="h-10 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium hover:from-purple-700 hover:to-pink-700 transition-colors disabled:opacity-50"
+                          >
+                            {savingInstagram ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Salvar Credenciais'}
                           </button>
                         </div>
                       </div>
@@ -818,8 +934,54 @@ export default function Conexao() {
                 )}
               </div>
             ))}
-          </div>
-        )}
+                </div>
+              )}
+
+              {/* Campos Instagram */}
+              {tipoProvedor === 'instagram' && (
+                <div className="space-y-4 pt-2 border-t border-border">
+                  <div className="flex items-center gap-2 text-sm text-pink-400">
+                    <Info className="h-4 w-4" />
+                    <span>Configure as credenciais do Instagram Business</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Instagram Page ID *
+                    </label>
+                    <input
+                      type="text"
+                      value={instagramPageId}
+                      onChange={(e) => setInstagramPageId(e.target.value)}
+                      placeholder="Ex: 123456789012345"
+                      className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Access Token *
+                    </label>
+                    <input
+                      type="password"
+                      value={instagramAccessToken}
+                      onChange={(e) => setInstagramAccessToken(e.target.value)}
+                      placeholder="Token de acesso do Instagram"
+                      className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+
+                  <a 
+                    href="https://developers.facebook.com/docs/instagram-api/getting-started"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-pink-400 hover:text-pink-300"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Guia de configuração Instagram API
+                  </a>
+                </div>
+              )}
 
         {/* Modal de Nova Conexão */}
         <Dialog open={showNovaConexao} onOpenChange={setShowNovaConexao}>
@@ -960,7 +1122,7 @@ export default function Conexao() {
               ) : tipoProvedor === 'instagram' ? (
                 <button
                   onClick={handleCreateInstagramConnection}
-                  disabled={creatingInstagram || !instanceName.trim()}
+                  disabled={creatingInstagram || !instanceName.trim() || !instagramPageId.trim() || !instagramAccessToken.trim()}
                   className="w-full h-11 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium flex items-center justify-center gap-2 hover:from-purple-700 hover:to-pink-700 transition-colors disabled:opacity-50"
                 >
                   {creatingInstagram ? (
