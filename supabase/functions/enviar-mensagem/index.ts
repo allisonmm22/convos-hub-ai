@@ -382,12 +382,17 @@ serve(async (req) => {
     }
 
     // Formatar número (remover caracteres especiais) ou usar grupo_jid diretamente
-    // Para Instagram via Evolution, preservar o formato ig_XXXXX do IGSID
-    const formattedNumber = grupo_jid || (
-      conexao.tipo_provedor === 'instagram' 
-        ? telefone // Preservar IGSID completo para Instagram
-        : telefone.replace(/\D/g, '') // Limpar para WhatsApp
-    );
+    // Para Instagram via Evolution, usar IGSID (remover prefixo ig_ se existir para compatibilidade)
+    let formattedNumber: string;
+    if (grupo_jid) {
+      formattedNumber = grupo_jid;
+    } else if (conexao.tipo_provedor === 'instagram') {
+      // Para Instagram, usar o IGSID diretamente (remover ig_ se existir)
+      formattedNumber = telefone.startsWith('ig_') ? telefone.slice(3) : telefone;
+    } else {
+      // Para WhatsApp, limpar caracteres não numéricos
+      formattedNumber = telefone.replace(/\D/g, '');
+    }
 
     let evolutionUrl: string;
     let body: Record<string, unknown>;

@@ -325,8 +325,8 @@ async function processInstagramMessaging(
   console.log('[instagram-webhook] Mensagem:', { tipo, conteudo: messageContent.substring(0, 50) });
 
   // Buscar ou criar contato
-  // Instagram usa IGSID como identificador
-  const contactPhone = `ig_${senderId}`;
+  // Instagram usa IGSID como identificador (armazenamos apenas o ID numérico)
+  const contactPhone = senderId;
   
   let { data: contato } = await supabase
     .from('contatos')
