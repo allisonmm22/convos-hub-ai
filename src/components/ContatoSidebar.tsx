@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react';
-import { X, Phone, Edit2, Save, Briefcase, Mail, Tag, Plus, MoreVertical, History, ChevronDown, ChevronUp, Check } from 'lucide-react';
+import { 
+  X, Phone, Edit2, Save, Briefcase, Mail, Tag, Plus, 
+  History, ChevronDown, ChevronUp, Check, MessageSquare,
+  TrendingUp, Trophy, XCircle, Clock, ArrowRight, Eye
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useNavigate } from 'react-router-dom';
 import {
   Select,
   SelectContent,
@@ -14,17 +19,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { NegociacaoDetalheModal } from '@/components/NegociacaoDetalheModal';
+import { Button } from '@/components/ui/button';
 
 interface Contato {
   id: string;
@@ -90,6 +96,7 @@ interface ContatoSidebarProps {
 
 export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContatoUpdate }: ContatoSidebarProps) {
   const { usuario } = useAuth();
+  const navigate = useNavigate();
   const [editando, setEditando] = useState(false);
   const [telefoneEdit, setTelefoneEdit] = useState(contato.telefone);
   const [emailEdit, setEmailEdit] = useState(contato.email || '');
@@ -97,7 +104,7 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
   const [negociacoes, setNegociacoes] = useState<Negociacao[]>([]);
   const [loadingNegociacoes, setLoadingNegociacoes] = useState(false);
   const [funis, setFunis] = useState<Funil[]>([]);
-  const [criandoNegociacao, setCriandoNegociacao] = useState(false);
+  const [modalNovaNegociacao, setModalNovaNegociacao] = useState(false);
   const [novaNegociacao, setNovaNegociacao] = useState({
     titulo: '',
     valor: '',
@@ -268,7 +275,6 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
 
   const handleUpdateNegociacao = async (negociacaoId: string, updates: { estagio_id?: string; status?: 'aberto' | 'ganho' | 'perdido' }, estagioAnteriorId?: string | null) => {
     try {
-      // Get negotiation details for notification
       const negociacao = negociacoes.find(n => n.id === negociacaoId);
       
       const { error } = await supabase
@@ -278,7 +284,6 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
 
       if (error) throw error;
 
-      // Record stage change history and send notification
       if (updates.estagio_id && estagioAnteriorId !== updates.estagio_id) {
         await supabase.from('negociacao_historico').insert({
           negociacao_id: negociacaoId,
@@ -288,11 +293,9 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
           tipo: 'mudanca_estagio',
         });
 
-        // Find stage names for notification
         const estagioAnterior = funis.flatMap(f => f.estagios).find(e => e.id === estagioAnteriorId);
         const estagioNovo = funis.flatMap(f => f.estagios).find(e => e.id === updates.estagio_id);
 
-        // Create notification for responsible users
         if (usuario?.conta_id && estagioNovo) {
           await supabase.from('notificacoes').insert({
             conta_id: usuario.conta_id,
@@ -303,7 +306,6 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
           });
         }
 
-        // Insert system message in conversation to track stage change
         if (conversaId) {
           const mensagemSistema = estagioAnterior 
             ? `📊 ${usuario?.nome || 'Usuário'} moveu negociação de "${estagioAnterior.nome}" para "${estagioNovo?.nome}"`
@@ -396,7 +398,7 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
       if (error) throw error;
 
       toast.success('Negociação criada');
-      setCriandoNegociacao(false);
+      setModalNovaNegociacao(false);
       setNovaNegociacao({ titulo: '', valor: '', funil_id: '', estagio_id: '' });
       fetchNegociacoes();
     } catch (error) {
@@ -413,14 +415,29 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
     }).format(value);
   };
 
-  const getStatusBadge = (status: string | null) => {
+  const getStatusConfig = (status: string | null) => {
     switch (status) {
       case 'ganho':
-        return 'bg-green-500/20 text-green-500';
+        return { 
+          bg: 'bg-emerald-500/10', 
+          text: 'text-emerald-500', 
+          icon: Trophy,
+          label: 'Ganho'
+        };
       case 'perdido':
-        return 'bg-red-500/20 text-red-500';
+        return { 
+          bg: 'bg-red-500/10', 
+          text: 'text-red-500', 
+          icon: XCircle,
+          label: 'Perdido'
+        };
       default:
-        return 'bg-blue-500/20 text-blue-500';
+        return { 
+          bg: 'bg-blue-500/10', 
+          text: 'text-blue-500', 
+          icon: Clock,
+          label: 'Aberto'
+        };
     }
   };
 
@@ -444,124 +461,179 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
     setModalDetalheAberto(true);
   };
 
+  const getProgressoEstagio = (negociacao: Negociacao) => {
+    const funil = getFunilByEstagioId(negociacao.estagio_id);
+    if (!funil || !negociacao.estagio_id) return 0;
+    
+    const estagioIndex = funil.estagios.findIndex(e => e.id === negociacao.estagio_id);
+    if (estagioIndex === -1) return 0;
+    
+    return ((estagioIndex + 1) / funil.estagios.length) * 100;
+  };
+
+  // Cálculos de resumo
+  const resumoNegociacoes = {
+    total: negociacoes.reduce((sum, n) => sum + (n.valor || 0), 0),
+    abertas: negociacoes.filter(n => n.status === 'aberto').length,
+    ganhas: negociacoes.filter(n => n.status === 'ganho').length,
+    perdidas: negociacoes.filter(n => n.status === 'perdido').length,
+    valorAberto: negociacoes.filter(n => n.status === 'aberto').reduce((sum, n) => sum + (n.valor || 0), 0),
+  };
+
+  const handleGoToConversation = async () => {
+    navigate(`/conversas?contato=${contato.id}`);
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   return (
     <>
       {/* Overlay */}
       <div 
-        className="fixed inset-0 bg-black/50 z-40"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity"
         onClick={onClose}
       />
       
       {/* Sidebar */}
-      <div className="fixed right-0 top-0 h-full w-96 bg-card border-l border-border z-50 flex flex-col animate-slide-in-right shadow-2xl">
-        {/* Header */}
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-foreground">Detalhes do Contato</h3>
+      <div className="fixed right-0 top-0 h-full w-[420px] max-w-[90vw] bg-card z-50 flex flex-col animate-slide-in-right shadow-2xl">
+        {/* Header com Gradiente */}
+        <div className="relative bg-gradient-to-br from-primary/20 via-primary/10 to-transparent p-6 pb-20">
           <button
             onClick={onClose}
-            className="p-2 hover:bg-muted rounded-lg transition-colors"
+            className="absolute top-4 right-4 p-2 hover:bg-background/50 rounded-full transition-colors"
           >
-            <X className="h-5 w-5 text-muted-foreground" />
+            <X className="h-5 w-5 text-foreground" />
           </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
-          {/* Avatar e Nome */}
-          <div className="flex flex-col items-center text-center">
+          
+          {/* Avatar centralizado */}
+          <div className="flex flex-col items-center pt-4">
             {contato.avatar_url ? (
               <img
                 src={contato.avatar_url}
                 alt={contato.nome}
-                className="h-20 w-20 rounded-full object-cover mb-3"
+                className="h-24 w-24 rounded-full object-cover border-4 border-background shadow-xl"
               />
             ) : (
-              <div className="h-20 w-20 rounded-full bg-primary/20 flex items-center justify-center text-primary text-2xl font-bold mb-3">
+              <div className="h-24 w-24 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-primary-foreground text-3xl font-bold border-4 border-background shadow-xl">
                 {contato.nome.charAt(0).toUpperCase()}
               </div>
             )}
-            <h4 className="text-xl font-semibold text-foreground">{contato.nome}</h4>
+            <h2 className="text-xl font-bold text-foreground mt-4">{contato.nome}</h2>
+            
+            {/* Ações rápidas */}
+            <div className="flex items-center gap-2 mt-3">
+              <button 
+                onClick={handleGoToConversation}
+                className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full transition-colors"
+                title="Ver conversa"
+              >
+                <MessageSquare className="h-4 w-4 text-primary" />
+              </button>
+              <a 
+                href={`tel:${contato.telefone}`}
+                className="p-2 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-full transition-colors"
+                title="Ligar"
+              >
+                <Phone className="h-4 w-4 text-emerald-500" />
+              </a>
+              {contato.email && (
+                <a 
+                  href={`mailto:${contato.email}`}
+                  className="p-2 bg-blue-500/10 hover:bg-blue-500/20 rounded-full transition-colors"
+                  title="Email"
+                >
+                  <Mail className="h-4 w-4 text-blue-500" />
+                </a>
+              )}
+            </div>
           </div>
+        </div>
 
-          {/* Informações de Contato */}
-          <div className="space-y-4">
+        {/* Content com scroll */}
+        <div className="flex-1 overflow-y-auto -mt-8 px-4 pb-24">
+          {/* Card de Informações */}
+          <div className="bg-card rounded-2xl border border-border shadow-lg p-4 space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-muted-foreground">Informações</span>
+              <span className="text-sm font-semibold text-foreground">Informações</span>
               {!editando ? (
                 <button
                   onClick={() => setEditando(true)}
-                  className="flex items-center gap-1 text-sm text-primary hover:underline"
+                  className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
                 >
-                  <Edit2 className="h-3 w-3" />
+                  <Edit2 className="h-3.5 w-3.5" />
                   Editar
                 </button>
               ) : (
                 <button
                   onClick={handleSave}
                   disabled={salvando}
-                  className="flex items-center gap-1 text-sm text-primary hover:underline disabled:opacity-50"
+                  className="flex items-center gap-1.5 text-xs text-emerald-500 hover:text-emerald-400 transition-colors disabled:opacity-50"
                 >
-                  <Save className="h-3 w-3" />
+                  <Save className="h-3.5 w-3.5" />
                   {salvando ? 'Salvando...' : 'Salvar'}
                 </button>
               )}
             </div>
 
-            {/* Telefone */}
-            <div className="bg-muted/50 rounded-lg p-3 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Phone className="h-4 w-4" />
-                <span className="text-xs">Telefone</span>
+            {/* Pills de Info */}
+            <div className="space-y-2">
+              <div className={cn(
+                "flex items-center gap-3 p-3 rounded-xl transition-colors",
+                editando ? "bg-muted" : "bg-muted/50"
+              )}>
+                <div className="p-2 bg-emerald-500/10 rounded-lg">
+                  <Phone className="h-4 w-4 text-emerald-500" />
+                </div>
+                {editando ? (
+                  <input
+                    type="text"
+                    value={telefoneEdit}
+                    onChange={(e) => setTelefoneEdit(e.target.value)}
+                    className="flex-1 bg-background border border-border rounded-lg px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                ) : (
+                  <span className="text-sm font-medium text-foreground">{contato.telefone}</span>
+                )}
               </div>
-              {editando ? (
-                <input
-                  type="text"
-                  value={telefoneEdit}
-                  onChange={(e) => setTelefoneEdit(e.target.value)}
-                  className="w-full bg-background border border-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              ) : (
-                <p className="text-sm font-medium text-foreground">{contato.telefone}</p>
-              )}
-            </div>
 
-            {/* Email */}
-            <div className="bg-muted/50 rounded-lg p-3 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Mail className="h-4 w-4" />
-                <span className="text-xs">Email</span>
+              <div className={cn(
+                "flex items-center gap-3 p-3 rounded-xl transition-colors",
+                editando ? "bg-muted" : "bg-muted/50"
+              )}>
+                <div className="p-2 bg-blue-500/10 rounded-lg">
+                  <Mail className="h-4 w-4 text-blue-500" />
+                </div>
+                {editando ? (
+                  <input
+                    type="email"
+                    value={emailEdit}
+                    onChange={(e) => setEmailEdit(e.target.value)}
+                    placeholder="email@exemplo.com"
+                    className="flex-1 bg-background border border-border rounded-lg px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                ) : (
+                  <span className="text-sm font-medium text-foreground">
+                    {contato.email || <span className="text-muted-foreground italic">Não informado</span>}
+                  </span>
+                )}
               </div>
-              {editando ? (
-                <input
-                  type="email"
-                  value={emailEdit}
-                  onChange={(e) => setEmailEdit(e.target.value)}
-                  placeholder="email@exemplo.com"
-                  className="w-full bg-background border border-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              ) : (
-                <p className="text-sm font-medium text-foreground">
-                  {contato.email || <span className="text-muted-foreground italic">Não informado</span>}
-                </p>
-              )}
             </div>
 
             {/* Tags */}
-            <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Tag className="h-4 w-4" />
-                  <span className="text-xs">Tags</span>
+            <div className="pt-2 border-t border-border">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium text-muted-foreground">Tags</span>
                 </div>
                 <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
                   <PopoverTrigger asChild>
                     <button 
-                      className="flex items-center gap-1 text-xs text-primary hover:underline"
+                      className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
                       disabled={salvandoTags}
                     >
-                      <Plus className="h-3 w-3" />
+                      <Plus className="h-3.5 w-3.5" />
                       Gerenciar
                     </button>
                   </PopoverTrigger>
@@ -583,7 +655,7 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
                               onClick={() => handleToggleTag(tag.nome)}
                               disabled={salvandoTags}
                               className={cn(
-                                "w-full flex items-center justify-between px-2 py-1.5 rounded-md text-sm transition-colors",
+                                "w-full flex items-center justify-between px-2 py-2 rounded-lg text-sm transition-colors",
                                 isSelected ? "bg-muted" : "hover:bg-muted/50"
                               )}
                             >
@@ -605,12 +677,13 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
                   </PopoverContent>
                 </Popover>
               </div>
+              
               {contato.tags && contato.tags.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
-                  {contato.tags.map((tagNome, index) => (
+                <div className="flex flex-wrap gap-2">
+                  {contato.tags.slice(0, 5).map((tagNome, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full text-white"
+                      className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full text-white shadow-sm"
                       style={{ backgroundColor: getTagColor(tagNome) }}
                     >
                       {tagNome}
@@ -623,6 +696,11 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
                       </button>
                     </span>
                   ))}
+                  {contato.tags.length > 5 && (
+                    <span className="px-3 py-1 text-xs font-medium rounded-full bg-muted text-muted-foreground">
+                      +{contato.tags.length - 5}
+                    </span>
+                  )}
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground italic">Nenhuma tag atribuída</p>
@@ -630,262 +708,297 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
             </div>
           </div>
 
-          {/* Negociações */}
-          <div className="space-y-3">
+          {/* Seção de Negociações */}
+          <div className="mt-4 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Briefcase className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-muted-foreground">
-                  Negociações ({negociacoes.length})
+                <Briefcase className="h-5 w-5 text-primary" />
+                <span className="text-sm font-semibold text-foreground">
+                  Negociações
+                </span>
+                <span className="px-2 py-0.5 text-xs font-medium bg-muted rounded-full text-muted-foreground">
+                  {negociacoes.length}
                 </span>
               </div>
               <button
                 onClick={() => {
-                  setCriandoNegociacao(true);
+                  setModalNovaNegociacao(true);
                   setNovaNegociacao({ titulo: contato.nome, valor: '', funil_id: '', estagio_id: '' });
                 }}
-                className="flex items-center gap-1 text-sm text-primary hover:underline"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
               >
-                <Plus className="h-3 w-3" />
+                <Plus className="h-3.5 w-3.5" />
                 Nova
               </button>
             </div>
 
-            {/* Form Nova Negociação */}
-            {criandoNegociacao && (
-              <div className="bg-muted/50 rounded-lg p-3 space-y-3 border border-primary/30">
-                <input
-                  type="text"
-                  placeholder="Título da negociação"
-                  value={novaNegociacao.titulo}
-                  onChange={(e) => setNovaNegociacao(prev => ({ ...prev, titulo: e.target.value }))}
-                  className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-                <input
-                  type="number"
-                  placeholder="Valor (opcional)"
-                  value={novaNegociacao.valor}
-                  onChange={(e) => setNovaNegociacao(prev => ({ ...prev, valor: e.target.value }))}
-                  className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-                <Select
-                  value={novaNegociacao.funil_id}
-                  onValueChange={(value) => setNovaNegociacao(prev => ({ ...prev, funil_id: value, estagio_id: '' }))}
-                >
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue placeholder="Selecione o funil" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {funis.map(funil => (
-                      <SelectItem key={funil.id} value={funil.id}>{funil.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {novaNegociacao.funil_id && (
-                  <Select
-                    value={novaNegociacao.estagio_id}
-                    onValueChange={(value) => setNovaNegociacao(prev => ({ ...prev, estagio_id: value }))}
-                  >
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue placeholder="Selecione o estágio" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {getEstagiosByFunilId(novaNegociacao.funil_id).map(estagio => (
-                        <SelectItem key={estagio.id} value={estagio.id}>{estagio.nome}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleCriarNegociacao}
-                    className="flex-1 bg-primary text-primary-foreground text-sm py-1.5 rounded hover:bg-primary/90 transition-colors"
-                  >
-                    Criar
-                  </button>
-                  <button
-                    onClick={() => setCriandoNegociacao(false)}
-                    className="flex-1 bg-muted text-muted-foreground text-sm py-1.5 rounded hover:bg-muted/80 transition-colors"
-                  >
-                    Cancelar
-                  </button>
+            {/* Card de Resumo */}
+            {negociacoes.length > 0 && (
+              <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent rounded-2xl border border-primary/20 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <TrendingUp className="h-4 w-4 text-primary" />
+                  <span className="text-xs font-semibold text-primary uppercase tracking-wider">Resumo</span>
+                </div>
+                
+                <div className="text-2xl font-bold text-foreground mb-4">
+                  {formatCurrency(resumoNegociacoes.valorAberto)}
+                  <span className="text-xs font-normal text-muted-foreground ml-2">em aberto</span>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                    <span className="text-xs text-muted-foreground">{resumoNegociacoes.abertas} abertas</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                    <span className="text-xs text-muted-foreground">{resumoNegociacoes.ganhas} ganhas</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                    <span className="text-xs text-muted-foreground">{resumoNegociacoes.perdidas} perdidas</span>
+                  </div>
                 </div>
               </div>
             )}
 
+            {/* Lista de Negociações */}
             {loadingNegociacoes ? (
-              <div className="flex items-center justify-center py-4">
-                <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              <div className="flex items-center justify-center py-8">
+                <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               </div>
             ) : negociacoes.length === 0 ? (
-              <div className="text-center py-6 bg-muted/30 rounded-lg">
-                <Briefcase className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
-                <p className="text-sm text-muted-foreground">Nenhuma negociação</p>
+              <div className="text-center py-12 bg-muted/30 rounded-2xl border border-dashed border-border">
+                <Briefcase className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
+                <p className="text-sm font-medium text-muted-foreground">Nenhuma negociação</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">Clique em "Nova" para criar</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {negociacoes.map((negociacao) => {
                   const funilAtual = getFunilByEstagioId(negociacao.estagio_id);
+                  const statusConfig = getStatusConfig(negociacao.status);
+                  const StatusIcon = statusConfig.icon;
+                  const progresso = getProgressoEstagio(negociacao);
                   
                   return (
                     <div
                       key={negociacao.id}
-                      className="bg-muted/50 rounded-lg p-3 space-y-3 hover:bg-muted/70 transition-colors"
+                      className="bg-card rounded-2xl border border-border overflow-hidden hover:border-primary/30 hover:shadow-lg transition-all duration-200 group"
                     >
-                      {/* Header com título e menu */}
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-medium text-foreground line-clamp-1 flex-1">
-                          {negociacao.titulo}
-                        </p>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="p-1 hover:bg-muted rounded">
-                              <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleOpenDetalhe(negociacao)}>
-                              Ver detalhes
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-
-                      {/* Selects de Funil e Etapa */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <Select
-                          value={funilAtual?.id || ''}
-                          onValueChange={(funilId) => {
-                            const novoFunil = funis.find(f => f.id === funilId);
-                            if (novoFunil && novoFunil.estagios.length > 0) {
-                              handleUpdateNegociacao(negociacao.id, { 
-                                estagio_id: novoFunil.estagios[0].id 
-                              }, negociacao.estagio_id);
-                            }
-                          }}
-                        >
-                          <SelectTrigger className="h-7 text-xs">
-                            <SelectValue placeholder="Funil" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {funis.map(funil => (
-                              <SelectItem key={funil.id} value={funil.id} className="text-xs">
-                                {funil.nome}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-
-                        <Select
-                          value={negociacao.estagio_id || ''}
-                          onValueChange={(estagioId) => {
-                            handleUpdateNegociacao(negociacao.id, { estagio_id: estagioId }, negociacao.estagio_id);
-                          }}
-                        >
-                          <SelectTrigger className="h-7 text-xs">
-                            <SelectValue placeholder="Etapa" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {funilAtual?.estagios.map(estagio => (
-                              <SelectItem key={estagio.id} value={estagio.id} className="text-xs">
-                                {estagio.nome}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Valor e Status */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-foreground">
-                          {formatCurrency(negociacao.valor)}
-                        </span>
-                        <Select
-                          value={negociacao.status || 'aberto'}
-                          onValueChange={(status: 'aberto' | 'ganho' | 'perdido') => {
-                            handleUpdateNegociacao(negociacao.id, { status });
-                          }}
-                        >
-                          <SelectTrigger className={cn(
-                            "h-6 w-24 text-xs border-0",
-                            getStatusBadge(negociacao.status)
-                          )}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="aberto" className="text-xs">Aberto</SelectItem>
-                            <SelectItem value="ganho" className="text-xs">Ganho</SelectItem>
-                            <SelectItem value="perdido" className="text-xs">Perdido</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Histórico Toggle */}
-                      <button
-                        onClick={() => toggleHistorico(negociacao.id)}
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
-                      >
-                        <History className="h-3 w-3" />
-                        <span>Histórico</span>
-                        {historicoExpandido === negociacao.id ? (
-                          <ChevronUp className="h-3 w-3 ml-auto" />
-                        ) : (
-                          <ChevronDown className="h-3 w-3 ml-auto" />
-                        )}
-                      </button>
-
-                      {/* Histórico Content */}
-                      {historicoExpandido === negociacao.id && (
-                        <div className="border-t border-border pt-2 space-y-2">
-                          {!historicos[negociacao.id] ? (
-                            <div className="flex items-center justify-center py-2">
-                              <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                            </div>
-                          ) : historicos[negociacao.id].length === 0 ? (
-                            <p className="text-xs text-muted-foreground text-center py-2">
-                              Nenhuma movimentação registrada
+                      {/* Borda lateral colorida */}
+                      <div 
+                        className="h-1 w-full"
+                        style={{ backgroundColor: negociacao.estagio?.cor || '#3b82f6' }}
+                      />
+                      
+                      <div className="p-4 space-y-3">
+                        {/* Header do card */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">
+                              {negociacao.titulo}
                             </p>
-                          ) : (
-                            <div className="space-y-2 max-h-40 overflow-y-auto">
-                              {historicos[negociacao.id].map((item) => (
-                                <div key={item.id} className="text-xs space-y-0.5">
-                                  <div className="flex items-center gap-1 text-muted-foreground">
-                                    <span>{format(new Date(item.created_at), "dd/MM HH:mm", { locale: ptBR })}</span>
-                                    {item.usuario && (
-                                      <span className="text-foreground">• {item.usuario.nome}</span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-1 flex-wrap">
-                                    {item.estagio_anterior && (
-                                      <span 
-                                        className="px-1.5 py-0.5 rounded text-xs"
-                                        style={{ 
-                                          backgroundColor: `${item.estagio_anterior.cor}20`,
-                                          color: item.estagio_anterior.cor || undefined
-                                        }}
-                                      >
-                                        {item.estagio_anterior.nome}
-                                      </span>
-                                    )}
-                                    <span className="text-muted-foreground">→</span>
-                                    {item.estagio_novo && (
-                                      <span 
-                                        className="px-1.5 py-0.5 rounded text-xs"
-                                        style={{ 
-                                          backgroundColor: `${item.estagio_novo.cor}20`,
-                                          color: item.estagio_novo.cor || undefined
-                                        }}
-                                      >
-                                        {item.estagio_novo.nome}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                            <p className="text-lg font-bold text-foreground mt-0.5">
+                              {formatCurrency(negociacao.valor)}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleOpenDetalhe(negociacao)}
+                            className="p-2 hover:bg-muted rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Ver detalhes"
+                          >
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          </button>
                         </div>
-                      )}
+
+                        {/* Selects de Funil e Etapa */}
+                        <div className="flex gap-2">
+                          <Select
+                            value={funilAtual?.id || ''}
+                            onValueChange={(funilId) => {
+                              const novoFunil = funis.find(f => f.id === funilId);
+                              if (novoFunil && novoFunil.estagios.length > 0) {
+                                handleUpdateNegociacao(negociacao.id, { 
+                                  estagio_id: novoFunil.estagios[0].id 
+                                }, negociacao.estagio_id);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="h-8 text-xs flex-1 bg-muted/50 border-0">
+                              <SelectValue placeholder="Funil" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {funis.map(funil => (
+                                <SelectItem key={funil.id} value={funil.id} className="text-xs">
+                                  {funil.nome}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+
+                          <Select
+                            value={negociacao.estagio_id || ''}
+                            onValueChange={(estagioId) => {
+                              handleUpdateNegociacao(negociacao.id, { estagio_id: estagioId }, negociacao.estagio_id);
+                            }}
+                          >
+                            <SelectTrigger className="h-8 text-xs flex-1 bg-muted/50 border-0">
+                              <SelectValue placeholder="Etapa" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {funilAtual?.estagios.map(estagio => (
+                                <SelectItem key={estagio.id} value={estagio.id} className="text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <div 
+                                      className="h-2 w-2 rounded-full"
+                                      style={{ backgroundColor: estagio.cor || '#3b82f6' }}
+                                    />
+                                    {estagio.nome}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Barra de progresso */}
+                        <div className="space-y-1">
+                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{ 
+                                width: `${progresso}%`,
+                                backgroundColor: negociacao.estagio?.cor || '#3b82f6'
+                              }}
+                            />
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            {Math.round(progresso)}% do funil
+                          </p>
+                        </div>
+
+                        {/* Footer com status e histórico */}
+                        <div className="flex items-center justify-between pt-2 border-t border-border">
+                          <Select
+                            value={negociacao.status || 'aberto'}
+                            onValueChange={(status: 'aberto' | 'ganho' | 'perdido') => {
+                              handleUpdateNegociacao(negociacao.id, { status });
+                            }}
+                          >
+                            <SelectTrigger className={cn(
+                              "h-7 w-auto gap-1.5 text-xs border-0 px-2",
+                              statusConfig.bg,
+                              statusConfig.text
+                            )}>
+                              <StatusIcon className="h-3.5 w-3.5" />
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="aberto" className="text-xs">
+                                <div className="flex items-center gap-2">
+                                  <Clock className="h-3.5 w-3.5 text-blue-500" />
+                                  Aberto
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="ganho" className="text-xs">
+                                <div className="flex items-center gap-2">
+                                  <Trophy className="h-3.5 w-3.5 text-emerald-500" />
+                                  Ganho
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="perdido" className="text-xs">
+                                <div className="flex items-center gap-2">
+                                  <XCircle className="h-3.5 w-3.5 text-red-500" />
+                                  Perdido
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          <button
+                            onClick={() => toggleHistorico(negociacao.id)}
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <History className="h-3.5 w-3.5" />
+                            <span>Histórico</span>
+                            {historicoExpandido === negociacao.id ? (
+                              <ChevronUp className="h-3.5 w-3.5" />
+                            ) : (
+                              <ChevronDown className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Timeline de Histórico */}
+                        {historicoExpandido === negociacao.id && (
+                          <div className="pt-3 border-t border-border animate-fade-in">
+                            {!historicos[negociacao.id] ? (
+                              <div className="flex items-center justify-center py-3">
+                                <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                              </div>
+                            ) : historicos[negociacao.id].length === 0 ? (
+                              <p className="text-xs text-muted-foreground text-center py-3">
+                                Nenhuma movimentação
+                              </p>
+                            ) : (
+                              <div className="relative space-y-3 max-h-48 overflow-y-auto pl-4">
+                                {/* Linha vertical da timeline */}
+                                <div className="absolute left-1.5 top-2 bottom-2 w-0.5 bg-border" />
+                                
+                                {historicos[negociacao.id].map((item, index) => (
+                                  <div key={item.id} className="relative flex items-start gap-3">
+                                    {/* Dot da timeline */}
+                                    <div 
+                                      className="absolute -left-2.5 top-1 h-3 w-3 rounded-full border-2 border-background"
+                                      style={{ backgroundColor: item.estagio_novo?.cor || '#3b82f6' }}
+                                    />
+                                    
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        {item.estagio_anterior && (
+                                          <>
+                                            <span 
+                                              className="px-2 py-0.5 text-[10px] font-medium rounded-full"
+                                              style={{ 
+                                                backgroundColor: `${item.estagio_anterior.cor}20`,
+                                                color: item.estagio_anterior.cor || '#666'
+                                              }}
+                                            >
+                                              {item.estagio_anterior.nome}
+                                            </span>
+                                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                                          </>
+                                        )}
+                                        {item.estagio_novo && (
+                                          <span 
+                                            className="px-2 py-0.5 text-[10px] font-medium rounded-full"
+                                            style={{ 
+                                              backgroundColor: `${item.estagio_novo.cor}20`,
+                                              color: item.estagio_novo.cor || '#666'
+                                            }}
+                                          >
+                                            {item.estagio_novo.nome}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
+                                        <span>{format(new Date(item.created_at), "dd MMM, HH:mm", { locale: ptBR })}</span>
+                                        {item.usuario && (
+                                          <>
+                                            <span>•</span>
+                                            <span>{item.usuario.nome}</span>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -893,38 +1006,148 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
             )}
           </div>
         </div>
+
+        {/* Footer Fixo */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-card via-card to-transparent pt-8">
+          <Button 
+            onClick={handleGoToConversation}
+            className="w-full h-12 text-sm font-semibold rounded-xl"
+          >
+            <MessageSquare className="h-4 w-4 mr-2" />
+            Ver Conversa
+          </Button>
+        </div>
       </div>
 
-      {/* Modal de Detalhes */}
+      {/* Modal Nova Negociação */}
+      <Dialog open={modalNovaNegociacao} onOpenChange={setModalNovaNegociacao}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nova Negociação</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Título</label>
+              <input
+                type="text"
+                placeholder="Título da negociação"
+                value={novaNegociacao.titulo}
+                onChange={(e) => setNovaNegociacao(prev => ({ ...prev, titulo: e.target.value }))}
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Valor</label>
+              <input
+                type="number"
+                placeholder="0,00"
+                value={novaNegociacao.valor}
+                onChange={(e) => setNovaNegociacao(prev => ({ ...prev, valor: e.target.value }))}
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Funil</label>
+              <Select
+                value={novaNegociacao.funil_id}
+                onValueChange={(value) => setNovaNegociacao(prev => ({ ...prev, funil_id: value, estagio_id: '' }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o funil" />
+                </SelectTrigger>
+                <SelectContent>
+                  {funis.map(funil => (
+                    <SelectItem key={funil.id} value={funil.id}>{funil.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {novaNegociacao.funil_id && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Etapa Inicial</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {getEstagiosByFunilId(novaNegociacao.funil_id).map(estagio => (
+                    <button
+                      key={estagio.id}
+                      onClick={() => setNovaNegociacao(prev => ({ ...prev, estagio_id: estagio.id }))}
+                      className={cn(
+                        "flex items-center gap-2 p-3 rounded-lg border-2 transition-all text-left",
+                        novaNegociacao.estagio_id === estagio.id
+                          ? "border-primary bg-primary/10"
+                          : "border-border hover:border-primary/50"
+                      )}
+                    >
+                      <div 
+                        className="h-3 w-3 rounded-full shrink-0"
+                        style={{ backgroundColor: estagio.cor || '#3b82f6' }}
+                      />
+                      <span className="text-sm font-medium text-foreground truncate">
+                        {estagio.nome}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="flex gap-2 pt-4">
+              <Button
+                onClick={handleCriarNegociacao}
+                className="flex-1"
+                disabled={!novaNegociacao.titulo.trim() || !novaNegociacao.estagio_id}
+              >
+                Criar Negociação
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setModalNovaNegociacao(false)}
+                className="flex-1"
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Detalhes da Negociação */}
       {negociacaoSelecionada && (
         <NegociacaoDetalheModal
           isOpen={modalDetalheAberto}
-          onClose={() => {
-            setModalDetalheAberto(false);
-            setNegociacaoSelecionada(null);
-          }}
+          onClose={() => setModalDetalheAberto(false)}
           negociacao={{
-            id: negociacaoSelecionada.id,
-            titulo: negociacaoSelecionada.titulo,
+            ...negociacaoSelecionada,
             valor: negociacaoSelecionada.valor || 0,
-            status: negociacaoSelecionada.status || 'aberto',
             estagio_id: negociacaoSelecionada.estagio_id || '',
             contato_id: contato.id,
             contatos: {
               nome: contato.nome,
               telefone: contato.telefone,
-            },
+            }
           }}
-          onUpdate={() => {
-            fetchNegociacoes();
-          }}
+          onUpdate={() => fetchNegociacoes()}
           onDelete={() => {
-            fetchNegociacoes();
             setModalDetalheAberto(false);
-            setNegociacaoSelecionada(null);
+            fetchNegociacoes();
           }}
-          estagios={funis.flatMap(f => f.estagios)}
-          funis={funis.map(f => ({ ...f, cor: '#3b82f6' }))}
+          estagios={funis.flatMap(f => f.estagios.map(e => ({
+            ...e,
+            cor: e.cor || '#3b82f6',
+            ordem: e.ordem || 0,
+            funil_id: f.id
+          })))}
+          funis={funis.map(f => ({
+            ...f,
+            cor: '#3b82f6',
+            estagios: f.estagios.map(e => ({
+              ...e,
+              cor: e.cor || '#3b82f6',
+              ordem: e.ordem || 0
+            }))
+          }))}
         />
       )}
     </>
