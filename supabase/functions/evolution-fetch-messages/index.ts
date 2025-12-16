@@ -176,7 +176,23 @@ serve(async (req) => {
 
         const telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
 
-        // Verificar se já existe mensagem com esse ID da Evolution
+        // VERIFICAR SE MENSAGEM JÁ FOI PROCESSADA (tabela independente)
+        // Isso previne reprocessamento mesmo após exclusão de contato/conversa
+        if (messageId) {
+          const { data: jaProcessada } = await supabase
+            .from('mensagens_processadas')
+            .select('id')
+            .eq('evolution_msg_id', messageId)
+            .eq('conta_id', conexao.conta_id)
+            .maybeSingle();
+
+          if (jaProcessada) {
+            console.log('Mensagem já foi processada anteriormente:', messageId);
+            continue;
+          }
+        }
+
+        // Verificar se já existe mensagem com esse ID da Evolution na tabela mensagens
         const { data: existingByEvolutionId } = await supabase
           .from('mensagens')
           .select('id')
@@ -189,7 +205,6 @@ serve(async (req) => {
         }
 
         // Verificação adicional: buscar por conteúdo similar nos últimos 5 minutos
-        // Isso previne duplicação de mensagens antigas sem evolution_msg_id
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
         const { data: existingByContent } = await supabase
           .from('mensagens')
@@ -295,6 +310,15 @@ serve(async (req) => {
         if (msgError) {
           console.error('Erro ao inserir mensagem:', msgError);
           continue;
+        }
+
+        // REGISTRAR MENSAGEM COMO PROCESSADA (previne reprocessamento após exclusão)
+        if (messageId) {
+          await supabase.from('mensagens_processadas').upsert({
+            evolution_msg_id: messageId,
+            conta_id: conexao.conta_id,
+            telefone,
+          }, { onConflict: 'evolution_msg_id,conta_id', ignoreDuplicates: true });
         }
 
         // Atualizar conversa
