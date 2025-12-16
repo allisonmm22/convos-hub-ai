@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useRef, useCallback, useEffect, useState, useMemo, memo, useLayoutEffect } from 'react';
 import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen, Handshake, X, CalendarSearch, CalendarPlus } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -16,144 +16,134 @@ interface ChipConfig {
   bgClass: string;
 }
 
-// Parse ação para config visual
+// Custom hook for debounced value
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
+// Parse ação para config visual - memoizado por ação
+const acaoConfigCache = new Map<string, ChipConfig>();
+
 function parseAcao(acao: string): ChipConfig {
+  const cached = acaoConfigCache.get(acao);
+  if (cached) return cached;
+  
   const acaoLower = acao.toLowerCase();
+  let config: ChipConfig;
   
   if (acaoLower.startsWith('@nome:')) {
     const valor = acao.replace(/^@nome:/i, '');
-    return {
+    config = {
       icon: UserPen,
       label: `Alterar Nome: ${valor}`,
       colorClass: 'text-amber-700 dark:text-amber-400',
       bgClass: 'bg-amber-100 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700',
     };
-  }
-  
-  if (acaoLower === '@nome') {
-    return {
+  } else if (acaoLower === '@nome') {
+    config = {
       icon: UserPen,
       label: 'Capturar Nome',
       colorClass: 'text-amber-700 dark:text-amber-400',
       bgClass: 'bg-amber-100 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700',
     };
-  }
-  
-  if (acaoLower.startsWith('@tag:')) {
+  } else if (acaoLower.startsWith('@tag:')) {
     const valor = acao.replace(/^@tag:/i, '');
-    return {
+    config = {
       icon: Tag,
       label: `Adicionar Tag: ${valor}`,
       colorClass: 'text-blue-700 dark:text-blue-400',
       bgClass: 'bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700',
     };
-  }
-  
-  if (acaoLower.startsWith('@negociacao:')) {
+  } else if (acaoLower.startsWith('@negociacao:')) {
     const valor = acao.replace(/^@negociacao:/i, '');
-    return {
+    config = {
       icon: Handshake,
       label: `Criar Negociação: ${valor}`,
       colorClass: 'text-orange-700 dark:text-orange-400',
       bgClass: 'bg-orange-100 dark:bg-orange-900/40 border-orange-300 dark:border-orange-700',
     };
-  }
-  
-  if (acaoLower.startsWith('@etapa:')) {
+  } else if (acaoLower.startsWith('@etapa:')) {
     const valor = acao.replace(/^@etapa:/i, '');
-    return {
+    config = {
       icon: Layers,
       label: `Mover para Estágio: ${valor}`,
       colorClass: 'text-purple-700 dark:text-purple-400',
       bgClass: 'bg-purple-100 dark:bg-purple-900/40 border-purple-300 dark:border-purple-700',
     };
-  }
-  
-  if (acaoLower.startsWith('@transferir:humano') || acaoLower.startsWith('@transferir:usuario:')) {
+  } else if (acaoLower.startsWith('@transferir:humano') || acaoLower.startsWith('@transferir:usuario:')) {
     const valor = acaoLower === '@transferir:humano' 
       ? 'Atendente' 
       : acao.replace(/^@transferir:usuario:/i, '');
-    return {
+    config = {
       icon: UserRound,
       label: `Transferir para: ${valor}`,
       colorClass: 'text-green-700 dark:text-green-400',
       bgClass: 'bg-green-100 dark:bg-green-900/40 border-green-300 dark:border-green-700',
     };
-  }
-  
-  if (acaoLower.startsWith('@transferir:ia') || acaoLower.startsWith('@transferir:agente:')) {
+  } else if (acaoLower.startsWith('@transferir:ia') || acaoLower.startsWith('@transferir:agente:')) {
     const valor = acaoLower === '@transferir:ia' 
       ? 'IA Principal' 
       : acao.replace(/^@transferir:agente:/i, '');
-    return {
+    config = {
       icon: Bot,
       label: `Transferir Agente: ${valor}`,
       colorClass: 'text-indigo-700 dark:text-indigo-400',
       bgClass: 'bg-indigo-100 dark:bg-indigo-900/40 border-indigo-300 dark:border-indigo-700',
     };
-  }
-  
-  if (acaoLower.startsWith('@fonte:')) {
+  } else if (acaoLower.startsWith('@fonte:')) {
     const valor = acao.replace(/^@fonte:/i, '');
-    return {
+    config = {
       icon: Globe,
       label: `Atribuir Fonte: ${valor}`,
       colorClass: 'text-teal-700 dark:text-teal-400',
       bgClass: 'bg-teal-100 dark:bg-teal-900/40 border-teal-300 dark:border-teal-700',
     };
-  }
-  
-  if (acaoLower.startsWith('@notificar:')) {
+  } else if (acaoLower.startsWith('@notificar:')) {
     const valor = acao.replace(/^@notificar:/i, '');
-    return {
+    config = {
       icon: Bell,
       label: `Notificar: ${valor.substring(0, 30)}${valor.length > 30 ? '...' : ''}`,
       colorClass: 'text-red-700 dark:text-red-400',
       bgClass: 'bg-red-100 dark:bg-red-900/40 border-red-300 dark:border-red-700',
     };
-  }
-  
-  if (acaoLower.startsWith('@produto:')) {
+  } else if (acaoLower.startsWith('@produto:')) {
     const valor = acao.replace(/^@produto:/i, '');
-    return {
+    config = {
       icon: Package,
       label: `Atribuir Produto: ${valor}`,
       colorClass: 'text-emerald-700 dark:text-emerald-400',
       bgClass: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700',
     };
-  }
-  
-  if (acaoLower === '@finalizar') {
-    return {
+  } else if (acaoLower === '@finalizar') {
+    config = {
       icon: StopCircle,
       label: 'Interromper Agente',
       colorClass: 'text-gray-700 dark:text-gray-400',
       bgClass: 'bg-gray-100 dark:bg-gray-800/50 border-gray-300 dark:border-gray-600',
     };
-  }
-  
-  // Agenda - Consultar
-  if (acaoLower.startsWith('@agenda:consultar:')) {
+  } else if (acaoLower.startsWith('@agenda:consultar:')) {
     const valor = acao.replace(/^@agenda:consultar:/i, '');
-    return {
+    config = {
       icon: CalendarSearch,
       label: `Consultar Agenda: ${valor}`,
       colorClass: 'text-sky-700 dark:text-sky-400',
       bgClass: 'bg-sky-100 dark:bg-sky-900/40 border-sky-300 dark:border-sky-700',
     };
-  }
-  
-  if (acaoLower === '@agenda:consultar') {
-    return {
+  } else if (acaoLower === '@agenda:consultar') {
+    config = {
       icon: CalendarSearch,
       label: 'Consultar Agenda',
       colorClass: 'text-sky-700 dark:text-sky-400',
       bgClass: 'bg-sky-100 dark:bg-sky-900/40 border-sky-300 dark:border-sky-700',
     };
-  }
-  
-  // Agenda - Criar (formato: @agenda:criar:calendario:duracao:meet)
-  if (acaoLower.startsWith('@agenda:criar:')) {
+  } else if (acaoLower.startsWith('@agenda:criar:')) {
     const partes = acao.replace(/^@agenda:criar:/i, '').split(':');
     const calendario = partes[0] || '';
     const duracao = partes[1] ? `${partes[1]}min` : '';
@@ -164,36 +154,40 @@ function parseAcao(acao: string): ChipConfig {
       label += ` (${duracao}${hasMeet ? ' + Meet' : ''})`;
     }
     
-    return {
+    config = {
       icon: CalendarPlus,
       label,
       colorClass: 'text-emerald-700 dark:text-emerald-400',
       bgClass: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700',
     };
-  }
-  
-  if (acaoLower === '@agenda:criar') {
-    return {
+  } else if (acaoLower === '@agenda:criar') {
+    config = {
       icon: CalendarPlus,
       label: 'Criar Evento',
       colorClass: 'text-emerald-700 dark:text-emerald-400',
       bgClass: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700',
     };
+  } else {
+    config = {
+      icon: Tag,
+      label: acao,
+      colorClass: 'text-muted-foreground',
+      bgClass: 'bg-muted border-border',
+    };
   }
   
-  return {
-    icon: Tag,
-    label: acao,
-    colorClass: 'text-muted-foreground',
-    bgClass: 'bg-muted border-border',
-  };
+  acaoConfigCache.set(acao, config);
+  return config;
 }
 
-// Regex para encontrar ações no texto
-const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao|agenda)(:[^\s@<>.,;!?]+)?/gi;
-
-// Componente ActionChip inline
-function ActionChip({ action, onRemove }: { action: string; onRemove?: () => void }) {
+// Componente ActionChip memoizado
+const ActionChip = memo(function ActionChip({ 
+  action, 
+  onRemove 
+}: { 
+  action: string; 
+  onRemove?: () => void;
+}) {
   const config = parseAcao(action);
   const Icon = config.icon;
   
@@ -228,64 +222,52 @@ function ActionChip({ action, onRemove }: { action: string; onRemove?: () => voi
       </Tooltip>
     </TooltipProvider>
   );
-}
+});
 
-// Renderizar texto com chips inline
-function renderTextWithChips(
-  text: string, 
-  onRemoveAction: (startIndex: number, endIndex: number) => void
-): React.ReactNode[] {
-  if (!text) return [];
-  
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  
-  // Resetar regex
-  ACTION_REGEX.lastIndex = 0;
-  
-  let match;
-  while ((match = ACTION_REGEX.exec(text)) !== null) {
-    // Texto antes da ação - VISÍVEL com cor do foreground
-    if (match.index > lastIndex) {
-      const textBefore = text.slice(lastIndex, match.index);
-      parts.push(
-        <span key={`text-${lastIndex}`} className="text-foreground">
-          {textBefore}
-        </span>
-      );
-    }
-    
-    // Ação como chip - VISÍVEL
-    const matchStart = match.index;
-    const matchEnd = match.index + match[0].length;
-    parts.push(
-      <ActionChip 
-        key={`action-${match.index}`}
-        action={match[0]} 
-        onRemove={() => onRemoveAction(matchStart, matchEnd)}
-      />
-    );
-    
-    lastIndex = matchEnd;
-  }
-  
-  // Texto restante - VISÍVEL com cor do foreground
-  if (lastIndex < text.length) {
-    parts.push(
-      <span key={`text-${lastIndex}`} className="text-foreground">
-        {text.slice(lastIndex)}
-      </span>
-    );
-  }
-  
-  return parts;
-}
+// Shared styles constant
+const SHARED_STYLES: React.CSSProperties = {
+  fontFamily: 'inherit',
+  fontSize: '0.875rem',
+  lineHeight: '1.75rem',
+  padding: '1rem',
+  whiteSpace: 'pre-wrap',
+  wordWrap: 'break-word',
+  overflowWrap: 'break-word',
+};
 
 export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: DescricaoEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number | null>(null);
+  
+  // Estado local para edição fluida
+  const [localValue, setLocalValue] = useState(value);
   const [isFocused, setIsFocused] = useState(false);
+  
+  // Sincronizar quando value externo muda (ex: inserção de ação via modal)
+  useEffect(() => {
+    if (value !== localValue) {
+      setLocalValue(value);
+    }
+  }, [value]);
+  
+  // Debounce para sincronizar com pai - só quando usuário está digitando
+  const debouncedLocalValue = useDebounce(localValue, 150);
+  
+  useEffect(() => {
+    if (debouncedLocalValue !== value) {
+      onChange(debouncedLocalValue);
+    }
+  }, [debouncedLocalValue, onChange, value]);
+
+  // Debounce maior para renderização de chips (evita lag durante digitação)
+  const debouncedValueForChips = useDebounce(localValue, 300);
+  
+  // Handler de mudança otimizado - atualiza apenas estado local
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setLocalValue(e.target.value);
+  }, []);
 
   // Sincronizar scroll entre textarea e overlay
   const syncScroll = useCallback(() => {
@@ -295,51 +277,103 @@ export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: D
     }
   }, []);
 
-  // Auto-resize do textarea
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = Math.max(160, textareaRef.current.scrollHeight) + 'px';
+  // Auto-resize otimizado com requestAnimationFrame
+  useLayoutEffect(() => {
+    if (!textareaRef.current) return;
+    
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
     }
-  }, [value]);
+    
+    rafRef.current = requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = Math.max(160, textareaRef.current.scrollHeight) + 'px';
+      }
+    });
+    
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, [localValue]);
 
   // Handler para tecla @
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === '@' && onAcaoClick) {
       e.preventDefault();
-      const pos = textareaRef.current?.selectionStart ?? value.length;
+      const pos = textareaRef.current?.selectionStart ?? localValue.length;
       onAcaoClick(pos);
     }
-  }, [onAcaoClick, value.length]);
+  }, [onAcaoClick, localValue.length]);
 
-  // Remover ação por posição no texto
+  // Remover ação por posição no texto - memoizado
   const handleRemoveAction = useCallback((startIndex: number, endIndex: number) => {
-    const before = value.slice(0, startIndex);
-    const after = value.slice(endIndex);
+    const before = localValue.slice(0, startIndex);
+    const after = localValue.slice(endIndex);
     
-    // Limpar espaço extra antes se existir
     const cleanBefore = before.endsWith(' ') ? before.slice(0, -1) : before;
-    // Limpar espaço extra depois se existir
     const cleanAfter = after.startsWith(' ') ? after.slice(1) : after;
     
     const newValue = cleanBefore + (cleanBefore.length > 0 && cleanAfter.length > 0 ? ' ' : '') + cleanAfter;
-    onChange(newValue.trim());
-  }, [value, onChange]);
+    const trimmed = newValue.trim();
+    setLocalValue(trimmed);
+    onChange(trimmed);
+  }, [localValue, onChange]);
 
-  // Verificar se há ações no texto
-  ACTION_REGEX.lastIndex = 0;
-  const hasActions = ACTION_REGEX.test(value);
+  // Renderizar chips memoizado - usa valor debounced
+  const renderedChips = useMemo(() => {
+    if (!debouncedValueForChips) return null;
+    
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    
+    // Usar matchAll ao invés de exec para evitar problemas com lastIndex global
+    const regex = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao|agenda)(:[^\s@<>.,;!?]+)?/gi;
+    const matches = Array.from(debouncedValueForChips.matchAll(regex));
+    
+    for (const match of matches) {
+      const matchIndex = match.index!;
+      
+      if (matchIndex > lastIndex) {
+        const textBefore = debouncedValueForChips.slice(lastIndex, matchIndex);
+        parts.push(
+          <span key={`text-${lastIndex}`} className="text-foreground">
+            {textBefore}
+          </span>
+        );
+      }
+      
+      const matchStart = matchIndex;
+      const matchEnd = matchIndex + match[0].length;
+      parts.push(
+        <ActionChip 
+          key={`action-${matchIndex}`}
+          action={match[0]} 
+          onRemove={() => handleRemoveAction(matchStart, matchEnd)}
+        />
+      );
+      
+      lastIndex = matchEnd;
+    }
+    
+    if (lastIndex < debouncedValueForChips.length) {
+      parts.push(
+        <span key={`text-${lastIndex}`} className="text-foreground">
+          {debouncedValueForChips.slice(lastIndex)}
+        </span>
+      );
+    }
+    
+    return parts.length > 0 ? parts : null;
+  }, [debouncedValueForChips, handleRemoveAction]);
 
-  // Estilos compartilhados entre textarea e overlay
-  const sharedStyles: React.CSSProperties = {
-    fontFamily: 'inherit',
-    fontSize: '0.875rem',
-    lineHeight: '1.75rem',
-    padding: '1rem',
-    whiteSpace: 'pre-wrap',
-    wordWrap: 'break-word',
-    overflowWrap: 'break-word',
-  };
+  // Verificar se há ações - usa valor debounced para consistência visual
+  const hasActions = useMemo(() => {
+    const regex = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao|agenda)(:[^\s@<>.,;!?]+)?/i;
+    return regex.test(debouncedValueForChips);
+  }, [debouncedValueForChips]);
 
   return (
     <div 
@@ -347,29 +381,27 @@ export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: D
       className="relative w-full"
       onClick={() => textareaRef.current?.focus()}
     >
-      {/* Overlay com chips visuais - fica por cima, mas não captura eventos */}
-      <div
-        ref={overlayRef}
-        className={`absolute inset-0 rounded-xl pointer-events-none overflow-hidden ${
-          hasActions ? 'block' : 'hidden'
-        }`}
-        style={{
-          ...sharedStyles,
-          color: 'transparent',
-          background: 'transparent',
-        }}
-        aria-hidden="true"
-      >
-        <div>
-          {renderTextWithChips(value, handleRemoveAction)}
+      {/* Overlay com chips visuais */}
+      {hasActions && (
+        <div
+          ref={overlayRef}
+          className="absolute inset-0 rounded-xl pointer-events-none overflow-hidden"
+          style={{
+            ...SHARED_STYLES,
+            color: 'transparent',
+            background: 'transparent',
+          }}
+          aria-hidden="true"
+        >
+          <div>{renderedChips}</div>
         </div>
-      </div>
+      )}
 
-      {/* Textarea real - transparente quando há ações, visível quando não há */}
+      {/* Textarea real */}
       <textarea
         ref={textareaRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        value={localValue}
+        onChange={handleChange}
         onKeyDown={handleKeyDown}
         onScroll={syncScroll}
         onFocus={() => setIsFocused(true)}
@@ -379,17 +411,17 @@ export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: D
           isFocused ? 'border-primary' : 'border-border'
         } ${hasActions ? 'text-transparent caret-foreground' : 'text-foreground'}`}
         style={{
-          ...sharedStyles,
+          ...SHARED_STYLES,
           WebkitTextFillColor: hasActions ? 'transparent' : undefined,
           caretColor: 'hsl(var(--foreground))',
         }}
       />
 
-      {/* Placeholder personalizado quando não há foco e está vazio */}
-      {!value && !isFocused && placeholder && (
+      {/* Placeholder personalizado */}
+      {!localValue && !isFocused && placeholder && (
         <div 
           className="absolute inset-0 rounded-xl pointer-events-none text-muted-foreground text-sm"
-          style={sharedStyles}
+          style={SHARED_STYLES}
         >
           {placeholder}
         </div>
@@ -398,7 +430,7 @@ export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick }: D
   );
 }
 
-// Função auxiliar para obter posição do cursor de um textarea específico
+// Função auxiliar para obter posição do cursor
 export function getTextareaCursorPosition(textareaElement: HTMLTextAreaElement | null): number {
   return textareaElement?.selectionStart ?? 0;
 }
