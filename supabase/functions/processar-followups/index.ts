@@ -132,6 +132,28 @@ serve(async (req) => {
           continue;
         }
 
+        // Verificar se o lead está em uma etapa com follow-up desativado
+        const { data: negociacao } = await supabase
+          .from('negociacoes')
+          .select('estagio_id')
+          .eq('contato_id', conversa.contato_id)
+          .eq('status', 'aberto')
+          .limit(1)
+          .maybeSingle();
+
+        if (negociacao?.estagio_id) {
+          const { data: estagio } = await supabase
+            .from('estagios')
+            .select('followup_ativo')
+            .eq('id', negociacao.estagio_id)
+            .single();
+
+          if (estagio?.followup_ativo === false) {
+            console.log(`[processar-followups] Conversa ${conversa.id}: etapa com follow-up desativado, pulando`);
+            continue;
+          }
+        }
+
         // Verificar quantos follow-ups já foram enviados para esta conversa
         const { data: followupsExistentes, error: followupsError } = await supabase
           .from('followup_enviados')

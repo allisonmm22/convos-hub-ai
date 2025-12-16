@@ -26,6 +26,7 @@ interface Estagio {
   cor: string;
   ordem: number;
   funil_id: string;
+  followup_ativo: boolean;
 }
 
 interface Funil {
@@ -71,7 +72,7 @@ export default function CRMConfiguracoes() {
   
   // Form states
   const [funilForm, setFunilForm] = useState({ nome: '', descricao: '', cor: '#3b82f6' });
-  const [estagioForm, setEstagioForm] = useState({ nome: '', cor: '#3b82f6' });
+  const [estagioForm, setEstagioForm] = useState({ nome: '', cor: '#3b82f6', followup_ativo: true });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -322,10 +323,10 @@ export default function CRMConfiguracoes() {
     setSelectedFunilId(funilId);
     if (estagio) {
       setEditingEstagio(estagio);
-      setEstagioForm({ nome: estagio.nome, cor: estagio.cor });
+      setEstagioForm({ nome: estagio.nome, cor: estagio.cor, followup_ativo: estagio.followup_ativo ?? true });
     } else {
       setEditingEstagio(null);
-      setEstagioForm({ nome: '', cor: '#3b82f6' });
+      setEstagioForm({ nome: '', cor: '#3b82f6', followup_ativo: true });
     }
     setEstagioModalOpen(true);
   };
@@ -344,6 +345,7 @@ export default function CRMConfiguracoes() {
           .update({
             nome: estagioForm.nome,
             cor: estagioForm.cor,
+            followup_ativo: estagioForm.followup_ativo,
           })
           .eq('id', editingEstagio.id);
 
@@ -362,6 +364,7 @@ export default function CRMConfiguracoes() {
             nome: estagioForm.nome,
             cor: estagioForm.cor,
             ordem: maxOrdem,
+            followup_ativo: estagioForm.followup_ativo,
           });
 
         if (error) throw error;
@@ -760,6 +763,18 @@ export default function CRMConfiguracoes() {
                   />
                 ))}
               </div>
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">Follow-up ativo</p>
+                <p className="text-sm text-muted-foreground">
+                  Se desativado, leads nesta etapa não receberão mensagens de follow-up
+                </p>
+              </div>
+              <Switch 
+                checked={estagioForm.followup_ativo} 
+                onCheckedChange={(checked) => setEstagioForm({...estagioForm, followup_ativo: checked})} 
+              />
             </div>
           </div>
           <DialogFooter>
