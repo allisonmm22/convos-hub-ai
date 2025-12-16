@@ -206,6 +206,7 @@ export default function Conversas() {
   const [showContatoSidebar, setShowContatoSidebar] = useState(false);
   const [agentesDisponiveis, setAgentesDisponiveis] = useState<AgenteIA[]>([]);
   const [mensagemParaDeletar, setMensagemParaDeletar] = useState<string | null>(null);
+  const [etapasAgenteAtual, setEtapasAgenteAtual] = useState<EtapaIA[]>([]);
   
   // Ref para manter a conversa selecionada atualizada no realtime
   const conversaSelecionadaRef = useRef<Conversa | null>(null);
@@ -355,8 +356,15 @@ export default function Conversas() {
     if (conversaSelecionada) {
       fetchMensagens(conversaSelecionada.id);
       marcarComoLida(conversaSelecionada.id);
+      
+      // Buscar etapas do agente atual se existir
+      if (conversaSelecionada.agente_ia_id) {
+        fetchEtapasAgenteAtual(conversaSelecionada.agente_ia_id);
+      } else {
+        setEtapasAgenteAtual([]);
+      }
     }
-  }, [conversaSelecionada]);
+  }, [conversaSelecionada?.id, conversaSelecionada?.agente_ia_id]);
 
   useEffect(() => {
     scrollToBottom();
@@ -527,6 +535,22 @@ export default function Conversas() {
     }
   };
 
+  const fetchEtapasAgenteAtual = async (agenteId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('agent_ia_etapas')
+        .select('id, nome, numero')
+        .eq('agent_ia_id', agenteId)
+        .order('numero');
+      
+      if (error) throw error;
+      setEtapasAgenteAtual(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar etapas do agente:', error);
+      setEtapasAgenteAtual([]);
+    }
+  };
+
   const toggleAgenteIA = async () => {
     if (!conversaSelecionada) return;
 
@@ -541,6 +565,32 @@ export default function Conversas() {
       toast.success(`Agente IA ${novoStatus ? 'ativado' : 'desativado'}`);
     } catch (error) {
       toast.error('Erro ao alterar status do Agente IA');
+    }
+  };
+
+  const alterarEtapaIA = async (etapaId: string | null) => {
+    if (!conversaSelecionada) return;
+
+    try {
+      await supabase
+        .from('conversas')
+        .update({ etapa_ia_atual: etapaId })
+        .eq('id', conversaSelecionada.id);
+
+      const etapaSelecionada = etapaId ? etapasAgenteAtual.find(e => e.id === etapaId) : null;
+      
+      setConversaSelecionada({ 
+        ...conversaSelecionada, 
+        etapa_ia_atual: etapaId,
+        etapa_ia: etapaSelecionada || null
+      });
+      
+      toast.success(etapaSelecionada 
+        ? `Etapa alterada para: ${etapaSelecionada.nome}` 
+        : 'Etapa removida'
+      );
+    } catch (error) {
+      toast.error('Erro ao alterar etapa');
     }
   };
 
@@ -1800,37 +1850,80 @@ export default function Conversas() {
 
                   {/* Botão Toggle Agente IA / Humano - não mostrar para grupos */}
                   {!conversaSelecionada.contatos.is_grupo && (
-                    <button
-                      onClick={toggleAgenteIA}
-                      className={cn(
-                        'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
-                        conversaSelecionada.agente_ia_ativo
-                          ? 'bg-primary/20 text-primary hover:bg-primary/30 shadow-[0_0_12px_hsl(var(--primary)/0.2)]'
-                          : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
-                      )}
-                    >
-                      {conversaSelecionada.agente_ia_ativo ? (
-                        <>
-                          <Bot className="h-4 w-4" />
-                          <span className="flex items-center gap-1.5">
-                            {conversaSelecionada.agent_ia?.nome || 'Agente IA'}
-                            {conversaSelecionada.etapa_ia && (
-                              <>
-                                <span className="text-primary/60">•</span>
-                                <span className="text-xs opacity-80">
-                                  Etapa {conversaSelecionada.etapa_ia.numero}: {conversaSelecionada.etapa_ia.nome}
-                                </span>
-                              </>
-                            )}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <User className="h-4 w-4" />
-                          Humano
-                        </>
-                      )}
-                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          className={cn(
+                            'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                            conversaSelecionada.agente_ia_ativo
+                              ? 'bg-primary/20 text-primary hover:bg-primary/30 shadow-[0_0_12px_hsl(var(--primary)/0.2)]'
+                              : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
+                          )}
+                        >
+                          {conversaSelecionada.agente_ia_ativo ? (
+                            <>
+                              <Bot className="h-4 w-4" />
+                              <span className="flex items-center gap-1.5">
+                                {conversaSelecionada.agent_ia?.nome || 'Agente IA'}
+                                {conversaSelecionada.etapa_ia && (
+                                  <>
+                                    <span className="text-primary/60">•</span>
+                                    <span className="text-xs opacity-80">
+                                      Etapa {conversaSelecionada.etapa_ia.numero}: {conversaSelecionada.etapa_ia.nome}
+                                    </span>
+                                  </>
+                                )}
+                              </span>
+                              <ChevronDown className="h-3 w-3 opacity-60" />
+                            </>
+                          ) : (
+                            <>
+                              <User className="h-4 w-4" />
+                              Humano
+                              <ChevronDown className="h-3 w-3 opacity-60" />
+                            </>
+                          )}
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56 bg-popover border border-border shadow-lg z-50">
+                        <DropdownMenuItem onClick={toggleAgenteIA}>
+                          {conversaSelecionada.agente_ia_ativo ? (
+                            <>
+                              <User className="h-4 w-4 mr-2" />
+                              Desativar IA (Humano)
+                            </>
+                          ) : (
+                            <>
+                              <Bot className="h-4 w-4 mr-2" />
+                              Ativar Agente IA
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                        
+                        {conversaSelecionada.agente_ia_ativo && etapasAgenteAtual.length > 0 && (
+                          <>
+                            <div className="px-2 py-1.5 text-xs text-muted-foreground border-t border-border mt-1 pt-2">
+                              Trocar etapa
+                            </div>
+                            <DropdownMenuItem 
+                              onClick={() => alterarEtapaIA(null)}
+                              className={cn(!conversaSelecionada.etapa_ia_atual && 'bg-accent')}
+                            >
+                              <span className="text-muted-foreground">Sem etapa específica</span>
+                            </DropdownMenuItem>
+                            {etapasAgenteAtual.map((etapa) => (
+                              <DropdownMenuItem 
+                                key={etapa.id}
+                                onClick={() => alterarEtapaIA(etapa.id)}
+                                className={cn(conversaSelecionada.etapa_ia_atual === etapa.id && 'bg-accent')}
+                              >
+                                Etapa {etapa.numero}: {etapa.nome}
+                              </DropdownMenuItem>
+                            ))}
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
 
                   {/* Transferir - não mostrar para grupos (não faz sentido transferir grupo para IA) */}
