@@ -650,7 +650,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { conversa_id, mensagem, conta_id: contaIdParam, mensagem_tipo, transcricao, descricao_imagem } = await req.json();
+    const { conversa_id, mensagem, conta_id: contaIdParam, mensagem_tipo, transcricao, descricao_imagem, texto_documento } = await req.json();
 
     console.log('=== AI RESPONDER ===');
     console.log('Conversa ID:', conversa_id);
@@ -662,6 +662,9 @@ serve(async (req) => {
     }
     if (descricao_imagem) {
       console.log('Descrição de imagem:', descricao_imagem.substring(0, 100));
+    }
+    if (texto_documento) {
+      console.log('Texto de documento:', texto_documento.substring(0, 100));
     }
 
     // Fallback: buscar conta_id da conversa se não foi passado
@@ -902,6 +905,19 @@ serve(async (req) => {
       promptCompleto += `- Se tiver dados importantes (valores, datas, nomes): mencione-os naturalmente.\n`;
       promptCompleto += `- Se for um screenshot de erro: ajude a resolver o problema.\n`;
       promptCompleto += `Não mencione que recebeu uma análise ou descrição da imagem. Aja como se tivesse visto a imagem diretamente.\n`;
+    }
+
+    // Adicionar contexto de mídia se for documento PDF com texto extraído
+    if (mensagem_tipo === 'documento' && texto_documento) {
+      promptCompleto += `\n\n## CONTEXTO DE DOCUMENTO\n`;
+      promptCompleto += `O lead enviou um documento PDF. Conteúdo extraído do documento:\n"${texto_documento}"\n\n`;
+      promptCompleto += `Responda naturalmente baseado no conteúdo do documento. Exemplos de comportamento:\n`;
+      promptCompleto += `- Se for um contrato: identifique cláusulas importantes, valores, prazos e partes envolvidas.\n`;
+      promptCompleto += `- Se for um orçamento/proposta: identifique os itens, valores e condições.\n`;
+      promptCompleto += `- Se for um documento técnico: resuma as informações relevantes.\n`;
+      promptCompleto += `- Se for uma nota fiscal: confirme os dados como valores, datas e produtos/serviços.\n`;
+      promptCompleto += `- Se for um comprovante: confirme as informações relevantes.\n`;
+      promptCompleto += `Não mencione que recebeu o texto extraído do PDF. Aja como se tivesse lido o documento diretamente.\n`;
     }
 
     if (etapas && etapas.length > 0) {
