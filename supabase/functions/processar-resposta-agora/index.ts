@@ -30,16 +30,26 @@ serve(async (req) => {
       });
     }
 
-    // Verificar se ainda há resposta pendente para esta conversa
-    const { data: pendente, error: pendenteError } = await supabase
+    // Tentar adquirir lock atomicamente - só atualiza se processando = false
+    const { data: pendente, error: lockError } = await supabase
       .from('respostas_pendentes')
-      .select('*')
+      .update({ processando: true })
       .eq('conversa_id', conversa_id)
-      .single();
+      .eq('processando', false)
+      .select('*')
+      .maybeSingle();
 
-    if (pendenteError || !pendente) {
-      console.log('Nenhuma resposta pendente encontrada (pode ter sido cancelada por nova mensagem)');
-      return new Response(JSON.stringify({ success: true, message: 'Sem pendência' }), {
+    if (lockError) {
+      console.error('Erro ao adquirir lock:', lockError);
+      return new Response(JSON.stringify({ error: 'Erro ao adquirir lock' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!pendente) {
+      console.log('Nenhuma resposta pendente encontrada ou já está sendo processada por outra instância');
+      return new Response(JSON.stringify({ success: true, message: 'Sem pendência ou já processando' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -50,10 +60,14 @@ serve(async (req) => {
     
     if (responderEm > agora) {
       console.log('Ainda não é hora de responder. Agendado para:', responderEm.toISOString());
+      // Liberar o lock se ainda não é hora
+      await supabase.from('respostas_pendentes').update({ processando: false }).eq('conversa_id', conversa_id);
       return new Response(JSON.stringify({ success: true, message: 'Ainda não é hora' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    console.log('Lock adquirido com sucesso, processando resposta...');
 
     console.log('Processando resposta pendente...');
 

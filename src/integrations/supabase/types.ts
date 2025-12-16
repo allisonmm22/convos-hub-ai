@@ -1121,18 +1121,21 @@ export type Database = {
           conversa_id: string
           created_at: string | null
           id: string
+          processando: boolean | null
           responder_em: string
         }
         Insert: {
           conversa_id: string
           created_at?: string | null
           id?: string
+          processando?: boolean | null
           responder_em: string
         }
         Update: {
           conversa_id?: string
           created_at?: string | null
           id?: string
+          processando?: boolean | null
           responder_em?: string
         }
         Relationships: [
