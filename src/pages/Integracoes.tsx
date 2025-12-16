@@ -101,6 +101,13 @@ const Integracoes = () => {
     }
   }, [usuario?.conta_id]);
 
+  // Auto abrir modal OpenAI durante onboarding
+  useEffect(() => {
+    if (isOnboardingActive && currentStep === 'configurar_openai' && !hasOpenAIKey) {
+      setOpenAIModalOpen(true);
+    }
+  }, [isOnboardingActive, currentStep, hasOpenAIKey]);
+
   const loadIntegrationStatus = async () => {
     if (!usuario?.conta_id) return;
 
@@ -216,14 +223,24 @@ const Integracoes = () => {
           />
 
           {/* OpenAI */}
-          <IntegrationCard
-            icon={<Brain className="h-5 w-5 text-primary" />}
-            title="OpenAI"
-            description="GPT-4, GPT-5, Whisper"
-            status={hasOpenAIKey ? 'configured' : 'disconnected'}
-            statusLabel={hasOpenAIKey ? "API Key configurada" : "Opcional - usa Lovable AI como fallback"}
-            onConfigure={() => setOpenAIModalOpen(true)}
-          />
+          <OnboardingTooltip
+            title="Configure sua chave OpenAI"
+            description="Esta é uma configuração obrigatória. Adicione sua API Key da OpenAI para que o agente IA funcione corretamente."
+            step={3}
+            totalSteps={5}
+            position="bottom"
+            isVisible={isOnboardingActive && currentStep === 'configurar_openai'}
+            showNextButton={false}
+          >
+            <IntegrationCard
+              icon={<Brain className="h-5 w-5 text-primary" />}
+              title="OpenAI"
+              description="GPT-4, GPT-5, Whisper"
+              status={hasOpenAIKey ? 'configured' : 'disconnected'}
+              statusLabel={hasOpenAIKey ? "API Key configurada" : "Opcional - usa Lovable AI como fallback"}
+              onConfigure={() => setOpenAIModalOpen(true)}
+            />
+          </OnboardingTooltip>
 
           {/* Google Calendar */}
           <IntegrationCard
@@ -280,7 +297,7 @@ const Integracoes = () => {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="apiKey">API Key</Label>
-              <div className="relative">
+              <div className={`relative ${isOnboardingActive && currentStep === 'configurar_openai' ? 'ring-2 ring-primary ring-offset-2 ring-offset-background rounded-md animate-pulse' : ''}`}>
                 <Input
                   id="apiKey"
                   type={showApiKey ? "text" : "password"}
@@ -308,6 +325,11 @@ const Integracoes = () => {
                   platform.openai.com
                 </a>
               </p>
+              {isOnboardingActive && currentStep === 'configurar_openai' && (
+                <p className="text-xs text-primary font-medium">
+                  ⬆️ Cole sua API Key aqui e clique em Salvar
+                </p>
+              )}
             </div>
 
             <Button 

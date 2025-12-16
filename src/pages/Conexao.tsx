@@ -572,18 +572,28 @@ export default function Conexao() {
             </div>
 
             {/* Nome da Conexão (comum para ambos) */}
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Nome da Conexão
-              </label>
-              <input
-                type="text"
-                value={instanceName}
-                onChange={(e) => setInstanceName(e.target.value)}
-                placeholder="Ex: WhatsApp Vendas"
-                className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
+            <OnboardingTooltip
+              title="Nome da sua conexão"
+              description="Dê um nome para identificar esta conexão, como 'WhatsApp Vendas' ou 'Atendimento'"
+              step={2}
+              totalSteps={5}
+              position="top"
+              isVisible={isOnboardingActive && (currentStep === 'configurar_conexao' || currentStep === 'aguardar_conexao') && !conexao}
+              showNextButton={false}
+            >
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Nome da Conexão
+                </label>
+                <input
+                  type="text"
+                  value={instanceName}
+                  onChange={(e) => setInstanceName(e.target.value)}
+                  placeholder="Ex: WhatsApp Vendas"
+                  className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </OnboardingTooltip>
 
             {/* Campos específicos para Meta API */}
             {tipoProvedor === 'meta' && (
@@ -690,29 +700,39 @@ export default function Conexao() {
 
         {/* QR Code - Se aguardando */}
         {conexao && conexao.status === 'aguardando' && qrCode && (
-          <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-4">
-            <h2 className="text-lg font-semibold text-foreground text-center">
-              Escaneie o QR Code
-            </h2>
-            <p className="text-xs md:text-sm text-muted-foreground text-center">
-              Abra o WhatsApp, vá em Configurações &gt; Dispositivos Conectados &gt; Conectar
-            </p>
-            
-            <div className="flex justify-center">
-              <div className="p-3 md:p-4 bg-background rounded-xl border border-border">
-                <img
-                  src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
-                  alt="QR Code"
-                  className="w-48 h-48 md:w-64 md:h-64"
-                />
+          <OnboardingTooltip
+            title="Escaneie com seu WhatsApp"
+            description="Abra o WhatsApp no celular, vá em Configurações > Dispositivos Conectados e escaneie este QR Code"
+            step={2}
+            totalSteps={5}
+            position="top"
+            isVisible={isOnboardingActive && currentStep === 'aguardar_conexao'}
+            showNextButton={false}
+          >
+            <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-4">
+              <h2 className="text-lg font-semibold text-foreground text-center">
+                Escaneie o QR Code
+              </h2>
+              <p className="text-xs md:text-sm text-muted-foreground text-center">
+                Abra o WhatsApp, vá em Configurações &gt; Dispositivos Conectados &gt; Conectar
+              </p>
+              
+              <div className="flex justify-center">
+                <div className="p-3 md:p-4 bg-background rounded-xl border border-border">
+                  <img
+                    src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
+                    alt="QR Code"
+                    className="w-48 h-48 md:w-64 md:h-64"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-center gap-2 text-xs md:text-sm text-muted-foreground">
+                <RefreshCw className={`h-4 w-4 ${checkingStatus ? 'animate-spin' : ''}`} />
+                <span>Verificando conexão...</span>
               </div>
             </div>
-
-            <div className="flex items-center justify-center gap-2 text-xs md:text-sm text-muted-foreground">
-              <RefreshCw className={`h-4 w-4 ${checkingStatus ? 'animate-spin' : ''}`} />
-              <span>Verificando conexão...</span>
-            </div>
-          </div>
+          </OnboardingTooltip>
         )}
 
         {/* Ações - Se instância existe */}
@@ -722,20 +742,30 @@ export default function Conexao() {
 
             <div className={`flex gap-2 md:gap-3 ${isMobile ? 'flex-col' : 'flex-wrap'}`}>
               {conexao.status !== 'conectado' && conexao.tipo_provedor === 'evolution' && (
-                <button
-                  onClick={handleConnect}
-                  disabled={connecting}
-                  className="w-full md:flex-1 md:min-w-[200px] h-11 rounded-lg bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
+                <OnboardingTooltip
+                  title="Conectar seu WhatsApp"
+                  description="Clique aqui para gerar um QR Code e conectar seu WhatsApp"
+                  step={2}
+                  totalSteps={5}
+                  position="top"
+                  isVisible={isOnboardingActive && currentStep === 'configurar_conexao' && conexao.status === 'desconectado'}
+                  showNextButton={false}
                 >
-                  {connecting ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <>
-                      <QrCode className="h-5 w-5" />
-                      {conexao.status === 'aguardando' ? 'Novo QR Code' : 'Conectar WhatsApp'}
-                    </>
-                  )}
-                </button>
+                  <button
+                    onClick={handleConnect}
+                    disabled={connecting}
+                    className="w-full md:flex-1 md:min-w-[200px] h-11 rounded-lg bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  >
+                    {connecting ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <>
+                        <QrCode className="h-5 w-5" />
+                        {conexao.status === 'aguardando' ? 'Novo QR Code' : 'Conectar WhatsApp'}
+                      </>
+                    )}
+                  </button>
+                </OnboardingTooltip>
               )}
 
               <button
