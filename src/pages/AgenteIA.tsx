@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, Key, Save, Eye, EyeOff, Trash2, Play, MessageSquare, RefreshCw, User, Sparkles, Crown, Zap, Power, PowerOff } from 'lucide-react';
+import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, Key, Save, Eye, EyeOff, Trash2, Play, MessageSquare, RefreshCw, User, Sparkles, Crown, Zap, Power, PowerOff, Bell } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { NovoAgenteModal } from '@/components/NovoAgenteModal';
 import { FollowUpRegraModal } from '@/components/FollowUpRegraModal';
+import { LembreteRegraModal } from '@/components/LembreteRegraModal';
 import { validarEExibirErro } from '@/hooks/useValidarLimitePlano';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -36,7 +37,7 @@ interface Agent {
   created_at?: string;
 }
 
-type SubPage = 'agentes' | 'followup' | 'sessoes' | 'configuracao';
+type SubPage = 'agentes' | 'followup' | 'lembretes' | 'sessoes' | 'configuracao';
 
 export default function AgenteIA() {
   const { usuario } = useAuth();
@@ -157,6 +158,7 @@ export default function AgenteIA() {
   const subNavItems = [
     { id: 'agentes' as SubPage, label: 'Agentes', icon: Bot, count: agentes.length },
     { id: 'followup' as SubPage, label: 'Follow-up', icon: Clock },
+    { id: 'lembretes' as SubPage, label: 'Lembretes', icon: Bell },
     { id: 'sessoes' as SubPage, label: 'Sessões', icon: Users },
     { id: 'configuracao' as SubPage, label: 'Configuração', icon: Key },
   ];
@@ -413,6 +415,10 @@ export default function AgenteIA() {
 
           {subPage === 'followup' && (
             <FollowUpPage />
+          )}
+
+          {subPage === 'lembretes' && (
+            <LembretesPage />
           )}
 
           {subPage === 'sessoes' && (
@@ -1353,6 +1359,262 @@ function ConfiguracaoPage() {
             {apiKey ? 'API Key configurada - Agentes prontos para uso' : 'API Key não configurada - Configure para habilitar os agentes'}
           </span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Interface para Lembrete Regra
+interface LembreteRegraItem {
+  id: string;
+  nome: string;
+  minutos_antes: number;
+  tipo: 'texto_fixo' | 'contextual_ia';
+  mensagem_fixa: string | null;
+  prompt_lembrete: string | null;
+  incluir_link_meet: boolean;
+  incluir_detalhes: boolean;
+  ativo: boolean;
+  created_at: string;
+}
+
+// Página de Lembretes
+function LembretesPage() {
+  const { usuario } = useAuth();
+  const [regras, setRegras] = useState<LembreteRegraItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingRegra, setEditingRegra] = useState<LembreteRegraItem | null>(null);
+  const [executando, setExecutando] = useState(false);
+
+  useEffect(() => {
+    if (usuario?.conta_id) {
+      fetchRegras();
+    }
+  }, [usuario?.conta_id]);
+
+  const fetchRegras = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('lembrete_regras')
+        .select('*')
+        .eq('conta_id', usuario!.conta_id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setRegras((data || []).map(d => ({
+        ...d,
+        tipo: d.tipo as 'texto_fixo' | 'contextual_ia'
+      })));
+    } catch (error) {
+      console.error('Erro ao buscar regras:', error);
+      toast.error('Erro ao carregar regras de lembrete');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleRegra = async (id: string, ativo: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('lembrete_regras')
+        .update({ ativo: !ativo })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setRegras(regras.map(r => r.id === id ? { ...r, ativo: !ativo } : r));
+      toast.success(ativo ? 'Regra desativada' : 'Regra ativada');
+    } catch (error) {
+      console.error('Erro ao atualizar regra:', error);
+      toast.error('Erro ao atualizar regra');
+    }
+  };
+
+  const deleteRegra = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta regra?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('lembrete_regras')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setRegras(regras.filter(r => r.id !== id));
+      toast.success('Regra excluída');
+    } catch (error) {
+      console.error('Erro ao excluir regra:', error);
+      toast.error('Erro ao excluir regra');
+    }
+  };
+
+  const executarLembretes = async () => {
+    setExecutando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('processar-lembretes');
+      
+      if (error) throw error;
+      
+      toast.success(`Processamento concluído! ${data?.lembretesEnviados || 0} lembretes enviados.`);
+    } catch (error) {
+      console.error('Erro ao processar lembretes:', error);
+      toast.error('Erro ao processar lembretes');
+    } finally {
+      setExecutando(false);
+    }
+  };
+
+  const openEdit = (regra: LembreteRegraItem) => {
+    setEditingRegra(regra);
+    setShowModal(true);
+  };
+
+  const openNew = () => {
+    setEditingRegra(null);
+    setShowModal(true);
+  };
+
+  const formatTempo = (minutos: number): string => {
+    if (minutos >= 1440) return `${minutos / 1440} dia${minutos / 1440 > 1 ? 's' : ''}`;
+    if (minutos >= 60) return `${minutos / 60}h`;
+    return `${minutos} min`;
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Lembretes de Agendamentos</h1>
+          <p className="text-muted-foreground mt-1">
+            Envie lembretes automáticos antes das reuniões agendadas
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={executarLembretes}
+            disabled={executando}
+            className="flex items-center gap-2 h-10 px-4 rounded-lg border border-border text-foreground font-medium hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            {executando ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
+            Executar Agora
+          </button>
+          <button
+            onClick={openNew}
+            className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Nova Regra
+          </button>
+        </div>
+      </div>
+
+      <LembreteRegraModal
+        open={showModal}
+        onOpenChange={setShowModal}
+        regra={editingRegra}
+        onSave={fetchRegras}
+      />
+
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : regras.length === 0 ? (
+        <div className="flex flex-col items-center justify-center p-12 rounded-xl bg-card border border-border">
+          <Bell className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h3 className="font-medium text-foreground mb-1">Nenhum lembrete configurado</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Crie lembretes automáticos para suas reuniões
+          </p>
+          <button
+            onClick={openNew}
+            className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Criar Primeiro Lembrete
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {regras.map((regra) => (
+            <div
+              key={regra.id}
+              className="group flex items-center justify-between p-4 rounded-lg bg-card border border-border hover:border-primary/30 transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+                  regra.tipo === 'contextual_ia' ? 'bg-primary/20' : 'bg-amber-500/20'
+                }`}>
+                  {regra.tipo === 'contextual_ia' ? (
+                    <Bot className="h-5 w-5 text-primary" />
+                  ) : (
+                    <Bell className="h-5 w-5 text-amber-500" />
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-foreground">{regra.nome}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      regra.tipo === 'contextual_ia' 
+                        ? 'bg-primary/10 text-primary' 
+                        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    }`}>
+                      {regra.tipo === 'contextual_ia' ? 'IA Contextual' : 'Texto Fixo'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {formatTempo(regra.minutos_antes)} antes da reunião
+                    {regra.incluir_link_meet && ' • Inclui link Meet'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => openEdit(regra)}
+                  className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-muted transition-all"
+                >
+                  <Pencil className="h-4 w-4 text-muted-foreground" />
+                </button>
+                <button
+                  onClick={() => deleteRegra(regra.id)}
+                  className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-destructive/10 transition-all"
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </button>
+                <button
+                  onClick={() => toggleRegra(regra.id, regra.ativo)}
+                  className={`relative h-6 w-11 rounded-full transition-colors ${
+                    regra.ativo ? 'bg-primary' : 'bg-muted'
+                  }`}
+                >
+                  <div
+                    className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                      regra.ativo ? 'translate-x-5' : ''
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Info box */}
+      <div className="p-4 rounded-lg bg-muted/30 border border-dashed border-border">
+        <h4 className="font-medium text-foreground mb-2">Como funciona</h4>
+        <ul className="text-sm text-muted-foreground space-y-1">
+          <li>• <strong>Texto Fixo:</strong> Use variáveis como {"{{nome_contato}}"}, {"{{titulo}}"}, {"{{link_meet}}"}</li>
+          <li>• <strong>IA Contextual:</strong> A IA gera uma mensagem personalizada com os detalhes do agendamento</li>
+          <li>• O sistema verifica agendamentos próximos e envia lembretes automaticamente</li>
+          <li>• Configure um cron job para executar a cada minuto para precisão nos envios</li>
+        </ul>
       </div>
     </div>
   );
