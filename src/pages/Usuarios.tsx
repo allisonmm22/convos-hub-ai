@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { NovoUsuarioModal } from '@/components/NovoUsuarioModal';
 import { EditarUsuarioModal } from '@/components/EditarUsuarioModal';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +33,7 @@ interface UsuarioComRole {
 
 export default function Usuarios() {
   const { usuario: currentUser } = useAuth();
+  const isMobile = useIsMobile();
   const [usuarios, setUsuarios] = useState<UsuarioComRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNovoModal, setShowNovoModal] = useState(false);
@@ -158,42 +160,42 @@ export default function Usuarios() {
 
   return (
     <MainLayout>
-      <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Usuários</h1>
-          <p className="text-muted-foreground">Gerencie os usuários e permissões da sua conta</p>
+      <div className={`max-w-4xl mx-auto ${isMobile ? 'px-4 py-4' : 'p-6'}`}>
+      <div className="flex items-center justify-between gap-4 mb-6">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Usuários</h1>
+          <p className="text-muted-foreground text-sm hidden sm:block">Gerencie os usuários e permissões da sua conta</p>
         </div>
-        <Button onClick={() => setShowNovoModal(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Usuário
+        <Button onClick={() => setShowNovoModal(true)} size={isMobile ? 'sm' : 'default'}>
+          <Plus className="h-4 w-4 mr-1 md:mr-2" />
+          {isMobile ? 'Novo' : 'Novo Usuário'}
         </Button>
       </div>
 
       <div className="space-y-3">
         {usuarios.map((user) => (
           <Card key={user.id} className="hover:bg-muted/50 transition-colors">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+            <CardContent className="p-3 md:p-4">
+              <div className={`flex ${isMobile ? 'flex-col gap-3' : 'items-center justify-between'}`}>
+                <div className="flex items-center gap-3 md:gap-4 min-w-0">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                     <span className="text-primary font-semibold">
                       {user.nome.charAt(0).toUpperCase()}
                     </span>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-foreground">{user.nome}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-foreground truncate">{user.nome}</p>
                       {user.user_id === currentUser?.user_id && (
                         <Badge variant="outline" className="text-xs">Você</Badge>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
+                    <p className="text-sm text-muted-foreground truncate">{user.email}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
+                <div className={`flex items-center ${isMobile ? 'justify-between pl-13' : 'gap-3'}`}>
+                  <div className="flex items-center gap-2 flex-wrap">
                     {user.role === 'admin' ? (
                       <Badge className="bg-primary/10 text-primary border-primary/20">
                         <Shield className="h-3 w-3 mr-1" />
@@ -205,7 +207,7 @@ export default function Usuarios() {
                         Atendente
                       </Badge>
                     )}
-                    {user.role === 'atendente' && (
+                    {user.role === 'atendente' && !isMobile && (
                       <Badge variant="outline" className="text-xs">
                         {user.ver_todas_conversas ? (
                           <>

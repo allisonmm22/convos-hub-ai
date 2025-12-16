@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { validarEExibirErro } from '@/hooks/useValidarLimitePlano';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Conexao {
   id: string;
@@ -19,6 +20,7 @@ interface Conexao {
 
 export default function Conexao() {
   const { usuario } = useAuth();
+  const isMobile = useIsMobile();
   const [conexao, setConexao] = useState<Conexao | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -298,19 +300,19 @@ export default function Conexao() {
 
   return (
     <MainLayout>
-      <div className="max-w-3xl space-y-8 animate-fade-in">
+      <div className={`max-w-3xl space-y-6 md:space-y-8 animate-fade-in ${isMobile ? 'px-4 py-4' : ''}`}>
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Conexão WhatsApp</h1>
-          <p className="text-muted-foreground mt-1">
-            Conecte seu WhatsApp para receber e enviar mensagens automaticamente.
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Conexão WhatsApp</h1>
+          <p className="text-muted-foreground mt-1 text-sm md:text-base">
+            Conecte seu WhatsApp para receber e enviar mensagens.
           </p>
         </div>
 
         {/* Status Card */}
-        <div className="p-6 rounded-xl bg-card border border-border">
-          <div className="flex items-center gap-4">
+        <div className="p-4 md:p-6 rounded-xl bg-card border border-border">
+          <div className="flex items-center gap-3 md:gap-4">
             <div
-              className={`flex h-16 w-16 items-center justify-center rounded-xl ${
+              className={`flex h-12 w-12 md:h-16 md:w-16 items-center justify-center rounded-xl flex-shrink-0 ${
                 conexao?.status === 'conectado'
                   ? 'bg-success/20'
                   : conexao?.status === 'aguardando'
@@ -320,11 +322,11 @@ export default function Conexao() {
             >
               {getStatusIcon()}
             </div>
-            <div className="flex-1">
-              <p className="text-sm text-muted-foreground">Status da Conexão</p>
-              <p className={`text-xl font-semibold ${getStatusColor()}`}>{getStatusText()}</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs md:text-sm text-muted-foreground">Status da Conexão</p>
+              <p className={`text-lg md:text-xl font-semibold ${getStatusColor()}`}>{getStatusText()}</p>
               {conexao?.nome && (
-                <p className="text-sm text-muted-foreground">{conexao.nome}</p>
+                <p className="text-sm text-muted-foreground truncate">{conexao.nome}</p>
               )}
               {conexao?.numero && (
                 <p className="text-sm text-muted-foreground flex items-center gap-1">
@@ -334,14 +336,14 @@ export default function Conexao() {
               )}
             </div>
             {conexao?.status === 'conectado' && (
-              <Check className="h-8 w-8 text-success" />
+              <Check className="h-6 w-6 md:h-8 md:w-8 text-success flex-shrink-0" />
             )}
           </div>
         </div>
 
         {/* Criar Instância - Se não existe */}
         {!conexao && (
-          <div className="p-6 rounded-xl bg-card border border-border space-y-4">
+          <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-4">
             <h2 className="text-lg font-semibold text-foreground">Criar Nova Instância</h2>
             <p className="text-sm text-muted-foreground">
               Crie uma instância do WhatsApp para começar a receber e enviar mensagens.
@@ -355,11 +357,11 @@ export default function Conexao() {
                 type="text"
                 value={instanceName}
                 onChange={(e) => setInstanceName(e.target.value)}
-                placeholder="Ex: WhatsApp Vendas, Suporte, etc."
+                placeholder="Ex: WhatsApp Vendas"
                 className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Nome para identificar esta conexão no sistema.
+                Nome para identificar esta conexão.
               </p>
             </div>
 
@@ -382,49 +384,49 @@ export default function Conexao() {
 
         {/* QR Code - Se aguardando */}
         {conexao && conexao.status === 'aguardando' && qrCode && (
-          <div className="p-6 rounded-xl bg-card border border-border space-y-4">
+          <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-4">
             <h2 className="text-lg font-semibold text-foreground text-center">
               Escaneie o QR Code
             </h2>
-            <p className="text-sm text-muted-foreground text-center">
-              Abra o WhatsApp no seu celular, vá em Configurações &gt; Dispositivos Conectados &gt; Conectar Dispositivo
+            <p className="text-xs md:text-sm text-muted-foreground text-center">
+              Abra o WhatsApp, vá em Configurações &gt; Dispositivos Conectados &gt; Conectar
             </p>
             
             <div className="flex justify-center">
-              <div className="p-4 bg-background rounded-xl border border-border">
+              <div className="p-3 md:p-4 bg-background rounded-xl border border-border">
                 <img
                   src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
                   alt="QR Code"
-                  className="w-64 h-64"
+                  className="w-48 h-48 md:w-64 md:h-64"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center justify-center gap-2 text-xs md:text-sm text-muted-foreground">
               <RefreshCw className={`h-4 w-4 ${checkingStatus ? 'animate-spin' : ''}`} />
-              <span>Verificando conexão automaticamente...</span>
+              <span>Verificando conexão...</span>
             </div>
           </div>
         )}
 
         {/* Ações - Se instância existe */}
         {conexao && (
-          <div className="p-6 rounded-xl bg-card border border-border space-y-4">
+          <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-4">
             <h2 className="text-lg font-semibold text-foreground">Ações</h2>
 
-            <div className="flex gap-3 flex-wrap">
+            <div className={`flex gap-2 md:gap-3 ${isMobile ? 'flex-col' : 'flex-wrap'}`}>
               {conexao.status !== 'conectado' && (
                 <button
                   onClick={handleConnect}
                   disabled={connecting}
-                  className="flex-1 min-w-[200px] h-11 rounded-lg bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  className="w-full md:flex-1 md:min-w-[200px] h-11 rounded-lg bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
                   {connecting ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
                     <>
                       <QrCode className="h-5 w-5" />
-                      {conexao.status === 'aguardando' ? 'Gerar Novo QR Code' : 'Conectar WhatsApp'}
+                      {conexao.status === 'aguardando' ? 'Novo QR Code' : 'Conectar WhatsApp'}
                     </>
                   )}
                 </button>
@@ -433,7 +435,7 @@ export default function Conexao() {
               <button
                 onClick={() => handleCheckStatus(false)}
                 disabled={checkingStatus}
-                className="h-11 px-6 rounded-lg bg-secondary text-secondary-foreground font-medium flex items-center gap-2 hover:bg-secondary/80 transition-colors disabled:opacity-50"
+                className="w-full md:w-auto h-11 px-6 rounded-lg bg-secondary text-secondary-foreground font-medium flex items-center justify-center gap-2 hover:bg-secondary/80 transition-colors disabled:opacity-50"
               >
                 {checkingStatus ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -449,10 +451,10 @@ export default function Conexao() {
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
                   disabled={deleting}
-                  className="h-11 px-6 rounded-lg bg-destructive text-destructive-foreground font-medium flex items-center gap-2 hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                  className="w-full md:w-auto h-11 px-6 rounded-lg bg-destructive text-destructive-foreground font-medium flex items-center justify-center gap-2 hover:bg-destructive/90 transition-colors disabled:opacity-50"
                 >
                   <Trash2 className="h-5 w-5" />
-                  Deletar Conexão
+                  Deletar
                 </button>
               )}
 
@@ -461,21 +463,21 @@ export default function Conexao() {
                   <button
                     onClick={handleReconfigureWebhook}
                     disabled={reconfiguringWebhook}
-                    className="h-11 px-6 rounded-lg bg-accent text-accent-foreground font-medium flex items-center gap-2 hover:bg-accent/80 transition-colors disabled:opacity-50"
+                    className="w-full md:w-auto h-11 px-6 rounded-lg bg-accent text-accent-foreground font-medium flex items-center justify-center gap-2 hover:bg-accent/80 transition-colors disabled:opacity-50"
                   >
                     {reconfiguringWebhook ? (
                       <Loader2 className="h-5 w-5 animate-spin" />
                     ) : (
                       <>
                         <RefreshCw className="h-5 w-5" />
-                        Reconfigurar Webhook
+                        {isMobile ? 'Webhook' : 'Reconfigurar Webhook'}
                       </>
                     )}
                   </button>
                   <button
                     onClick={handleDisconnect}
                     disabled={disconnecting}
-                    className="h-11 px-6 rounded-lg bg-destructive text-destructive-foreground font-medium flex items-center gap-2 hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                    className="w-full md:w-auto h-11 px-6 rounded-lg bg-destructive text-destructive-foreground font-medium flex items-center justify-center gap-2 hover:bg-destructive/90 transition-colors disabled:opacity-50"
                   >
                     {disconnecting ? (
                       <Loader2 className="h-5 w-5 animate-spin" />
