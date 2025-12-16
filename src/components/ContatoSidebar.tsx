@@ -64,6 +64,11 @@ interface Negociacao {
   created_at: string;
   estagio_id: string | null;
   funil_id: string | null;
+  probabilidade?: number | null;
+  notas?: string | null;
+  data_fechamento?: string | null;
+  resumo_ia?: string | null;
+  resumo_gerado_em?: string | null;
   estagio?: {
     nome: string;
     cor: string | null;
@@ -217,6 +222,11 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
           status,
           created_at,
           estagio_id,
+          probabilidade,
+          notas,
+          data_fechamento,
+          resumo_ia,
+          resumo_gerado_em,
           estagios:estagio_id (
             nome,
             cor,
