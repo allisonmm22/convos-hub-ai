@@ -171,6 +171,7 @@ interface Conexao {
   status: 'conectado' | 'desconectado' | 'aguardando' | null;
   numero: string | null;
   tipo_provedor?: string | null;
+  nome?: string;
 }
 
 interface MetaTemplate {
@@ -246,10 +247,19 @@ export default function Conversas() {
   // Ref para manter a conversa selecionada atualizada no realtime
   const conversaSelecionadaRef = useRef<Conversa | null>(null);
   
-  // Estado da conexão WhatsApp
-  const [conexao, setConexao] = useState<Conexao | null>(null);
+  // Estado das conexões WhatsApp/Instagram (múltiplas)
+  const [conexoes, setConexoes] = useState<Conexao[]>([]);
   const [pollingActive, setPollingActive] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Helper: buscar conexão específica de uma conversa
+  const getConexaoDaConversa = useCallback((conversa: Conversa | null): Conexao | null => {
+    if (!conversa?.conexao_id) return null;
+    return conexoes.find(c => c.id === conversa.conexao_id) || null;
+  }, [conexoes]);
+
+  // Helper: verificar se alguma conexão está conectada
+  const algumConexaoConectada = conexoes.some(c => c.status === 'conectado');
 
   // Estados para templates Meta
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -274,61 +284,76 @@ export default function Conversas() {
     localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
   }, [statusFilter, atendenteFilter, tipoFilter, canalFilter, tagsFilter]);
 
-  // Buscar conexão WhatsApp
-  const fetchConexao = useCallback(async () => {
+  // Buscar TODAS as conexões WhatsApp/Instagram
+  const fetchConexoes = useCallback(async () => {
     if (!usuario?.conta_id) return;
     
     try {
       const { data, error } = await supabase
         .from('conexoes_whatsapp')
-        .select('id, instance_name, status, numero, tipo_provedor')
-        .eq('conta_id', usuario.conta_id)
-        .single();
+        .select('id, instance_name, status, numero, tipo_provedor, nome')
+        .eq('conta_id', usuario.conta_id);
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Erro ao buscar conexão:', error);
+      if (error) {
+        console.error('Erro ao buscar conexões:', error);
         return;
       }
 
-      setConexao(data);
+      setConexoes(data || []);
     } catch (error) {
-      console.error('Erro ao buscar conexão:', error);
+      console.error('Erro ao buscar conexões:', error);
     }
   }, [usuario?.conta_id]);
 
-  // Polling de mensagens
+  // Polling de mensagens para TODAS as conexões Evolution conectadas
   const pollMessages = useCallback(async () => {
-    if (!conexao?.id || conexao.status !== 'conectado') return;
+    // Filtrar apenas conexões Evolution API conectadas
+    const conexoesEvolutionConectadas = conexoes.filter(
+      c => c.status === 'conectado' && c.tipo_provedor === 'evolution'
+    );
+    
+    if (conexoesEvolutionConectadas.length === 0) return;
     
     try {
-      console.log('Polling mensagens...');
-      const { data, error } = await supabase.functions.invoke('evolution-fetch-messages', {
-        body: { conexao_id: conexao.id },
-      });
+      console.log(`Polling mensagens para ${conexoesEvolutionConectadas.length} conexão(ões)...`);
+      
+      // Poll em paralelo para todas as conexões
+      await Promise.all(
+        conexoesEvolutionConectadas.map(async (con) => {
+          const { data, error } = await supabase.functions.invoke('evolution-fetch-messages', {
+            body: { conexao_id: con.id },
+          });
 
-      if (error) {
-        console.error('Erro no polling:', error);
-        return;
-      }
+          if (error) {
+            console.error(`Erro no polling da conexão ${con.nome || con.instance_name}:`, error);
+            return;
+          }
 
-      if (data?.processed > 0) {
-        console.log('Mensagens processadas via polling:', data.processed);
-        fetchConversas();
-      }
+          if (data?.processed > 0) {
+            console.log(`Mensagens processadas via polling (${con.nome || con.instance_name}):`, data.processed);
+          }
+        })
+      );
+      
+      fetchConversas();
     } catch (error) {
       console.error('Erro no polling:', error);
     }
-  }, [conexao?.id, conexao?.status]);
+  }, [conexoes]);
 
-  // Iniciar/parar polling
+  // Iniciar/parar polling baseado em conexões Evolution disponíveis
   useEffect(() => {
-    if (conexao?.status === 'conectado' && !pollingActive) {
+    const temEvolutionConectada = conexoes.some(
+      c => c.status === 'conectado' && c.tipo_provedor === 'evolution'
+    );
+    
+    if (temEvolutionConectada && !pollingActive) {
       setPollingActive(true);
       // Polling a cada 10 segundos
       pollingIntervalRef.current = setInterval(pollMessages, 10000);
       // Executar imediatamente
       pollMessages();
-    } else if (conexao?.status !== 'conectado' && pollingActive) {
+    } else if (!temEvolutionConectada && pollingActive) {
       setPollingActive(false);
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
@@ -341,29 +366,29 @@ export default function Conversas() {
         clearInterval(pollingIntervalRef.current);
       }
     };
-  }, [conexao?.status, pollingActive, pollMessages]);
+  }, [conexoes, pollingActive, pollMessages]);
 
   useEffect(() => {
     if (usuario?.conta_id) {
       fetchConversas();
       fetchUsuarios();
       fetchAgentes();
-      fetchConexao();
+      fetchConexoes();
       fetchTagsDisponiveis();
       const cleanup = setupRealtimeSubscription();
       
       // Solicitar permissão de notificação
       requestNotificationPermission();
       
-      // Verificar status da conexão periodicamente
-      const statusInterval = setInterval(fetchConexao, 30000);
+      // Verificar status das conexões periodicamente
+      const statusInterval = setInterval(fetchConexoes, 30000);
       
       return () => {
         cleanup();
         clearInterval(statusInterval);
       };
     }
-  }, [usuario, fetchConexao]);
+  }, [usuario, fetchConexoes]);
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -537,12 +562,14 @@ export default function Conversas() {
 
   // Buscar templates Meta
   const fetchTemplates = async () => {
-    if (!conexao?.id) {
-      toast.error('Conexão não encontrada');
+    const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
+    
+    if (!conexaoDaConversa?.id) {
+      toast.error('Esta conversa não está vinculada a uma conexão');
       return;
     }
     
-    if (conexao.tipo_provedor !== 'meta') {
+    if (conexaoDaConversa.tipo_provedor !== 'meta') {
       toast.error('Templates disponíveis apenas para WhatsApp Oficial (Meta API)');
       return;
     }
@@ -550,7 +577,7 @@ export default function Conversas() {
     setLoadingTemplates(true);
     try {
       const { data, error } = await supabase.functions.invoke('meta-get-templates', {
-        body: { conexao_id: conexao.id },
+        body: { conexao_id: conexaoDaConversa.id },
       });
       
       if (error) {
@@ -724,10 +751,11 @@ export default function Conversas() {
         atendente_id: usuario!.id
       } : null);
 
-      // Usar conexao_id da conversa ou pegar a conexão ativa
-      const conexaoIdToUse = conversaSelecionada.conexao_id || conexao?.id;
+      // Buscar conexão específica da conversa
+      const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
+      const conexaoIdToUse = conversaSelecionada.conexao_id || conexaoDaConversa?.id;
       
-      if (conexaoIdToUse && conexao?.status === 'conectado') {
+      if (conexaoIdToUse && conexaoDaConversa?.status === 'conectado') {
         const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
           body: {
             conexao_id: conexaoIdToUse,
@@ -750,8 +778,8 @@ export default function Conversas() {
             .update({ conexao_id: conexaoIdToUse })
             .eq('id', conversaSelecionada.id);
         }
-      } else if (!conexaoIdToUse || conexao?.status !== 'conectado') {
-        toast.warning('WhatsApp não conectado. Mensagem salva apenas no CRM.');
+      } else if (!conexaoDaConversa || conexaoDaConversa.status !== 'conectado') {
+        toast.warning('Conexão não disponível. Mensagem salva apenas no CRM.');
       }
 
       setNovaMensagem('');
@@ -948,9 +976,10 @@ export default function Conversas() {
           atendente_id: usuario!.id
         } : null);
 
-        // Enviar via WhatsApp
-        const conexaoIdToUse = conversaSelecionada.conexao_id || conexao?.id;
-        if (conexaoIdToUse && conexao?.status === 'conectado') {
+        // Enviar via WhatsApp usando a conexão específica da conversa
+        const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
+        const conexaoIdToUse = conversaSelecionada.conexao_id || conexaoDaConversa?.id;
+        if (conexaoIdToUse && conexaoDaConversa?.status === 'conectado') {
           const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
             body: {
               conexao_id: conexaoIdToUse,
@@ -1049,8 +1078,9 @@ export default function Conversas() {
       } : null);
 
       // Enviar via WhatsApp - usar media_url já que o áudio está em formato MP3 compatível
-      const conexaoIdToUse = conversaSelecionada.conexao_id || conexao?.id;
-      if (conexaoIdToUse && conexao?.status === 'conectado') {
+      const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
+      const conexaoIdToUse = conversaSelecionada.conexao_id || conexaoDaConversa?.id;
+      if (conexaoIdToUse && conexaoDaConversa?.status === 'conectado') {
         const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
           body: {
             conexao_id: conexaoIdToUse,
@@ -1563,35 +1593,71 @@ export default function Conversas() {
               <h2 className="text-xl font-bold text-foreground">Conversas</h2>
               
               <div className="flex items-center gap-2">
-                {/* Status da Conexão */}
-                <div className={cn(
-                  'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300',
-                  conexao?.status === 'conectado' 
-                    ? 'bg-green-500/20 text-green-400 shadow-[0_0_12px_hsl(142_70%_45%/0.3)]' 
-                    : conexao?.status === 'aguardando'
-                    ? 'bg-yellow-500/20 text-yellow-400'
-                    : 'bg-destructive/20 text-destructive'
-                )}>
-                  {conexao?.status === 'conectado' ? (
-                    <>
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                      </span>
-                      Online
-                    </>
-                  ) : conexao?.status === 'aguardando' ? (
-                    <>
-                      <RefreshCw className="h-3 w-3 animate-spin" />
-                      Conectando
-                    </>
-                  ) : (
-                    <>
-                      <WifiOff className="h-3 w-3" />
-                      Offline
-                    </>
-                  )}
-                </div>
+                {/* Status das Conexões */}
+                {(() => {
+                  const conectadas = conexoes.filter(c => c.status === 'conectado').length;
+                  const total = conexoes.length;
+                  const temConectada = conectadas > 0;
+                  const temAguardando = conexoes.some(c => c.status === 'aguardando');
+                  
+                  return (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className={cn(
+                            'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 cursor-help',
+                            temConectada 
+                              ? 'bg-green-500/20 text-green-400 shadow-[0_0_12px_hsl(142_70%_45%/0.3)]' 
+                              : temAguardando
+                              ? 'bg-yellow-500/20 text-yellow-400'
+                              : 'bg-destructive/20 text-destructive'
+                          )}>
+                            {temConectada ? (
+                              <>
+                                <span className="relative flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                </span>
+                                {conectadas}/{total}
+                              </>
+                            ) : temAguardando ? (
+                              <>
+                                <RefreshCw className="h-3 w-3 animate-spin" />
+                                Conectando
+                              </>
+                            ) : (
+                              <>
+                                <WifiOff className="h-3 w-3" />
+                                {total === 0 ? 'Sem conexão' : 'Offline'}
+                              </>
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-xs">
+                          <div className="space-y-1">
+                            <p className="font-semibold">Conexões ({total})</p>
+                            {conexoes.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">Nenhuma conexão configurada</p>
+                            ) : (
+                              conexoes.map(c => (
+                                <div key={c.id} className="flex items-center gap-2 text-xs">
+                                  <span className={cn(
+                                    'h-2 w-2 rounded-full',
+                                    c.status === 'conectado' ? 'bg-green-500' : 
+                                    c.status === 'aguardando' ? 'bg-yellow-500' : 'bg-destructive'
+                                  )} />
+                                  <span>{c.nome || c.instance_name}</span>
+                                  {c.tipo_provedor === 'instagram' && <Instagram className="h-3 w-3 text-pink-500" />}
+                                  {c.tipo_provedor === 'meta' && <Phone className="h-3 w-3 text-green-500" />}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  );
+                })()}
 
                 {/* Botão Filtros com Popover */}
                 <Popover>
@@ -2049,6 +2115,45 @@ export default function Conversas() {
               </div>
               {!conversaEncerrada ? (
                 <div className="flex items-center gap-1 md:gap-2">
+                  {/* Indicador da Conexão usada */}
+                  {!isMobile && (() => {
+                    const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
+                    if (!conexaoDaConversa) return null;
+                    return (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className={cn(
+                              'flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium mr-2',
+                              conexaoDaConversa.status === 'conectado' 
+                                ? 'bg-green-500/10 text-green-500' 
+                                : 'bg-destructive/10 text-destructive'
+                            )}>
+                              {conexaoDaConversa.tipo_provedor === 'instagram' ? (
+                                <Instagram className="h-3 w-3" />
+                              ) : conexaoDaConversa.tipo_provedor === 'meta' ? (
+                                <Phone className="h-3 w-3" />
+                              ) : (
+                                <Wifi className="h-3 w-3" />
+                              )}
+                              <span className={cn(
+                                'h-1.5 w-1.5 rounded-full',
+                                conexaoDaConversa.status === 'conectado' ? 'bg-green-500' : 'bg-destructive'
+                              )} />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            <p>{conexaoDaConversa.nome || conexaoDaConversa.instance_name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {conexaoDaConversa.tipo_provedor === 'instagram' ? 'Instagram' : 
+                               conexaoDaConversa.tipo_provedor === 'meta' ? 'WhatsApp Meta API' : 'WhatsApp Evolution'}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    );
+                  })()}
+
                   {/* Tags do Contato - Esconder em mobile */}
                   {!isMobile && conversaSelecionada.contatos.tags && 
                    conversaSelecionada.contatos.tags.length > 0 && (
@@ -2225,7 +2330,7 @@ export default function Conversas() {
                   </div>
                   
                   {/* Botão Template separado - apenas para Meta API */}
-                  {conexao?.tipo_provedor === 'meta' && (
+                  {getConexaoDaConversa(conversaSelecionada)?.tipo_provedor === 'meta' && (
                     <button
                       onClick={() => {
                         fetchTemplates();
