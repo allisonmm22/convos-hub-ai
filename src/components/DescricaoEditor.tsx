@@ -364,15 +364,20 @@ export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick, onC
         onClick={handleViewClick}
         className={`
           w-full min-h-[160px] rounded-xl bg-input border border-border
-          text-sm leading-7 cursor-text transition-all duration-150
+          text-sm leading-7 cursor-text
+          transition-all duration-300 ease-out
           hover:border-primary/50
-          ${isFocused ? 'opacity-0 pointer-events-none absolute inset-0 z-0' : 'opacity-100 relative z-10'}
+          ${isFocused 
+            ? 'opacity-0 scale-[0.99] pointer-events-none absolute inset-0 z-0' 
+            : 'opacity-100 scale-100 relative z-10'}
         `}
         style={SHARED_STYLES}
       >
-        {renderedContent || (
-          <span className="text-muted-foreground">{placeholder}</span>
-        )}
+        <div className={`transition-all duration-300 ease-out ${isFocused ? 'blur-sm' : 'blur-0'}`}>
+          {renderedContent || (
+            <span className="text-muted-foreground">{placeholder}</span>
+          )}
+        </div>
       </div>
 
       {/* Modo Edição - textarea normal */}
@@ -388,9 +393,11 @@ export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick, onC
         className={`
           w-full min-h-[160px] rounded-xl bg-input border text-sm leading-7
           focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary
-          transition-all duration-150 resize-none
+          transition-all duration-300 ease-out resize-none
           text-foreground placeholder:text-muted-foreground
-          ${isFocused ? 'opacity-100 relative z-10 border-primary' : 'opacity-0 pointer-events-none absolute inset-0 z-0'}
+          ${isFocused 
+            ? 'opacity-100 scale-100 relative z-10 border-primary' 
+            : 'opacity-0 scale-[1.01] pointer-events-none absolute inset-0 z-0'}
         `}
         style={{
           ...SHARED_STYLES,
