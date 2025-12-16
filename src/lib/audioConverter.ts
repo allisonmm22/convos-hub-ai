@@ -3,7 +3,7 @@
  */
 
 // @ts-ignore - lamejs não tem tipos
-import lamejs from 'lamejs';
+import lamejs from '@breezystack/lamejs';
 
 export async function convertWebmToMp3(webmBlob: Blob): Promise<Blob> {
   console.log('Iniciando conversão de áudio webm para mp3...', { size: webmBlob.size, type: webmBlob.type });
@@ -53,22 +53,19 @@ function encodeToMp3(audioBuffer: AudioBuffer): Blob {
     const leftChunk = leftSamples.subarray(i, i + sampleBlockSize);
     const rightChunk = rightSamples.subarray(i, i + sampleBlockSize);
     
-    let mp3buf: Int8Array;
-    if (channels === 1) {
-      mp3buf = mp3encoder.encodeBuffer(leftChunk);
-    } else {
-      mp3buf = mp3encoder.encodeBuffer(leftChunk, rightChunk);
-    }
+    const mp3buf = channels === 1 
+      ? mp3encoder.encodeBuffer(leftChunk)
+      : mp3encoder.encodeBuffer(leftChunk, rightChunk);
     
     if (mp3buf.length > 0) {
-      mp3Data.push(new Uint8Array(mp3buf));
+      mp3Data.push(new Uint8Array(mp3buf.buffer));
     }
   }
   
   // Flush final
   const mp3End = mp3encoder.flush();
   if (mp3End.length > 0) {
-    mp3Data.push(new Uint8Array(mp3End));
+    mp3Data.push(new Uint8Array(mp3End.buffer));
   }
   
   // Concatenar todos os buffers em um único ArrayBuffer
