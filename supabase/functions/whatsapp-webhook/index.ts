@@ -142,6 +142,25 @@ async function processarWebhookMeta(payload: any, supabase: any, supabaseUrl: st
       const timestamp = new Date(parseInt(msg.timestamp) * 1000).toISOString();
       const metaMsgId = msg.id;
 
+      // Extrair informações de referral/anúncio da Meta
+      const referral = msg.referral || msg.context?.referral;
+      let adInfo: any = null;
+      
+      if (referral) {
+        adInfo = {
+          ad_id: referral.source_id || referral.ad_id,
+          ad_title: referral.headline || referral.ad_title,
+          ad_body: referral.body,
+          ad_source: referral.source_type || 'ad',
+          ad_url: referral.source_url,
+          ad_image: referral.image_url || referral.photo_url,
+          media_type: referral.media_type,
+          ctwa_clid: referral.ctwa_clid,
+          captured_at: new Date().toISOString()
+        };
+        console.log('📢 Lead veio de anúncio Meta:', JSON.stringify(adInfo));
+      }
+
       let messageContent = '';
       let tipo: 'texto' | 'imagem' | 'audio' | 'video' | 'documento' = 'texto';
       let mediaUrl: string | null = null;
@@ -191,6 +210,7 @@ async function processarWebhookMeta(payload: any, supabase: any, supabaseUrl: st
             conta_id: conexao.conta_id,
             nome: contactName,
             telefone: fromNumber,
+            metadata: adInfo ? { origem_anuncio: adInfo } : {}
           })
           .select()
           .single();
@@ -200,6 +220,27 @@ async function processarWebhookMeta(payload: any, supabase: any, supabaseUrl: st
           continue;
         }
         contato = novoContato;
+        console.log('Novo contato criado com origem de anúncio:', contato.id);
+      } else if (adInfo) {
+        // Atualizar contato existente com info de anúncio se ainda não tiver
+        const { data: contatoAtual } = await supabase
+          .from('contatos')
+          .select('metadata')
+          .eq('id', contato.id)
+          .single();
+        
+        if (!contatoAtual?.metadata?.origem_anuncio) {
+          await supabase
+            .from('contatos')
+            .update({ 
+              metadata: { 
+                ...(contatoAtual?.metadata || {}), 
+                origem_anuncio: adInfo 
+              }
+            })
+            .eq('id', contato.id);
+          console.log('Contato atualizado com origem de anúncio:', contato.id);
+        }
       }
 
       // Buscar ou criar conversa
