@@ -635,6 +635,18 @@ export default function Conversas() {
     if (!conversaSelecionada) return;
 
     try {
+      // Inserir mensagem de sistema registrando o encerramento
+      const nomeUsuario = usuario?.nome || 'Sistema';
+      await supabase
+        .from('mensagens')
+        .insert({
+          conversa_id: conversaSelecionada.id,
+          conteudo: `🔒 Atendimento encerrado por ${nomeUsuario}`,
+          direcao: 'saida',
+          tipo: 'sistema',
+          usuario_id: usuario?.id || null,
+        });
+
       await supabase
         .from('conversas')
         .update({ 
@@ -648,6 +660,7 @@ export default function Conversas() {
       toast.success('Atendimento encerrado');
       setConversaSelecionada(prev => prev ? { ...prev, status: 'encerrado' } : null);
       fetchConversas();
+      fetchMensagens(conversaSelecionada.id);
     } catch (error) {
       toast.error('Erro ao encerrar atendimento');
     }
@@ -657,6 +670,18 @@ export default function Conversas() {
     if (!conversaSelecionada) return;
 
     try {
+      // Inserir mensagem de sistema registrando a reabertura
+      const nomeUsuario = usuario?.nome || 'Sistema';
+      await supabase
+        .from('mensagens')
+        .insert({
+          conversa_id: conversaSelecionada.id,
+          conteudo: `🔓 Conversa reaberta por ${nomeUsuario}`,
+          direcao: 'saida',
+          tipo: 'sistema',
+          usuario_id: usuario?.id || null,
+        });
+
       await supabase
         .from('conversas')
         .update({ 
@@ -668,6 +693,7 @@ export default function Conversas() {
       toast.success('Conversa reaberta');
       setConversaSelecionada(prev => prev ? { ...prev, status: 'em_atendimento' } : null);
       fetchConversas();
+      fetchMensagens(conversaSelecionada.id);
     } catch (error) {
       toast.error('Erro ao reabrir conversa');
     }
