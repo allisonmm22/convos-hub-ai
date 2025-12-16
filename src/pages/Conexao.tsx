@@ -109,22 +109,25 @@ export default function Conexao() {
     fetchConexoes();
   }, [fetchConexoes]);
 
-  // Listener para OAuth callback do Instagram
+  // Detectar retorno do OAuth do Instagram via URL params
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'instagram-oauth-success') {
-        toast.success('Instagram conectado com sucesso!');
-        setShowNovaConexao(false);
-        setInstagramOAuthLoading(false);
-        fetchConexoes();
-      } else if (event.data?.type === 'instagram-oauth-error') {
-        toast.error(event.data.error || 'Erro ao conectar Instagram');
-        setInstagramOAuthLoading(false);
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    const params = new URLSearchParams(window.location.search);
+    const instagramOAuth = params.get('instagram_oauth');
+    
+    if (instagramOAuth === 'success') {
+      toast.success('Instagram conectado com sucesso!');
+      setShowNovaConexao(false);
+      setInstagramOAuthLoading(false);
+      // Limpar URL params
+      window.history.replaceState({}, '', '/conexao');
+      fetchConexoes();
+    } else if (instagramOAuth === 'error') {
+      const errorMessage = params.get('message') || 'Erro ao conectar Instagram';
+      toast.error(decodeURIComponent(errorMessage));
+      setInstagramOAuthLoading(false);
+      // Limpar URL params
+      window.history.replaceState({}, '', '/conexao');
+    }
   }, [fetchConexoes]);
 
   // Auto-refresh status quando aguardando (apenas para Evolution)
@@ -239,7 +242,7 @@ export default function Conexao() {
     }
   };
 
-  // Função para iniciar OAuth do Instagram (novo fluxo simplificado)
+  // Função para iniciar OAuth do Instagram (redirecionamento de página completa)
   const handleInstagramOAuth = async () => {
     if (!usuario?.conta_id) {
       toast.error('Usuário não autenticado');
@@ -254,10 +257,13 @@ export default function Conexao() {
         return;
       }
 
+      // Passar URL base sem query params para o redirect
+      const baseUrl = `${window.location.origin}/conexao`;
+      
       const { data, error } = await supabase.functions.invoke('instagram-oauth-auth', {
         body: { 
           conta_id: usuario.conta_id,
-          redirect_url: window.location.href
+          redirect_url: baseUrl
         },
       });
 
@@ -270,17 +276,8 @@ export default function Conexao() {
       }
 
       if (data.auth_url) {
-        // Abrir popup para OAuth
-        const width = 600;
-        const height = 700;
-        const left = window.screenX + (window.outerWidth - width) / 2;
-        const top = window.screenY + (window.outerHeight - height) / 2;
-        
-        window.open(
-          data.auth_url,
-          'instagram-oauth',
-          `width=${width},height=${height},left=${left},top=${top},popup=yes`
-        );
+        // Redirecionamento de página completa (não popup)
+        window.location.href = data.auth_url;
       }
     } catch (error) {
       console.error('Erro ao iniciar OAuth Instagram:', error);
