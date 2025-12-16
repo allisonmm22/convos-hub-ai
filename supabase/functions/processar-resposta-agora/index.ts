@@ -142,7 +142,7 @@ serve(async (req) => {
     // Buscar dados da conversa
     const { data: conversa, error: conversaError } = await supabase
       .from('conversas')
-      .select('*, contato:contatos(*), conexao:conexoes_whatsapp(id, instance_name, token), agente:agent_ia(fracionar_mensagens, tamanho_max_fracao, delay_entre_fracoes, simular_digitacao)')
+      .select('*, contato:contatos(*), conexao:conexoes_whatsapp(id, instance_name, token, tipo_provedor), agente:agent_ia(fracionar_mensagens, tamanho_max_fracao, delay_entre_fracoes, simular_digitacao)')
       .eq('id', conversa_id)
       .single();
 
@@ -225,18 +225,21 @@ serve(async (req) => {
 
     // Enviar resposta se houver
     if (aiData.should_respond && aiData.resposta) {
-      const conexao = conversa.conexao;
+      const conexao = conversa.conexao as { id: string; instance_name: string; token: string; tipo_provedor?: string } | null;
       const contato = conversa.contato;
       const agente = conversa.agente as { fracionar_mensagens?: boolean; tamanho_max_fracao?: number; delay_entre_fracoes?: number; simular_digitacao?: boolean } | null;
       
-      if (!conexao?.instance_name || !conexao?.token) {
-        console.error('Conexão sem instance_name ou token');
+      if (!conexao?.id) {
+        console.error('Conexão não encontrada');
         await supabase.from('respostas_pendentes').delete().eq('conversa_id', conversa_id);
         return new Response(JSON.stringify({ error: 'Conexão inválida' }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+
+      const tipoProvedor = conexao.tipo_provedor || 'evolution';
+      console.log('Tipo de provedor:', tipoProvedor);
 
       // Verificar se deve fracionar a mensagem
       const fracionarMensagens = agente?.fracionar_mensagens ?? false;
@@ -263,8 +266,8 @@ serve(async (req) => {
           await sleep(delayEntreFracoes * 1000);
         }
 
-        // Simular digitação se ativo
-        if (simularDigitacao) {
+        // Simular digitação apenas para Evolution API (Meta não suporta)
+        if (simularDigitacao && tipoProvedor === 'evolution' && conexao.instance_name && conexao.token) {
           try {
             console.log('Enviando indicador de digitação...');
             await fetch(
@@ -291,23 +294,26 @@ serve(async (req) => {
           }
         }
 
+        // Usar a função centralizada enviar-mensagem que roteia para o provedor correto
         const sendResponse = await fetch(
-          `${EVOLUTION_API_URL}/message/sendText/${conexao.instance_name}`,
+          `${supabaseUrl}/functions/v1/enviar-mensagem`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'apikey': conexao.token,
+              'Authorization': `Bearer ${supabaseKey}`,
             },
             body: JSON.stringify({
-              number: contato?.telefone,
-              text: fracao,
+              conexao_id: conexao.id,
+              telefone: contato?.telefone,
+              mensagem: fracao,
+              tipo: 'texto',
             }),
           }
         );
 
         if (sendResponse.ok) {
-          console.log(`Fração ${i + 1}/${mensagensParaEnviar.length} enviada com sucesso`);
+          console.log(`Fração ${i + 1}/${mensagensParaEnviar.length} enviada com sucesso via ${tipoProvedor}`);
 
           // Salvar mensagem da IA
           const { error: msgError } = await supabase.from('mensagens').insert({
@@ -324,7 +330,7 @@ serve(async (req) => {
           }
         } else {
           const sendError = await sendResponse.text();
-          console.error('Erro ao enviar:', sendResponse.status, sendError);
+          console.error('Erro ao enviar via enviar-mensagem:', sendResponse.status, sendError);
         }
       }
 
