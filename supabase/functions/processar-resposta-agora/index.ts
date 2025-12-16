@@ -8,6 +8,74 @@ const corsHeaders = {
 
 const EVOLUTION_API_URL = 'https://evolution.cognityx.com.br';
 
+// Função para dividir mensagem de forma inteligente
+function dividirMensagem(texto: string, tamanhoMax: number): string[] {
+  if (texto.length <= tamanhoMax) {
+    return [texto];
+  }
+
+  const fracoes: string[] = [];
+  const paragrafos = texto.split(/\n\n+/);
+  let fracaoAtual = '';
+
+  for (const paragrafo of paragrafos) {
+    // Se o parágrafo cabe na fração atual
+    if (fracaoAtual.length + paragrafo.length + 2 <= tamanhoMax) {
+      fracaoAtual = fracaoAtual ? `${fracaoAtual}\n\n${paragrafo}` : paragrafo;
+    } else {
+      // Se a fração atual não está vazia, salva ela
+      if (fracaoAtual) {
+        fracoes.push(fracaoAtual.trim());
+        fracaoAtual = '';
+      }
+
+      // Se o parágrafo é maior que o tamanho máximo, divide por frases
+      if (paragrafo.length > tamanhoMax) {
+        const frases = paragrafo.split(/(?<=[.!?])\s+/);
+        
+        for (const frase of frases) {
+          if (fracaoAtual.length + frase.length + 1 <= tamanhoMax) {
+            fracaoAtual = fracaoAtual ? `${fracaoAtual} ${frase}` : frase;
+          } else {
+            if (fracaoAtual) {
+              fracoes.push(fracaoAtual.trim());
+            }
+            // Se a frase sozinha é maior que o max, divide por palavras
+            if (frase.length > tamanhoMax) {
+              const palavras = frase.split(/\s+/);
+              fracaoAtual = '';
+              for (const palavra of palavras) {
+                if (fracaoAtual.length + palavra.length + 1 <= tamanhoMax) {
+                  fracaoAtual = fracaoAtual ? `${fracaoAtual} ${palavra}` : palavra;
+                } else {
+                  if (fracaoAtual) {
+                    fracoes.push(fracaoAtual.trim());
+                  }
+                  fracaoAtual = palavra;
+                }
+              }
+            } else {
+              fracaoAtual = frase;
+            }
+          }
+        }
+      } else {
+        fracaoAtual = paragrafo;
+      }
+    }
+  }
+
+  // Adiciona a última fração se houver
+  if (fracaoAtual.trim()) {
+    fracoes.push(fracaoAtual.trim());
+  }
+
+  return fracoes;
+}
+
+// Função de sleep
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -74,7 +142,7 @@ serve(async (req) => {
     // Buscar dados da conversa
     const { data: conversa, error: conversaError } = await supabase
       .from('conversas')
-      .select('*, contato:contatos(*), conexao:conexoes_whatsapp(id, instance_name, token)')
+      .select('*, contato:contatos(*), conexao:conexoes_whatsapp(id, instance_name, token), agente:agent_ia(fracionar_mensagens, tamanho_max_fracao, delay_entre_fracoes)')
       .eq('id', conversa_id)
       .single();
 
@@ -154,6 +222,7 @@ serve(async (req) => {
     if (aiData.should_respond && aiData.resposta) {
       const conexao = conversa.conexao;
       const contato = conversa.contato;
+      const agente = conversa.agente as { fracionar_mensagens?: boolean; tamanho_max_fracao?: number; delay_entre_fracoes?: number } | null;
       
       if (!conexao?.instance_name || !conexao?.token) {
         console.error('Conexão sem instance_name ou token');
@@ -164,52 +233,75 @@ serve(async (req) => {
         });
       }
 
+      // Verificar se deve fracionar a mensagem
+      const fracionarMensagens = agente?.fracionar_mensagens ?? false;
+      const tamanhoMaxFracao = agente?.tamanho_max_fracao ?? 500;
+      const delayEntreFracoes = agente?.delay_entre_fracoes ?? 2;
+
+      let mensagensParaEnviar: string[] = [aiData.resposta];
+      
+      if (fracionarMensagens && aiData.resposta.length > tamanhoMaxFracao) {
+        mensagensParaEnviar = dividirMensagem(aiData.resposta, tamanhoMaxFracao);
+        console.log(`Mensagem fracionada em ${mensagensParaEnviar.length} partes`);
+      }
+
       console.log('Enviando resposta para:', contato?.telefone);
       
-      const sendResponse = await fetch(
-        `${EVOLUTION_API_URL}/message/sendText/${conexao.instance_name}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': conexao.token,
-          },
-          body: JSON.stringify({
-            number: contato?.telefone,
-            text: aiData.resposta,
-          }),
-        }
-      );
-
-      if (sendResponse.ok) {
-        console.log('Resposta enviada com sucesso');
-
-        // Salvar mensagem da IA
-        const { error: msgError } = await supabase.from('mensagens').insert({
-          conversa_id: conversa.id,
-          contato_id: contato?.id || null,
-          conteudo: aiData.resposta,
-          direcao: 'saida',
-          tipo: 'texto',
-          enviada_por_ia: true,
-        });
-
-        if (msgError) {
-          console.error('Erro ao salvar mensagem:', msgError);
+      // Enviar cada fração com delay
+      for (let i = 0; i < mensagensParaEnviar.length; i++) {
+        const fracao = mensagensParaEnviar[i];
+        
+        // Delay entre mensagens (exceto a primeira)
+        if (i > 0 && fracionarMensagens) {
+          console.log(`Aguardando ${delayEntreFracoes}s antes de enviar fração ${i + 1}...`);
+          await sleep(delayEntreFracoes * 1000);
         }
 
-        // Atualizar conversa
-        await supabase.from('conversas').update({
-          ultima_mensagem: aiData.resposta,
-          ultima_mensagem_at: new Date().toISOString(),
-          status: 'aguardando_cliente',
-        }).eq('id', conversa.id);
+        const sendResponse = await fetch(
+          `${EVOLUTION_API_URL}/message/sendText/${conexao.instance_name}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': conexao.token,
+            },
+            body: JSON.stringify({
+              number: contato?.telefone,
+              text: fracao,
+            }),
+          }
+        );
 
-        console.log('Mensagem salva e conversa atualizada');
-      } else {
-        const sendError = await sendResponse.text();
-        console.error('Erro ao enviar:', sendResponse.status, sendError);
+        if (sendResponse.ok) {
+          console.log(`Fração ${i + 1}/${mensagensParaEnviar.length} enviada com sucesso`);
+
+          // Salvar mensagem da IA
+          const { error: msgError } = await supabase.from('mensagens').insert({
+            conversa_id: conversa.id,
+            contato_id: contato?.id || null,
+            conteudo: fracao,
+            direcao: 'saida',
+            tipo: 'texto',
+            enviada_por_ia: true,
+          });
+
+          if (msgError) {
+            console.error('Erro ao salvar mensagem:', msgError);
+          }
+        } else {
+          const sendError = await sendResponse.text();
+          console.error('Erro ao enviar:', sendResponse.status, sendError);
+        }
       }
+
+      // Atualizar conversa com a última fração (ou mensagem completa se não fracionou)
+      await supabase.from('conversas').update({
+        ultima_mensagem: mensagensParaEnviar[mensagensParaEnviar.length - 1],
+        ultima_mensagem_at: new Date().toISOString(),
+        status: 'aguardando_cliente',
+      }).eq('id', conversa.id);
+
+      console.log('Mensagem(ns) salva(s) e conversa atualizada');
     } else {
       console.log('IA decidiu não responder');
     }

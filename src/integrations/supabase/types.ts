@@ -90,8 +90,10 @@ export type Database = {
           ativo: boolean | null
           conta_id: string
           created_at: string
+          delay_entre_fracoes: number | null
           descricao: string | null
           dias_ativos: number[] | null
+          fracionar_mensagens: boolean | null
           gatilho: string | null
           horario_fim: string | null
           horario_inicio: string | null
@@ -101,6 +103,7 @@ export type Database = {
           modelo: string | null
           nome: string | null
           prompt_sistema: string | null
+          tamanho_max_fracao: number | null
           temperatura: number | null
           tempo_espera_segundos: number | null
           tipo: string | null
@@ -111,8 +114,10 @@ export type Database = {
           ativo?: boolean | null
           conta_id: string
           created_at?: string
+          delay_entre_fracoes?: number | null
           descricao?: string | null
           dias_ativos?: number[] | null
+          fracionar_mensagens?: boolean | null
           gatilho?: string | null
           horario_fim?: string | null
           horario_inicio?: string | null
@@ -122,6 +127,7 @@ export type Database = {
           modelo?: string | null
           nome?: string | null
           prompt_sistema?: string | null
+          tamanho_max_fracao?: number | null
           temperatura?: number | null
           tempo_espera_segundos?: number | null
           tipo?: string | null
@@ -132,8 +138,10 @@ export type Database = {
           ativo?: boolean | null
           conta_id?: string
           created_at?: string
+          delay_entre_fracoes?: number | null
           descricao?: string | null
           dias_ativos?: number[] | null
+          fracionar_mensagens?: boolean | null
           gatilho?: string | null
           horario_fim?: string | null
           horario_inicio?: string | null
@@ -143,6 +151,7 @@ export type Database = {
           modelo?: string | null
           nome?: string | null
           prompt_sistema?: string | null
+          tamanho_max_fracao?: number | null
           temperatura?: number | null
           tempo_espera_segundos?: number | null
           tipo?: string | null

@@ -29,6 +29,9 @@ interface AgentConfig {
   descricao: string | null;
   atender_24h: boolean;
   tempo_espera_segundos: number;
+  fracionar_mensagens: boolean;
+  tamanho_max_fracao: number;
+  delay_entre_fracoes: number;
 }
 
 type Tab = 'regras' | 'etapas' | 'perguntas' | 'horario' | 'configuracao';
@@ -121,6 +124,9 @@ export default function AgenteIAEditar() {
           tipo: (data.tipo === 'secundario' ? 'secundario' : 'principal') as 'principal' | 'secundario',
           atender_24h: data.atender_24h ?? false,
           tempo_espera_segundos: data.tempo_espera_segundos ?? 5,
+          fracionar_mensagens: data.fracionar_mensagens ?? false,
+          tamanho_max_fracao: data.tamanho_max_fracao ?? 500,
+          delay_entre_fracoes: data.delay_entre_fracoes ?? 2,
         });
         setTempName(data.nome || '');
         
@@ -163,6 +169,9 @@ export default function AgenteIAEditar() {
           descricao: config.descricao,
           atender_24h: config.atender_24h,
           tempo_espera_segundos: config.tempo_espera_segundos,
+          fracionar_mensagens: config.fracionar_mensagens,
+          tamanho_max_fracao: config.tamanho_max_fracao,
+          delay_entre_fracoes: config.delay_entre_fracoes,
         })
         .eq('id', config.id);
 
@@ -1383,6 +1392,94 @@ function ConfiguracaoAPITab({
             o agente aguarda {config.tempo_espera_segundos} segundos após a última mensagem antes de responder, 
             evitando múltiplas respostas.
           </p>
+        </div>
+      </div>
+
+      {/* Fracionamento de Mensagens */}
+      <div className="rounded-xl bg-card border border-border p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10">
+            <Layers className="h-5 w-5 text-emerald-500" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Fracionamento de Mensagens</h2>
+            <p className="text-sm text-muted-foreground">
+              Divide mensagens longas em partes menores, simulando comportamento humano
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {/* Toggle */}
+          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+            <div>
+              <span className="font-medium text-foreground">Ativar fracionamento</span>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Quando ativo, respostas longas serão divididas automaticamente
+              </p>
+            </div>
+            <button
+              onClick={() => setConfig({ ...config, fracionar_mensagens: !config.fracionar_mensagens })}
+              className={`relative h-6 w-11 rounded-full transition-colors ${
+                config.fracionar_mensagens ? 'bg-primary' : 'bg-muted-foreground/30'
+              }`}
+            >
+              <span 
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                  config.fracionar_mensagens ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+
+          {config.fracionar_mensagens && (
+            <>
+              {/* Tamanho máximo */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Tamanho máximo por mensagem ({config.tamanho_max_fracao} caracteres)
+                </label>
+                <input
+                  type="range"
+                  min="200"
+                  max="1000"
+                  step="50"
+                  value={config.tamanho_max_fracao}
+                  onChange={(e) => setConfig({ ...config, tamanho_max_fracao: parseInt(e.target.value) })}
+                  className="w-full accent-primary"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>200 (mensagens curtas)</span>
+                  <span>1000 (mensagens longas)</span>
+                </div>
+              </div>
+
+              {/* Delay entre mensagens */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Delay entre mensagens ({config.delay_entre_fracoes}s)
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="5"
+                  step="1"
+                  value={config.delay_entre_fracoes}
+                  onChange={(e) => setConfig({ ...config, delay_entre_fracoes: parseInt(e.target.value) })}
+                  className="w-full accent-primary"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>1s (rápido)</span>
+                  <span>5s (mais natural)</span>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground p-3 bg-muted/50 rounded-lg">
+                💡 Exemplo: Uma resposta de 1200 caracteres será dividida em 3 mensagens de ~400 caracteres cada,
+                enviadas com {config.delay_entre_fracoes} segundo(s) de intervalo entre elas.
+              </p>
+            </>
+          )}
         </div>
       </div>
 
