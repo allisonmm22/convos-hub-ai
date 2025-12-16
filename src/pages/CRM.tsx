@@ -421,11 +421,15 @@ export default function CRM() {
 
         {/* Kanban */}
         {selectedFunil ? (
-          <div className="flex gap-4 overflow-x-auto pb-4">
+          <div 
+            className="flex gap-4 overflow-x-auto pt-4"
+            style={{ transform: 'rotateX(180deg)' }}
+          >
             {selectedFunil.estagios.map((estagio) => (
               <div
                 key={estagio.id}
                 className="flex-shrink-0 w-80"
+                style={{ transform: 'rotateX(180deg)' }}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, estagio.id)}
               >
