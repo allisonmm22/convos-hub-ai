@@ -798,15 +798,16 @@ serve(async (req) => {
       .eq('agent_ia_id', agente.id)
       .order('ordem', { ascending: true });
 
-    // 5. Buscar dados da conversa para obter contato_id e memoria_limpa_em
+    // 5. Buscar dados da conversa para obter contato_id, memoria_limpa_em e etapa_ia_atual
     const { data: conversa } = await supabase
       .from('conversas')
-      .select('contato_id, memoria_limpa_em')
+      .select('contato_id, memoria_limpa_em, etapa_ia_atual')
       .eq('id', conversa_id)
       .single();
 
     const contatoId = conversa?.contato_id;
     const memoriaLimpaEm = conversa?.memoria_limpa_em;
+    const etapaIAAtual = conversa?.etapa_ia_atual;
 
     // 6. Buscar histórico de mensagens da conversa (últimas 20, filtrando por memoria_limpa_em)
     let historicoQuery = supabase
@@ -912,6 +913,21 @@ serve(async (req) => {
           promptCompleto += `${etapa.descricao}\n\n`;
         }
       });
+
+      // Se há uma etapa específica definida para esta conversa, destacar como foco
+      if (etapaIAAtual) {
+        const etapaAtual = etapas.find((e: any) => e.id === etapaIAAtual);
+        if (etapaAtual) {
+          console.log('Etapa IA atual definida:', etapaAtual.nome, '(número:', etapaAtual.numero + ')');
+          promptCompleto += '\n\n## ⚡ FOCO ATUAL - ETAPA ESPECÍFICA\n';
+          promptCompleto += `**IMPORTANTE:** Esta conversa foi iniciada especificamente na ETAPA ${etapaAtual.numero}: ${etapaAtual.nome}.\n`;
+          promptCompleto += `Você DEVE focar e priorizar as instruções desta etapa:\n`;
+          if (etapaAtual.descricao) {
+            promptCompleto += `\n${etapaAtual.descricao}\n`;
+          }
+          promptCompleto += `\nSiga rigorosamente o que está definido nesta etapa antes de prosseguir para outras etapas.\n`;
+        }
+      }
     }
 
     if (perguntas && perguntas.length > 0) {

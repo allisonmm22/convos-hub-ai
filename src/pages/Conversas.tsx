@@ -187,7 +187,7 @@ export default function Conversas() {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferType, setTransferType] = useState<'choice' | 'humano' | 'agente' | 'agente-etapa'>('choice');
   const [agenteParaTransferir, setAgenteParaTransferir] = useState<string | null>(null);
-  const [funisTransferencia, setFunisTransferencia] = useState<any[]>([]);
+  const [etapasAgenteIA, setEtapasAgenteIA] = useState<any[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -661,7 +661,7 @@ export default function Conversas() {
 
   const conversaEncerrada = conversaSelecionada?.status === 'encerrado';
 
-  const transferirAtendimento = async (paraUsuarioId: string | null, paraIA: boolean, paraAgenteIAId?: string, paraEstagioId?: string) => {
+  const transferirAtendimento = async (paraUsuarioId: string | null, paraIA: boolean, paraAgenteIAId?: string, etapaIAId?: string) => {
     if (!conversaSelecionada) return;
 
     try {
@@ -674,7 +674,7 @@ export default function Conversas() {
           para_agente_ia_id: paraAgenteIAId,
           para_ia: paraIA,
           conta_id: usuario?.conta_id,
-          para_estagio_id: paraEstagioId,
+          etapa_ia_id: etapaIAId,
         },
       });
 
@@ -684,6 +684,7 @@ export default function Conversas() {
       setShowTransferModal(false);
       setTransferType('choice');
       setAgenteParaTransferir(null);
+      setEtapasAgenteIA([]);
       setConversaSelecionada(null);
       fetchConversas();
     } catch (error) {
@@ -692,20 +693,20 @@ export default function Conversas() {
     }
   };
 
-  // Carregar funis e etapas para seleção na transferência
+  // Carregar etapas do agente IA selecionado para transferência
   useEffect(() => {
-    if (showTransferModal && usuario?.conta_id) {
-      const fetchFunisEtapas = async () => {
+    if (agenteParaTransferir && transferType === 'agente-etapa') {
+      const fetchEtapasAgente = async () => {
         const { data } = await supabase
-          .from('funis')
-          .select('*, estagios(*)')
-          .eq('conta_id', usuario.conta_id)
-          .order('ordem');
-        setFunisTransferencia(data || []);
+          .from('agent_ia_etapas')
+          .select('*')
+          .eq('agent_ia_id', agenteParaTransferir)
+          .order('numero', { ascending: true });
+        setEtapasAgenteIA(data || []);
       };
-      fetchFunisEtapas();
+      fetchEtapasAgente();
     }
-  }, [showTransferModal, usuario?.conta_id]);
+  }, [agenteParaTransferir, transferType]);
 
   const handleFileSelect = (type: 'imagem' | 'documento' | 'audio') => {
     setFileType(type);
@@ -2117,43 +2118,34 @@ export default function Conversas() {
               )}
 
               {transferType === 'agente-etapa' && (
-                <div className="space-y-4 max-h-96 overflow-y-auto">
+                <div className="space-y-3 max-h-96 overflow-y-auto">
                   <p className="text-sm text-muted-foreground">
-                    Selecione a etapa do CRM para onde o lead será movido:
+                    Selecione a etapa de atendimento inicial:
                   </p>
                   
-                  {funisTransferencia.length === 0 ? (
+                  {etapasAgenteIA.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
-                      <p>Nenhum funil configurado</p>
+                      <p>Nenhuma etapa configurada para este agente</p>
                     </div>
                   ) : (
-                    funisTransferencia.map((funil) => (
-                      <div key={funil.id} className="space-y-2">
-                        <h4 className="font-medium text-sm text-foreground flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: funil.cor || '#10b981' }}
-                          />
-                          {funil.nome}
-                        </h4>
-                        <div className="grid grid-cols-2 gap-2">
-                          {funil.estagios
-                            ?.sort((a: any, b: any) => (a.ordem || 0) - (b.ordem || 0))
-                            .map((etapa: any) => (
-                              <button
-                                key={etapa.id}
-                                onClick={() => transferirAtendimento(null, true, agenteParaTransferir!, etapa.id)}
-                                className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted hover:border-primary/50 transition-all text-left"
-                              >
-                                <div 
-                                  className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
-                                  style={{ backgroundColor: etapa.cor || '#3b82f6' }}
-                                />
-                                <span className="text-sm truncate">{etapa.nome}</span>
-                              </button>
-                            ))}
+                    etapasAgenteIA.map((etapa) => (
+                      <button
+                        key={etapa.id}
+                        onClick={() => transferirAtendimento(null, true, agenteParaTransferir!, etapa.id)}
+                        className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted hover:border-primary/50 transition-all"
+                      >
+                        <span className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
+                          {etapa.numero}
+                        </span>
+                        <div className="text-left flex-1">
+                          <p className="font-medium text-foreground">{etapa.nome}</p>
+                          {etapa.descricao && (
+                            <p className="text-xs text-muted-foreground truncate max-w-[250px]">
+                              {etapa.descricao.replace(/@\w+:[^\s@]+/g, '').trim().substring(0, 60)}...
+                            </p>
+                          )}
                         </div>
-                      </div>
+                      </button>
                     ))
                   )}
                   
@@ -2161,7 +2153,7 @@ export default function Conversas() {
                     onClick={() => transferirAtendimento(null, true, agenteParaTransferir!)}
                     className="w-full p-3 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg hover:bg-muted hover:border-primary/50 transition-all"
                   >
-                    Transferir sem mover etapa
+                    Começar do início (sem etapa específica)
                   </button>
                 </div>
               )}
