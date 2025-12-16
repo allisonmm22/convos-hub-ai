@@ -10,7 +10,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { MessageSquare, Brain, Calendar, Mail, Webhook, Zap, Eye, EyeOff, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOnboarding } from "@/contexts/OnboardingContext";
 import { toast } from "sonner";
+import { OnboardingTooltip } from "@/components/onboarding/OnboardingTooltip";
 
 interface IntegrationCardProps {
   icon: React.ReactNode;
@@ -82,6 +84,7 @@ const IntegrationCard = ({
 const Integracoes = () => {
   const navigate = useNavigate();
   const { usuario } = useAuth();
+  const { isOnboardingActive, currentStep, completeStep, nextStep } = useOnboarding();
   const [openAIModalOpen, setOpenAIModalOpen] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
@@ -151,6 +154,12 @@ const Integracoes = () => {
       setHasOpenAIKey(!!apiKey);
       toast.success(apiKey ? "API Key salva com sucesso!" : "API Key removida");
       setOpenAIModalOpen(false);
+      
+      // Avançar onboarding se estiver ativo
+      if (apiKey && isOnboardingActive && currentStep === 'configurar_openai') {
+        completeStep('configurar_openai');
+        nextStep();
+      }
     } catch (error) {
       console.error('Error saving API key:', error);
       toast.error("Erro ao salvar API Key");
