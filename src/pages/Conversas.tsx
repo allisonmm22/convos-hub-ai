@@ -35,6 +35,8 @@ import {
   Ban,
   Tag,
   ChevronDown,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -1125,9 +1127,15 @@ export default function Conversas() {
               <span>{formatDateSeparator(msg.created_at)}</span>
             </div>
           )}
-          <div className="flex justify-center my-1">
-            <div className="glass rounded-lg px-4 py-2 flex items-center gap-2 max-w-[80%]">
-              <Activity className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+          <div className="flex justify-end my-1">
+            <div className="bg-muted/50 border border-border rounded-lg px-3 py-2 flex items-center gap-2">
+              {msg.conteudo.includes('encerrado') ? (
+                <Lock className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+              ) : msg.conteudo.includes('reaberta') ? (
+                <Unlock className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+              ) : (
+                <Activity className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+              )}
               <span className="text-xs text-muted-foreground">{msg.conteudo}</span>
               <span className="text-xs text-muted-foreground/60 flex-shrink-0">
                 {formatTime(msg.created_at)}
