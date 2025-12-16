@@ -41,6 +41,7 @@ import {
   Archive,
   File as FileIcon,
   Download,
+  ChevronLeft,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -51,6 +52,7 @@ import { AudioPlayer } from '@/components/AudioPlayer';
 import { ContatoSidebar } from '@/components/ContatoSidebar';
 import { notifyNewMessage, requestNotificationPermission } from '@/lib/notificationSound';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   DropdownMenu,
@@ -190,6 +192,8 @@ export default function Conversas() {
   const { usuario } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const [mobileView, setMobileView] = useState<'lista' | 'chat'>('lista');
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [conversaSelecionada, setConversaSelecionada] = useState<Conversa | null>(null);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
@@ -1411,9 +1415,19 @@ export default function Conversas() {
 
   return (
     <MainLayout>
-      <div className="h-[calc(100vh-3rem)] flex rounded-xl overflow-hidden bg-card border border-border animate-fade-in">
+      <div className={cn(
+        "flex overflow-hidden bg-card animate-fade-in",
+        isMobile 
+          ? "h-[calc(100vh-7.5rem)]" 
+          : "h-[calc(100vh-3rem)] rounded-xl border border-border"
+      )}>
         {/* Lista de Conversas */}
-        <div className="w-96 border-r border-border flex flex-col bg-card/50">
+        <div className={cn(
+          "border-r border-border flex flex-col bg-card/50",
+          isMobile 
+            ? cn("w-full", mobileView === 'chat' && "hidden")
+            : "w-96"
+        )}>
           {/* Header */}
           <div className="p-4 border-b border-border bg-card/80 backdrop-blur-sm">
             <div className="flex items-center justify-between mb-4">
@@ -1727,7 +1741,10 @@ export default function Conversas() {
               filteredConversas.map((conversa, index) => (
                 <div
                   key={conversa.id}
-                  onClick={() => setConversaSelecionada(conversa)}
+                  onClick={() => {
+                    setConversaSelecionada(conversa);
+                    if (isMobile) setMobileView('chat');
+                  }}
                   style={{ animationDelay: `${index * 30}ms` }}
                   className={cn(
                     'flex items-center gap-3 p-4 cursor-pointer border-b border-border/30 conversation-card animate-fade-in',
@@ -1832,63 +1849,79 @@ export default function Conversas() {
 
         {/* Área da Conversa */}
         {conversaSelecionada ? (
-          <div className="flex-1 flex flex-col animate-slide-in-left bg-gradient-to-b from-background to-card/30">
+          <div className={cn(
+            "flex-1 flex flex-col animate-slide-in-left bg-gradient-to-b from-background to-card/30",
+            isMobile && mobileView === 'lista' && "hidden"
+          )}>
             {/* Header da Conversa */}
             <div className="flex items-center justify-between p-4 border-b border-border bg-card/80 backdrop-blur-sm">
-              <button
-                onClick={() => setShowContatoSidebar(true)}
-                className="flex items-center gap-3 hover:bg-muted/50 rounded-xl p-2 -m-2 transition-all duration-200 cursor-pointer text-left group"
-              >
-                <div className="relative">
-                  {conversaSelecionada.contatos.is_grupo ? (
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/40 to-blue-500/20 text-blue-500 ring-2 ring-blue-500/30 ring-offset-2 ring-offset-background transition-all duration-200 group-hover:ring-blue-500">
-                      <Users className="h-5 w-5" />
-                    </div>
-                  ) : conversaSelecionada.contatos.avatar_url ? (
-                    <img
-                      src={conversaSelecionada.contatos.avatar_url}
-                      alt={conversaSelecionada.contatos.nome}
-                      className="h-11 w-11 rounded-full object-cover ring-2 ring-primary/30 ring-offset-2 ring-offset-background transition-all duration-200 group-hover:ring-primary"
-                    />
-                  ) : (
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-primary/40 to-primary/20 text-primary font-bold text-lg ring-2 ring-primary/30 ring-offset-2 ring-offset-background transition-all duration-200 group-hover:ring-primary">
-                      {conversaSelecionada.contatos.nome.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <div className={cn(
-                    'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background',
-                    conversaSelecionada.status === 'em_atendimento' ? 'bg-green-500' :
-                    conversaSelecionada.status === 'aguardando_cliente' ? 'bg-yellow-500' : 'bg-muted-foreground'
-                  )} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                      {conversaSelecionada.contatos.nome}
-                    </span>
-                    {conversaSelecionada.contatos.is_grupo && (
-                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/20 text-blue-500 flex items-center gap-1">
-                        <Users className="h-3 w-3" /> Grupo
-                      </span>
+              <div className="flex items-center gap-2">
+                {/* Botão Voltar (Mobile) */}
+                {isMobile && (
+                  <button
+                    onClick={() => setMobileView('lista')}
+                    className="p-2 -ml-2 rounded-xl hover:bg-muted/50 transition-colors"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowContatoSidebar(true)}
+                  className="flex items-center gap-3 hover:bg-muted/50 rounded-xl p-2 transition-all duration-200 cursor-pointer text-left group"
+                >
+                  <div className="relative">
+                    {conversaSelecionada.contatos.is_grupo ? (
+                      <div className="flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/40 to-blue-500/20 text-blue-500 ring-2 ring-blue-500/30 ring-offset-2 ring-offset-background transition-all duration-200 group-hover:ring-blue-500">
+                        <Users className="h-5 w-5" />
+                      </div>
+                    ) : conversaSelecionada.contatos.avatar_url ? (
+                      <img
+                        src={conversaSelecionada.contatos.avatar_url}
+                        alt={conversaSelecionada.contatos.nome}
+                        className="h-10 w-10 md:h-11 md:w-11 rounded-full object-cover ring-2 ring-primary/30 ring-offset-2 ring-offset-background transition-all duration-200 group-hover:ring-primary"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-full bg-gradient-to-br from-primary/40 to-primary/20 text-primary font-bold text-lg ring-2 ring-primary/30 ring-offset-2 ring-offset-background transition-all duration-200 group-hover:ring-primary">
+                        {conversaSelecionada.contatos.nome.charAt(0).toUpperCase()}
+                      </div>
                     )}
-                    <span className={cn(
-                      'px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide',
-                      conversaSelecionada.status === 'em_atendimento' ? 'bg-green-500/20 text-green-400' :
-                      conversaSelecionada.status === 'aguardando_cliente' ? 'bg-yellow-500/20 text-yellow-400' :
-                      'bg-muted text-muted-foreground'
-                    )}>
-                      {getStatusLabel(conversaSelecionada.status)}
-                    </span>
+                    <div className={cn(
+                      'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background',
+                      conversaSelecionada.status === 'em_atendimento' ? 'bg-green-500' :
+                      conversaSelecionada.status === 'aguardando_cliente' ? 'bg-yellow-500' : 'bg-muted-foreground'
+                    )} />
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {conversaSelecionada.contatos.telefone}
-                  </p>
-                </div>
-              </button>
+                  <div className="hidden sm:block">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                        {conversaSelecionada.contatos.nome}
+                      </span>
+                      {!isMobile && conversaSelecionada.contatos.is_grupo && (
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/20 text-blue-500 flex items-center gap-1">
+                          <Users className="h-3 w-3" /> Grupo
+                        </span>
+                      )}
+                      {!isMobile && (
+                        <span className={cn(
+                          'px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide',
+                          conversaSelecionada.status === 'em_atendimento' ? 'bg-green-500/20 text-green-400' :
+                          conversaSelecionada.status === 'aguardando_cliente' ? 'bg-yellow-500/20 text-yellow-400' :
+                          'bg-muted text-muted-foreground'
+                        )}>
+                          {getStatusLabel(conversaSelecionada.status)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {conversaSelecionada.contatos.telefone}
+                    </p>
+                  </div>
+                </button>
+              </div>
               {!conversaEncerrada ? (
-                <div className="flex items-center gap-2">
-                  {/* Tags do Contato */}
-                  {conversaSelecionada.contatos.tags && 
+                <div className="flex items-center gap-1 md:gap-2">
+                  {/* Tags do Contato - Esconder em mobile */}
+                  {!isMobile && conversaSelecionada.contatos.tags && 
                    conversaSelecionada.contatos.tags.length > 0 && (
                     <div className="flex items-center gap-1.5 mr-2">
                       {conversaSelecionada.contatos.tags.slice(0, 3).map((tagNome) => {
@@ -1920,7 +1953,7 @@ export default function Conversas() {
                     <button
                       onClick={toggleAgenteIA}
                       className={cn(
-                        'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                        'flex items-center gap-1 md:gap-2 px-2 md:px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
                         conversaSelecionada.agente_ia_ativo
                           ? 'bg-primary/20 text-primary hover:bg-primary/30 shadow-[0_0_12px_hsl(var(--primary)/0.2)]'
                           : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
@@ -1929,7 +1962,7 @@ export default function Conversas() {
                       {conversaSelecionada.agente_ia_ativo ? (
                         <>
                           <Bot className="h-4 w-4" />
-                          <span className="flex items-center gap-1.5">
+                          <span className="hidden md:flex items-center gap-1.5">
                             {conversaSelecionada.agent_ia?.nome || 'Agente IA'}
                             {conversaSelecionada.etapa_ia && (
                               <>
@@ -1944,7 +1977,7 @@ export default function Conversas() {
                       ) : (
                         <>
                           <User className="h-4 w-4" />
-                          Humano
+                          <span className="hidden md:inline">Humano</span>
                         </>
                       )}
                     </button>
