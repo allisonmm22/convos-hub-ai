@@ -246,10 +246,29 @@ export default function Conversas() {
   // Ref para manter a conversa selecionada atualizada no realtime
   const conversaSelecionadaRef = useRef<Conversa | null>(null);
   
-  // Estado da conexão WhatsApp
-  const [conexao, setConexao] = useState<Conexao | null>(null);
+  // Estado das conexões (WhatsApp e Instagram)
+  const [conexoes, setConexoes] = useState<Conexao[]>([]);
   const [pollingActive, setPollingActive] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Helper para buscar a conexão da conversa selecionada
+  const getConexaoDaConversa = useCallback((conversa: Conversa | null): Conexao | null => {
+    if (!conversa) return null;
+    
+    // Primeiro, tentar encontrar pela conexao_id da conversa
+    if (conversa.conexao_id) {
+      const conexaoExata = conexoes.find(c => c.id === conversa.conexao_id);
+      if (conexaoExata) return conexaoExata;
+    }
+    
+    // Fallback: encontrar conexão compatível pelo canal
+    const canal = conversa.canal || 'whatsapp';
+    return conexoes.find(c => 
+      c.status === 'conectado' && 
+      ((canal === 'instagram' && c.tipo_provedor === 'instagram') ||
+       (canal === 'whatsapp' && (c.tipo_provedor === 'evolution' || c.tipo_provedor === 'meta')))
+    ) || null;
+  }, [conexoes]);
 
   // Estados para templates Meta
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -274,61 +293,72 @@ export default function Conversas() {
     localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
   }, [statusFilter, atendenteFilter, tipoFilter, canalFilter, tagsFilter]);
 
-  // Buscar conexão WhatsApp
-  const fetchConexao = useCallback(async () => {
+  // Buscar todas as conexões (WhatsApp e Instagram)
+  const fetchConexoes = useCallback(async () => {
     if (!usuario?.conta_id) return;
     
     try {
       const { data, error } = await supabase
         .from('conexoes_whatsapp')
         .select('id, instance_name, status, numero, tipo_provedor')
-        .eq('conta_id', usuario.conta_id)
-        .single();
+        .eq('conta_id', usuario.conta_id);
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Erro ao buscar conexão:', error);
+      if (error) {
+        console.error('Erro ao buscar conexões:', error);
         return;
       }
 
-      setConexao(data);
+      setConexoes(data || []);
     } catch (error) {
-      console.error('Erro ao buscar conexão:', error);
+      console.error('Erro ao buscar conexões:', error);
     }
   }, [usuario?.conta_id]);
 
-  // Polling de mensagens
+  // Polling de mensagens - apenas para conexões Evolution API
   const pollMessages = useCallback(async () => {
-    if (!conexao?.id || conexao.status !== 'conectado') return;
+    // Encontrar conexões Evolution conectadas
+    const evolutionConexoes = conexoes.filter(c => 
+      c.tipo_provedor === 'evolution' && c.status === 'conectado'
+    );
+    
+    if (evolutionConexoes.length === 0) return;
     
     try {
       console.log('Polling mensagens...');
-      const { data, error } = await supabase.functions.invoke('evolution-fetch-messages', {
-        body: { conexao_id: conexao.id },
-      });
+      // Fazer polling para cada conexão Evolution
+      for (const conexao of evolutionConexoes) {
+        const { data, error } = await supabase.functions.invoke('evolution-fetch-messages', {
+          body: { conexao_id: conexao.id },
+        });
 
-      if (error) {
-        console.error('Erro no polling:', error);
-        return;
-      }
+        if (error) {
+          console.error('Erro no polling:', error);
+          continue;
+        }
 
-      if (data?.processed > 0) {
-        console.log('Mensagens processadas via polling:', data.processed);
-        fetchConversas();
+        if (data?.processed > 0) {
+          console.log('Mensagens processadas via polling:', data.processed);
+          fetchConversas();
+        }
       }
     } catch (error) {
       console.error('Erro no polling:', error);
     }
-  }, [conexao?.id, conexao?.status]);
+  }, [conexoes]);
 
-  // Iniciar/parar polling
+  // Iniciar/parar polling - apenas para conexões Evolution
   useEffect(() => {
-    if (conexao?.status === 'conectado' && !pollingActive) {
+    const hasEvolutionConectado = conexoes.some(c => 
+      c.tipo_provedor === 'evolution' && c.status === 'conectado'
+    );
+    
+    if (hasEvolutionConectado && !pollingActive) {
       setPollingActive(true);
       // Polling a cada 10 segundos
       pollingIntervalRef.current = setInterval(pollMessages, 10000);
       // Executar imediatamente
       pollMessages();
-    } else if (conexao?.status !== 'conectado' && pollingActive) {
+    } else if (!hasEvolutionConectado && pollingActive) {
       setPollingActive(false);
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
@@ -341,29 +371,29 @@ export default function Conversas() {
         clearInterval(pollingIntervalRef.current);
       }
     };
-  }, [conexao?.status, pollingActive, pollMessages]);
+  }, [conexoes, pollingActive, pollMessages]);
 
   useEffect(() => {
     if (usuario?.conta_id) {
       fetchConversas();
       fetchUsuarios();
       fetchAgentes();
-      fetchConexao();
+      fetchConexoes();
       fetchTagsDisponiveis();
       const cleanup = setupRealtimeSubscription();
       
       // Solicitar permissão de notificação
       requestNotificationPermission();
       
-      // Verificar status da conexão periodicamente
-      const statusInterval = setInterval(fetchConexao, 30000);
+      // Verificar status das conexões periodicamente
+      const statusInterval = setInterval(fetchConexoes, 30000);
       
       return () => {
         cleanup();
         clearInterval(statusInterval);
       };
     }
-  }, [usuario, fetchConexao]);
+  }, [usuario, fetchConexoes]);
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -535,14 +565,16 @@ export default function Conversas() {
     }
   };
 
-  // Buscar templates Meta
+  // Buscar templates Meta - usa conexão da conversa selecionada
   const fetchTemplates = async () => {
-    if (!conexao?.id) {
-      toast.error('Conexão não encontrada');
+    const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
+    
+    if (!conexaoDaConversa?.id) {
+      toast.error('Conexão não encontrada para esta conversa');
       return;
     }
     
-    if (conexao.tipo_provedor !== 'meta') {
+    if (conexaoDaConversa.tipo_provedor !== 'meta') {
       toast.error('Templates disponíveis apenas para WhatsApp Oficial (Meta API)');
       return;
     }
@@ -550,7 +582,7 @@ export default function Conversas() {
     setLoadingTemplates(true);
     try {
       const { data, error } = await supabase.functions.invoke('meta-get-templates', {
-        body: { conexao_id: conexao.id },
+        body: { conexao_id: conexaoDaConversa.id },
       });
       
       if (error) {
@@ -724,13 +756,13 @@ export default function Conversas() {
         atendente_id: usuario!.id
       } : null);
 
-      // Usar conexao_id da conversa ou pegar a conexão ativa
-      const conexaoIdToUse = conversaSelecionada.conexao_id || conexao?.id;
+      // Buscar a conexão específica desta conversa
+      const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
       
-      if (conexaoIdToUse && conexao?.status === 'conectado') {
+      if (conexaoDaConversa && conexaoDaConversa.status === 'conectado') {
         const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
           body: {
-            conexao_id: conexaoIdToUse,
+            conexao_id: conexaoDaConversa.id,
             telefone: conversaSelecionada.contatos.telefone,
             mensagem: mensagemFinal,
             grupo_jid: conversaSelecionada.contatos.grupo_jid || undefined,
@@ -739,19 +771,25 @@ export default function Conversas() {
         });
 
         if (envioError) {
-          console.error('Erro ao enviar via WhatsApp:', envioError);
-          toast.error('Mensagem salva, mas erro ao enviar via WhatsApp');
+          const canalNome = conexaoDaConversa.tipo_provedor === 'instagram' ? 'Instagram' : 'WhatsApp';
+          console.error(`Erro ao enviar via ${canalNome}:`, envioError);
+          toast.error(`Mensagem salva, mas erro ao enviar via ${canalNome}`);
         }
         
         // Atualizar conexao_id na conversa se estava vazio
-        if (!conversaSelecionada.conexao_id && conexaoIdToUse) {
+        if (!conversaSelecionada.conexao_id && conexaoDaConversa.id) {
           await supabase
             .from('conversas')
-            .update({ conexao_id: conexaoIdToUse })
+            .update({ conexao_id: conexaoDaConversa.id })
             .eq('id', conversaSelecionada.id);
         }
-      } else if (!conexaoIdToUse || conexao?.status !== 'conectado') {
-        toast.warning('WhatsApp não conectado. Mensagem salva apenas no CRM.');
+      } else if (!conexaoDaConversa) {
+        const canal = conversaSelecionada.canal || 'whatsapp';
+        const canalNome = canal === 'instagram' ? 'Instagram' : 'WhatsApp';
+        toast.warning(`${canalNome} não conectado. Mensagem salva apenas no CRM.`);
+      } else {
+        const canalNome = conexaoDaConversa.tipo_provedor === 'instagram' ? 'Instagram' : 'WhatsApp';
+        toast.warning(`${canalNome} desconectado. Mensagem salva apenas no CRM.`);
       }
 
       setNovaMensagem('');
@@ -948,12 +986,12 @@ export default function Conversas() {
           atendente_id: usuario!.id
         } : null);
 
-        // Enviar via WhatsApp
-        const conexaoIdToUse = conversaSelecionada.conexao_id || conexao?.id;
-        if (conexaoIdToUse && conexao?.status === 'conectado') {
+        // Enviar via canal correto
+        const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
+        if (conexaoDaConversa && conexaoDaConversa.status === 'conectado') {
           const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
             body: {
-              conexao_id: conexaoIdToUse,
+              conexao_id: conexaoDaConversa.id,
               telefone: conversaSelecionada.contatos.telefone,
               mensagem: '',
               tipo: fileType,
@@ -964,8 +1002,9 @@ export default function Conversas() {
           });
 
           if (envioError) {
-            console.error('Erro ao enviar via WhatsApp:', envioError);
-            toast.warning('Arquivo salvo, mas erro ao enviar via WhatsApp');
+            const canalNome = conexaoDaConversa.tipo_provedor === 'instagram' ? 'Instagram' : 'WhatsApp';
+            console.error(`Erro ao enviar via ${canalNome}:`, envioError);
+            toast.warning(`Arquivo salvo, mas erro ao enviar via ${canalNome}`);
           }
         }
 
@@ -1048,12 +1087,12 @@ export default function Conversas() {
         atendente_id: usuario!.id
       } : null);
 
-      // Enviar via WhatsApp - usar media_url já que o áudio está em formato MP3 compatível
-      const conexaoIdToUse = conversaSelecionada.conexao_id || conexao?.id;
-      if (conexaoIdToUse && conexao?.status === 'conectado') {
+      // Enviar via canal correto
+      const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
+      if (conexaoDaConversa && conexaoDaConversa.status === 'conectado') {
         const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
           body: {
-            conexao_id: conexaoIdToUse,
+            conexao_id: conexaoDaConversa.id,
             telefone: conversaSelecionada.contatos.telefone,
             mensagem: '',
             tipo: 'audio',
@@ -1064,8 +1103,9 @@ export default function Conversas() {
         });
 
         if (envioError) {
-          console.error('Erro ao enviar áudio via WhatsApp:', envioError);
-          toast.warning('Áudio salvo, mas erro ao enviar via WhatsApp');
+          const canalNome = conexaoDaConversa.tipo_provedor === 'instagram' ? 'Instagram' : 'WhatsApp';
+          console.error(`Erro ao enviar áudio via ${canalNome}:`, envioError);
+          toast.warning(`Áudio salvo, mas erro ao enviar via ${canalNome}`);
         }
       }
 
@@ -1563,35 +1603,41 @@ export default function Conversas() {
               <h2 className="text-xl font-bold text-foreground">Conversas</h2>
               
               <div className="flex items-center gap-2">
-                {/* Status da Conexão */}
-                <div className={cn(
-                  'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300',
-                  conexao?.status === 'conectado' 
-                    ? 'bg-green-500/20 text-green-400 shadow-[0_0_12px_hsl(142_70%_45%/0.3)]' 
-                    : conexao?.status === 'aguardando'
-                    ? 'bg-yellow-500/20 text-yellow-400'
-                    : 'bg-destructive/20 text-destructive'
-                )}>
-                  {conexao?.status === 'conectado' ? (
-                    <>
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                      </span>
-                      Online
-                    </>
-                  ) : conexao?.status === 'aguardando' ? (
-                    <>
-                      <RefreshCw className="h-3 w-3 animate-spin" />
-                      Conectando
-                    </>
-                  ) : (
-                    <>
-                      <WifiOff className="h-3 w-3" />
-                      Offline
-                    </>
-                  )}
-                </div>
+                {/* Status das Conexões */}
+                {(() => {
+                  const hasConectado = conexoes.some(c => c.status === 'conectado');
+                  const hasAguardando = conexoes.some(c => c.status === 'aguardando');
+                  return (
+                    <div className={cn(
+                      'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300',
+                      hasConectado 
+                        ? 'bg-green-500/20 text-green-400 shadow-[0_0_12px_hsl(142_70%_45%/0.3)]' 
+                        : hasAguardando
+                        ? 'bg-yellow-500/20 text-yellow-400'
+                        : 'bg-destructive/20 text-destructive'
+                    )}>
+                      {hasConectado ? (
+                        <>
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                          </span>
+                          Online ({conexoes.filter(c => c.status === 'conectado').length})
+                        </>
+                      ) : hasAguardando ? (
+                        <>
+                          <RefreshCw className="h-3 w-3 animate-spin" />
+                          Conectando
+                        </>
+                      ) : (
+                        <>
+                          <WifiOff className="h-3 w-3" />
+                          Offline
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Botão Filtros com Popover */}
                 <Popover>
@@ -2224,8 +2270,8 @@ export default function Conversas() {
                     )}
                   </div>
                   
-                  {/* Botão Template separado - apenas para Meta API */}
-                  {conexao?.tipo_provedor === 'meta' && (
+                  {/* Botão Template separado - apenas para Meta API na conversa selecionada */}
+                  {getConexaoDaConversa(conversaSelecionada)?.tipo_provedor === 'meta' && (
                     <button
                       onClick={() => {
                         fetchTemplates();
