@@ -778,6 +778,108 @@ export type Database = {
           },
         ]
       }
+      lembrete_enviados: {
+        Row: {
+          agendamento_id: string
+          contato_id: string | null
+          enviado_em: string | null
+          id: string
+          mensagem_enviada: string | null
+          regra_id: string
+        }
+        Insert: {
+          agendamento_id: string
+          contato_id?: string | null
+          enviado_em?: string | null
+          id?: string
+          mensagem_enviada?: string | null
+          regra_id: string
+        }
+        Update: {
+          agendamento_id?: string
+          contato_id?: string | null
+          enviado_em?: string | null
+          id?: string
+          mensagem_enviada?: string | null
+          regra_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lembrete_enviados_agendamento_id_fkey"
+            columns: ["agendamento_id"]
+            isOneToOne: false
+            referencedRelation: "agendamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lembrete_enviados_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lembrete_enviados_regra_id_fkey"
+            columns: ["regra_id"]
+            isOneToOne: false
+            referencedRelation: "lembrete_regras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lembrete_regras: {
+        Row: {
+          ativo: boolean | null
+          conta_id: string
+          created_at: string | null
+          id: string
+          incluir_detalhes: boolean | null
+          incluir_link_meet: boolean | null
+          mensagem_fixa: string | null
+          minutos_antes: number
+          nome: string
+          prompt_lembrete: string | null
+          tipo: string
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          conta_id: string
+          created_at?: string | null
+          id?: string
+          incluir_detalhes?: boolean | null
+          incluir_link_meet?: boolean | null
+          mensagem_fixa?: string | null
+          minutos_antes?: number
+          nome: string
+          prompt_lembrete?: string | null
+          tipo?: string
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          conta_id?: string
+          created_at?: string | null
+          id?: string
+          incluir_detalhes?: boolean | null
+          incluir_link_meet?: boolean | null
+          mensagem_fixa?: string | null
+          minutos_antes?: number
+          nome?: string
+          prompt_lembrete?: string | null
+          tipo?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lembrete_regras_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       logs_atividade: {
         Row: {
           conta_id: string
