@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { ArrowLeft, Plus, Trash2, Edit2, GripVertical, Loader2, ChevronDown, ChevronRight, Settings, Tag } from 'lucide-react';
+import { 
+  ArrowLeft, Plus, Trash2, Edit2, GripVertical, Loader2, 
+  Settings, Tag, Bell, BellOff, ChevronUp, ChevronDown,
+  Layers, ArrowRight, X
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -19,6 +23,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface Estagio {
   id: string;
@@ -56,6 +67,7 @@ export default function CRMConfiguracoes() {
   const [loading, setLoading] = useState(true);
   const [expandedFunil, setExpandedFunil] = useState<string | null>(null);
   const [permitirMultiplas, setPermitirMultiplas] = useState(true);
+  const [activeTab, setActiveTab] = useState('funis');
   
   // Tags state
   const [tags, setTags] = useState<TagItem[]>([]);
@@ -264,7 +276,6 @@ export default function CRMConfiguracoes() {
         if (error) throw error;
         toast.success('Funil atualizado!');
       } else {
-        // Validar limite do plano para criação
         const permitido = await validarEExibirErro(usuario!.conta_id, 'funis');
         if (!permitido) {
           setSaving(false);
@@ -303,14 +314,12 @@ export default function CRMConfiguracoes() {
     }
 
     try {
-      // First delete all estagios
       await supabase.from('estagios').delete().eq('funil_id', funilId);
-      
-      // Then delete the funil
       const { error } = await supabase.from('funis').delete().eq('id', funilId);
       if (error) throw error;
 
       toast.success('Funil excluído!');
+      setExpandedFunil(null);
       fetchFunis();
     } catch (error) {
       console.error('Erro ao excluir funil:', error);
@@ -425,6 +434,30 @@ export default function CRMConfiguracoes() {
     }
   };
 
+  const toggleFollowup = async (estagio: Estagio) => {
+    const novoValor = !(estagio.followup_ativo ?? true);
+    try {
+      const { error } = await supabase
+        .from('estagios')
+        .update({ followup_ativo: novoValor })
+        .eq('id', estagio.id);
+
+      if (error) throw error;
+
+      setFunis(prev => prev.map(funil => ({
+        ...funil,
+        estagios: funil.estagios.map(e => 
+          e.id === estagio.id ? { ...e, followup_ativo: novoValor } : e
+        )
+      })));
+
+      toast.success(novoValor ? 'Follow-up ativado' : 'Follow-up desativado');
+    } catch (error) {
+      console.error('Erro ao atualizar follow-up:', error);
+      toast.error('Erro ao atualizar follow-up');
+    }
+  };
+
   if (loading) {
     return (
       <MainLayout>
@@ -437,415 +470,667 @@ export default function CRMConfiguracoes() {
 
   return (
     <MainLayout>
-      <div className="space-y-6 animate-fade-in">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+      <TooltipProvider>
+        <div className="space-y-6 animate-fade-in">
+          {/* Header */}
           <div className="flex items-center gap-4">
             <Link 
               to="/crm" 
-              className="p-2 rounded-lg hover:bg-muted transition-colors"
+              className="p-2 rounded-xl hover:bg-muted transition-colors"
             >
               <ArrowLeft className="h-5 w-5 text-muted-foreground" />
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Configurações do CRM</h1>
-              <p className="text-muted-foreground mt-1">
-                Gerencie seus funis e etapas de vendas.
-              </p>
-            </div>
-          </div>
-          <Button onClick={() => openFunilModal()} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Novo Funil
-          </Button>
-        </div>
-
-        {/* Configurações Gerais */}
-        <div className="border border-border rounded-xl bg-card p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Settings className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold text-foreground">Configurações Gerais</h2>
-          </div>
-          
-          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
-            <div className="space-y-1">
-              <p className="font-medium text-foreground">Permitir múltiplas negociações por lead</p>
+              <h1 className="text-2xl font-bold text-foreground">Configurações do CRM</h1>
               <p className="text-sm text-muted-foreground">
-                Se desativado, impede criar nova negociação quando o lead já possui uma em aberto
+                Gerencie funis, etapas e tags do seu CRM
               </p>
             </div>
-            <Switch 
-              checked={permitirMultiplas} 
-              onCheckedChange={handleToggleMultiplas} 
-            />
           </div>
-        </div>
 
-        {/* Gerenciamento de Tags */}
-        <div className="border border-border rounded-xl bg-card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Tag className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-semibold text-foreground">Gerenciamento de Tags</h2>
-            </div>
-            <Button size="sm" onClick={() => openTagModal()} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Nova Tag
-            </Button>
-          </div>
-          
-          {tags.length === 0 ? (
-            <div className="text-center py-8 border border-dashed border-border rounded-lg">
-              <Tag className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground mb-2">Nenhuma tag cadastrada</p>
-              <p className="text-sm text-muted-foreground">
-                Tags ajudam a organizar e categorizar seus contatos
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {tags.map((tag) => (
-                <div 
-                  key={tag.id} 
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border"
-                >
-                  <div className="flex items-center gap-3">
-                    <div 
-                      className="h-4 w-4 rounded-full shrink-0" 
-                      style={{ backgroundColor: tag.cor }}
-                    />
-                    <span className="font-medium text-foreground truncate">{tag.nome}</span>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => openTagModal(tag)}
-                      className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-                    >
-                      <Edit2 className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                    <button
-                      onClick={() => deleteTag(tag.id)}
-                      className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </button>
-                  </div>
+          {/* Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full max-w-md grid-cols-3 bg-muted/50">
+              <TabsTrigger value="funis" className="gap-2 data-[state=active]:bg-background">
+                <Layers className="h-4 w-4" />
+                Funis
+              </TabsTrigger>
+              <TabsTrigger value="tags" className="gap-2 data-[state=active]:bg-background">
+                <Tag className="h-4 w-4" />
+                Tags
+              </TabsTrigger>
+              <TabsTrigger value="config" className="gap-2 data-[state=active]:bg-background">
+                <Settings className="h-4 w-4" />
+                Geral
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Tab Funis */}
+            <TabsContent value="funis" className="mt-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Funis de Vendas</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Configure seus pipelines de vendas
+                  </p>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+                <Button onClick={() => openFunilModal()} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Novo Funil
+                </Button>
+              </div>
 
-        {/* Lista de Funis */}
-        <div className="space-y-4">
-          {funis.length === 0 ? (
-            <div className="text-center py-12 border border-dashed border-border rounded-xl">
-              <p className="text-muted-foreground mb-4">Nenhum funil configurado</p>
-              <Button onClick={() => openFunilModal()} variant="outline">
-                <Plus className="h-4 w-4 mr-2" />
-                Criar primeiro funil
-              </Button>
-            </div>
-          ) : (
-            funis.map((funil) => (
-              <div key={funil.id} className="border border-border rounded-xl bg-card overflow-hidden">
-                {/* Funil Header */}
-                <div 
-                  className="p-4 flex items-center justify-between cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={() => setExpandedFunil(expandedFunil === funil.id ? null : funil.id)}
-                >
-                  <div className="flex items-center gap-3">
-                    {expandedFunil === funil.id ? (
-                      <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                    )}
+              {funis.length === 0 ? (
+                <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl bg-muted/20">
+                  <Layers className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-foreground mb-2">Nenhum funil configurado</h3>
+                  <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
+                    Crie seu primeiro funil para começar a organizar suas negociações
+                  </p>
+                  <Button onClick={() => openFunilModal()}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Criar primeiro funil
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {funis.map((funil) => (
                     <div 
-                      className="h-4 w-4 rounded-full" 
-                      style={{ backgroundColor: funil.cor }}
-                    />
-                    <div>
-                      <h3 className="font-semibold text-foreground">{funil.nome}</h3>
-                      {funil.descricao && (
-                        <p className="text-sm text-muted-foreground">{funil.descricao}</p>
+                      key={funil.id} 
+                      className={cn(
+                        "border rounded-2xl bg-card overflow-hidden transition-all duration-300",
+                        expandedFunil === funil.id ? "border-primary/50 shadow-lg shadow-primary/5" : "border-border hover:border-muted-foreground/30"
                       )}
-                    </div>
-                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                      {funil.estagios.length} etapa{funil.estagios.length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={() => openFunilModal(funil)}
-                      className="p-2 rounded-lg hover:bg-muted transition-colors"
                     >
-                      <Edit2 className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                    <button
-                      onClick={() => deleteFunil(funil.id)}
-                      className="p-2 rounded-lg hover:bg-destructive/10 transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Etapas */}
-                {expandedFunil === funil.id && (
-                  <div className="border-t border-border p-4 bg-muted/30">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-medium text-foreground">Etapas</h4>
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        onClick={() => openEstagioModal(funil.id)}
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Nova Etapa
-                      </Button>
-                    </div>
-
-                    {funil.estagios.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        Nenhuma etapa configurada
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {funil.estagios.map((estagio, index) => (
-                          <div 
-                            key={estagio.id} 
-                            className="flex items-center justify-between p-3 bg-card rounded-lg border border-border"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="flex flex-col gap-1">
-                                <button
-                                  onClick={() => reorderEstagio(funil.id, estagio.id, 'up')}
-                                  disabled={index === 0}
-                                  className={cn(
-                                    "p-0.5 rounded hover:bg-muted transition-colors",
-                                    index === 0 && "opacity-30 cursor-not-allowed"
-                                  )}
-                                >
-                                  <GripVertical className="h-3 w-3 text-muted-foreground rotate-180" />
-                                </button>
-                                <button
-                                  onClick={() => reorderEstagio(funil.id, estagio.id, 'down')}
-                                  disabled={index === funil.estagios.length - 1}
-                                  className={cn(
-                                    "p-0.5 rounded hover:bg-muted transition-colors",
-                                    index === funil.estagios.length - 1 && "opacity-30 cursor-not-allowed"
-                                  )}
-                                >
-                                  <GripVertical className="h-3 w-3 text-muted-foreground" />
-                                </button>
-                              </div>
-                              <span className="text-sm text-muted-foreground w-6">{index + 1}.</span>
+                      {/* Funil Card Header */}
+                      <div className="p-5">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div 
+                              className="h-10 w-10 rounded-xl flex items-center justify-center"
+                              style={{ backgroundColor: `${funil.cor}20` }}
+                            >
                               <div 
-                                className="h-3 w-3 rounded-full" 
-                                style={{ backgroundColor: estagio.cor }}
+                                className="h-4 w-4 rounded-full" 
+                                style={{ backgroundColor: funil.cor }}
                               />
-                              <span className="font-medium text-foreground">{estagio.nome}</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => openEstagioModal(funil.id, estagio)}
-                                className="p-2 rounded-lg hover:bg-muted transition-colors"
-                              >
-                                <Edit2 className="h-4 w-4 text-muted-foreground" />
-                              </button>
-                              <button
-                                onClick={() => deleteEstagio(estagio.id)}
-                                className="p-2 rounded-lg hover:bg-destructive/10 transition-colors"
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </button>
+                            <div>
+                              <h3 className="font-semibold text-foreground text-lg">{funil.nome}</h3>
+                              {funil.descricao && (
+                                <p className="text-sm text-muted-foreground line-clamp-1">{funil.descricao}</p>
+                              )}
                             </div>
                           </div>
-                        ))}
+                          <div className="flex items-center gap-1">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={() => openFunilModal(funil)}
+                                  className="p-2 rounded-lg hover:bg-muted transition-colors"
+                                >
+                                  <Edit2 className="h-4 w-4 text-muted-foreground" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>Editar funil</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={() => deleteFunil(funil.id)}
+                                  className="p-2 rounded-lg hover:bg-destructive/10 transition-colors"
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>Excluir funil</TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </div>
+
+                        {/* Pipeline Preview Horizontal */}
+                        {funil.estagios.length > 0 ? (
+                          <div className="flex items-center gap-1 overflow-x-auto pb-2 scrollbar-thin">
+                            {funil.estagios.map((estagio, index) => (
+                              <div key={estagio.id} className="flex items-center shrink-0">
+                                <div 
+                                  className="flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors"
+                                  style={{ 
+                                    backgroundColor: `${estagio.cor}15`,
+                                    borderColor: `${estagio.cor}30`
+                                  }}
+                                >
+                                  <div 
+                                    className="h-2.5 w-2.5 rounded-full shrink-0" 
+                                    style={{ backgroundColor: estagio.cor }}
+                                  />
+                                  <span className="text-sm font-medium text-foreground whitespace-nowrap">
+                                    {estagio.nome}
+                                  </span>
+                                  <Tooltip>
+                                    <TooltipTrigger>
+                                      {estagio.followup_ativo !== false ? (
+                                        <Bell className="h-3.5 w-3.5 text-primary" />
+                                      ) : (
+                                        <BellOff className="h-3.5 w-3.5 text-muted-foreground" />
+                                      )}
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      {estagio.followup_ativo !== false ? 'Follow-up ativo' : 'Follow-up desativado'}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </div>
+                                {index < funil.estagios.length - 1 && (
+                                  <ArrowRight className="h-4 w-4 text-muted-foreground/50 mx-1 shrink-0" />
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="py-3 px-4 rounded-lg bg-muted/50 text-center">
+                            <p className="text-sm text-muted-foreground">Nenhuma etapa configurada</p>
+                          </div>
+                        )}
+
+                        {/* Expand Button */}
+                        <button
+                          onClick={() => setExpandedFunil(expandedFunil === funil.id ? null : funil.id)}
+                          className={cn(
+                            "w-full mt-4 py-2.5 px-4 rounded-xl border border-dashed transition-all flex items-center justify-center gap-2 text-sm font-medium",
+                            expandedFunil === funil.id 
+                              ? "border-primary/50 bg-primary/5 text-primary" 
+                              : "border-border hover:border-muted-foreground/50 text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          {expandedFunil === funil.id ? (
+                            <>
+                              <X className="h-4 w-4" />
+                              Fechar editor de etapas
+                            </>
+                          ) : (
+                            <>
+                              <Edit2 className="h-4 w-4" />
+                              Editar etapas ({funil.estagios.length})
+                            </>
+                          )}
+                        </button>
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
 
-      {/* Modal Funil */}
-      <Dialog open={funilModalOpen} onOpenChange={setFunilModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingFunil ? 'Editar Funil' : 'Novo Funil'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="funil-nome">Nome</Label>
-              <Input
-                id="funil-nome"
-                value={funilForm.nome}
-                onChange={(e) => setFunilForm({ ...funilForm, nome: e.target.value })}
-                placeholder="Ex: Vendas B2B"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="funil-descricao">Descrição (opcional)</Label>
-              <Textarea
-                id="funil-descricao"
-                value={funilForm.descricao}
-                onChange={(e) => setFunilForm({ ...funilForm, descricao: e.target.value })}
-                placeholder="Descreva o objetivo deste funil..."
-                rows={3}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Cor</Label>
-              <div className="flex flex-wrap gap-2">
-                {CORES_PREDEFINIDAS.map((cor) => (
-                  <button
-                    key={cor}
-                    type="button"
-                    onClick={() => setFunilForm({ ...funilForm, cor })}
-                    className={cn(
-                      "h-8 w-8 rounded-full transition-all",
-                      funilForm.cor === cor && "ring-2 ring-offset-2 ring-primary"
-                    )}
-                    style={{ backgroundColor: cor }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFunilModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={saveFunil} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingFunil ? 'Salvar' : 'Criar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                      {/* Expanded Stage Editor */}
+                      {expandedFunil === funil.id && (
+                        <div className="border-t border-border bg-muted/30 p-5 animate-fade-in">
+                          <div className="flex items-center justify-between mb-4">
+                            <div>
+                              <h4 className="font-medium text-foreground">Etapas do Funil</h4>
+                              <p className="text-xs text-muted-foreground">Arraste para reordenar</p>
+                            </div>
+                            <Button 
+                              size="sm" 
+                              onClick={() => openEstagioModal(funil.id)}
+                              className="gap-2"
+                            >
+                              <Plus className="h-4 w-4" />
+                              Nova Etapa
+                            </Button>
+                          </div>
 
-      {/* Modal Etapa */}
-      <Dialog open={estagioModalOpen} onOpenChange={setEstagioModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingEstagio ? 'Editar Etapa' : 'Nova Etapa'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="estagio-nome">Nome</Label>
-              <Input
-                id="estagio-nome"
-                value={estagioForm.nome}
-                onChange={(e) => setEstagioForm({ ...estagioForm, nome: e.target.value })}
-                placeholder="Ex: Contato Inicial"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Cor</Label>
-              <div className="flex flex-wrap gap-2">
-                {CORES_PREDEFINIDAS.map((cor) => (
-                  <button
-                    key={cor}
-                    type="button"
-                    onClick={() => setEstagioForm({ ...estagioForm, cor })}
-                    className={cn(
-                      "h-8 w-8 rounded-full transition-all",
-                      estagioForm.cor === cor && "ring-2 ring-offset-2 ring-primary"
-                    )}
-                    style={{ backgroundColor: cor }}
-                  />
-                ))}
+                          {funil.estagios.length === 0 ? (
+                            <div className="py-8 text-center border-2 border-dashed border-border rounded-xl">
+                              <p className="text-sm text-muted-foreground mb-3">
+                                Nenhuma etapa configurada
+                              </p>
+                              <Button variant="outline" size="sm" onClick={() => openEstagioModal(funil.id)}>
+                                <Plus className="h-4 w-4 mr-1" />
+                                Adicionar primeira etapa
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {funil.estagios.map((estagio, index) => (
+                                <div key={estagio.id} className="relative">
+                                  <div 
+                                    className="flex items-center gap-3 p-4 bg-card rounded-xl border border-border hover:border-muted-foreground/30 transition-all group"
+                                  >
+                                    {/* Drag Handle & Order */}
+                                    <div className="flex flex-col gap-0.5">
+                                      <button
+                                        onClick={() => reorderEstagio(funil.id, estagio.id, 'up')}
+                                        disabled={index === 0}
+                                        className={cn(
+                                          "p-1 rounded hover:bg-muted transition-colors",
+                                          index === 0 && "opacity-30 cursor-not-allowed"
+                                        )}
+                                      >
+                                        <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                                      </button>
+                                      <button
+                                        onClick={() => reorderEstagio(funil.id, estagio.id, 'down')}
+                                        disabled={index === funil.estagios.length - 1}
+                                        className={cn(
+                                          "p-1 rounded hover:bg-muted transition-colors",
+                                          index === funil.estagios.length - 1 && "opacity-30 cursor-not-allowed"
+                                        )}
+                                      >
+                                        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                      </button>
+                                    </div>
+
+                                    {/* Order Number */}
+                                    <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                                      <span className="text-sm font-semibold text-muted-foreground">{index + 1}</span>
+                                    </div>
+
+                                    {/* Color & Name */}
+                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                      <div 
+                                        className="h-4 w-4 rounded-full shrink-0" 
+                                        style={{ backgroundColor: estagio.cor }}
+                                      />
+                                      <div className="min-w-0">
+                                        <p className="font-medium text-foreground truncate">{estagio.nome}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {estagio.followup_ativo !== false ? 'Follow-up ativo' : 'Follow-up desativado'}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            onClick={() => toggleFollowup(estagio)}
+                                            className={cn(
+                                              "p-2 rounded-lg transition-colors",
+                                              estagio.followup_ativo !== false 
+                                                ? "text-primary hover:bg-primary/10" 
+                                                : "text-muted-foreground hover:bg-muted"
+                                            )}
+                                          >
+                                            {estagio.followup_ativo !== false ? (
+                                              <Bell className="h-4 w-4" />
+                                            ) : (
+                                              <BellOff className="h-4 w-4" />
+                                            )}
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          {estagio.followup_ativo !== false ? 'Desativar follow-up' : 'Ativar follow-up'}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            onClick={() => openEstagioModal(funil.id, estagio)}
+                                            className="p-2 rounded-lg hover:bg-muted transition-colors"
+                                          >
+                                            <Edit2 className="h-4 w-4 text-muted-foreground" />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Editar etapa</TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            onClick={() => deleteEstagio(estagio.id)}
+                                            className="p-2 rounded-lg hover:bg-destructive/10 transition-colors"
+                                          >
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Excluir etapa</TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Flow Arrow */}
+                                  {index < funil.estagios.length - 1 && (
+                                    <div className="flex justify-center py-1">
+                                      <div className="w-0.5 h-3 bg-border rounded-full" />
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Tab Tags */}
+            <TabsContent value="tags" className="mt-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Gerenciamento de Tags</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Organize e categorize seus contatos
+                  </p>
+                </div>
+                <Button onClick={() => openTagModal()} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Nova Tag
+                </Button>
               </div>
-            </div>
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-              <div className="space-y-1">
-                <p className="font-medium text-foreground">Follow-up ativo</p>
+
+              {tags.length === 0 ? (
+                <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl bg-muted/20">
+                  <Tag className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-foreground mb-2">Nenhuma tag cadastrada</h3>
+                  <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
+                    Tags ajudam a organizar e filtrar seus contatos
+                  </p>
+                  <Button onClick={() => openTagModal()}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Criar primeira tag
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {tags.map((tag) => (
+                    <div 
+                      key={tag.id} 
+                      className="group relative p-5 rounded-2xl border border-border bg-card hover:border-muted-foreground/30 transition-all hover:shadow-lg"
+                    >
+                      {/* Tag Preview Badge */}
+                      <div className="mb-4">
+                        <span 
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-white"
+                          style={{ backgroundColor: tag.cor }}
+                        >
+                          <Tag className="h-3.5 w-3.5" />
+                          {tag.nome}
+                        </span>
+                      </div>
+
+                      {/* Tag Name */}
+                      <h4 className="font-medium text-foreground mb-1">{tag.nome}</h4>
+                      <p className="text-xs text-muted-foreground">Clique para editar</p>
+
+                      {/* Actions */}
+                      <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => openTagModal(tag)}
+                              className="p-2 rounded-lg bg-background/80 hover:bg-muted transition-colors"
+                            >
+                              <Edit2 className="h-4 w-4 text-muted-foreground" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>Editar tag</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => deleteTag(tag.id)}
+                              className="p-2 rounded-lg bg-background/80 hover:bg-destructive/10 transition-colors"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>Excluir tag</TooltipContent>
+                        </Tooltip>
+                      </div>
+
+                      {/* Click overlay */}
+                      <button 
+                        onClick={() => openTagModal(tag)}
+                        className="absolute inset-0 rounded-2xl"
+                        aria-label={`Editar tag ${tag.nome}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Tab Configurações */}
+            <TabsContent value="config" className="mt-6 space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Configurações Gerais</h2>
                 <p className="text-sm text-muted-foreground">
-                  Se desativado, leads nesta etapa não receberão mensagens de follow-up
+                  Ajuste o comportamento do CRM
                 </p>
               </div>
-              <Switch 
-                checked={estagioForm.followup_ativo} 
-                onCheckedChange={(checked) => setEstagioForm({...estagioForm, followup_ativo: checked})} 
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEstagioModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={saveEstagio} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingEstagio ? 'Salvar' : 'Criar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      {/* Modal Tag */}
-      <Dialog open={tagModalOpen} onOpenChange={setTagModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingTag ? 'Editar Tag' : 'Nova Tag'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="tag-nome">Nome</Label>
-              <Input
-                id="tag-nome"
-                value={tagForm.nome}
-                onChange={(e) => setTagForm({ ...tagForm, nome: e.target.value })}
-                placeholder="Ex: Lead Quente"
-              />
+              <div className="space-y-4">
+                {/* Múltiplas Negociações */}
+                <div className="border border-border rounded-2xl bg-card overflow-hidden">
+                  <div className="p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-4">
+                        <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                          <Layers className="h-6 w-6 text-primary" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground mb-1">
+                            Múltiplas negociações por lead
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            Quando desativado, impede criar uma nova negociação se o lead já possui uma em aberto. 
+                            Isso ajuda a evitar duplicações acidentais.
+                          </p>
+                        </div>
+                      </div>
+                      <Switch 
+                        checked={permitirMultiplas} 
+                        onCheckedChange={handleToggleMultiplas} 
+                      />
+                    </div>
+                  </div>
+                  <div className={cn(
+                    "px-6 py-3 border-t border-border text-sm",
+                    permitirMultiplas ? "bg-primary/5 text-primary" : "bg-muted/50 text-muted-foreground"
+                  )}>
+                    {permitirMultiplas 
+                      ? "✓ Múltiplas negociações permitidas" 
+                      : "Apenas uma negociação por lead"
+                    }
+                  </div>
+                </div>
+
+                {/* Placeholder for future settings */}
+                <div className="border border-dashed border-border rounded-2xl p-8 text-center bg-muted/10">
+                  <Settings className="h-10 w-10 text-muted-foreground/50 mx-auto mb-3" />
+                  <h3 className="font-medium text-muted-foreground mb-1">Mais configurações em breve</h3>
+                  <p className="text-sm text-muted-foreground/70">
+                    Novas opções de personalização serão adicionadas aqui
+                  </p>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        {/* Modal Funil */}
+        <Dialog open={funilModalOpen} onOpenChange={setFunilModalOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-xl">
+                {editingFunil ? 'Editar Funil' : 'Novo Funil'}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-5 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="funil-nome">Nome do funil</Label>
+                <Input
+                  id="funil-nome"
+                  value={funilForm.nome}
+                  onChange={(e) => setFunilForm({ ...funilForm, nome: e.target.value })}
+                  placeholder="Ex: Vendas B2B"
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="funil-descricao">Descrição (opcional)</Label>
+                <Textarea
+                  id="funil-descricao"
+                  value={funilForm.descricao}
+                  onChange={(e) => setFunilForm({ ...funilForm, descricao: e.target.value })}
+                  placeholder="Descreva o objetivo deste funil..."
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-3">
+                <Label>Cor do funil</Label>
+                <div className="flex flex-wrap gap-2">
+                  {CORES_PREDEFINIDAS.map((cor) => (
+                    <button
+                      key={cor}
+                      type="button"
+                      onClick={() => setFunilForm({ ...funilForm, cor })}
+                      className={cn(
+                        "h-9 w-9 rounded-xl transition-all",
+                        funilForm.cor === cor && "ring-2 ring-offset-2 ring-primary ring-offset-background"
+                      )}
+                      style={{ backgroundColor: cor }}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Cor</Label>
-              <div className="flex flex-wrap gap-2">
-                {CORES_PREDEFINIDAS.map((cor) => (
-                  <button
-                    key={cor}
-                    type="button"
-                    onClick={() => setTagForm({ ...tagForm, cor })}
-                    className={cn(
-                      "h-8 w-8 rounded-full transition-all",
-                      tagForm.cor === cor && "ring-2 ring-offset-2 ring-primary"
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setFunilModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={saveFunil} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingFunil ? 'Salvar' : 'Criar Funil'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal Etapa */}
+        <Dialog open={estagioModalOpen} onOpenChange={setEstagioModalOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-xl">
+                {editingEstagio ? 'Editar Etapa' : 'Nova Etapa'}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-5 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="estagio-nome">Nome da etapa</Label>
+                <Input
+                  id="estagio-nome"
+                  value={estagioForm.nome}
+                  onChange={(e) => setEstagioForm({ ...estagioForm, nome: e.target.value })}
+                  placeholder="Ex: Contato Inicial"
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-3">
+                <Label>Cor da etapa</Label>
+                <div className="flex flex-wrap gap-2">
+                  {CORES_PREDEFINIDAS.map((cor) => (
+                    <button
+                      key={cor}
+                      type="button"
+                      onClick={() => setEstagioForm({ ...estagioForm, cor })}
+                      className={cn(
+                        "h-9 w-9 rounded-xl transition-all",
+                        estagioForm.cor === cor && "ring-2 ring-offset-2 ring-primary ring-offset-background"
+                      )}
+                      style={{ backgroundColor: cor }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-4 rounded-xl bg-muted/50 border border-border">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    {estagioForm.followup_ativo ? (
+                      <Bell className="h-4 w-4 text-primary" />
+                    ) : (
+                      <BellOff className="h-4 w-4 text-muted-foreground" />
                     )}
-                    style={{ backgroundColor: cor }}
-                  />
-                ))}
+                    <p className="font-medium text-foreground">Follow-up automático</p>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Leads nesta etapa receberão mensagens de follow-up
+                  </p>
+                </div>
+                <Switch 
+                  checked={estagioForm.followup_ativo} 
+                  onCheckedChange={(checked) => setEstagioForm({...estagioForm, followup_ativo: checked})} 
+                />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Preview</Label>
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
-                <span 
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium text-white"
-                  style={{ backgroundColor: tagForm.cor }}
-                >
-                  <Tag className="h-3 w-3" />
-                  {tagForm.nome || 'Nome da tag'}
-                </span>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEstagioModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={saveEstagio} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingEstagio ? 'Salvar' : 'Criar Etapa'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal Tag */}
+        <Dialog open={tagModalOpen} onOpenChange={setTagModalOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-xl">
+                {editingTag ? 'Editar Tag' : 'Nova Tag'}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-5 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="tag-nome">Nome da tag</Label>
+                <Input
+                  id="tag-nome"
+                  value={tagForm.nome}
+                  onChange={(e) => setTagForm({ ...tagForm, nome: e.target.value })}
+                  placeholder="Ex: Lead Quente"
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-3">
+                <Label>Cor da tag</Label>
+                <div className="flex flex-wrap gap-2">
+                  {CORES_PREDEFINIDAS.map((cor) => (
+                    <button
+                      key={cor}
+                      type="button"
+                      onClick={() => setTagForm({ ...tagForm, cor })}
+                      className={cn(
+                        "h-9 w-9 rounded-xl transition-all",
+                        tagForm.cor === cor && "ring-2 ring-offset-2 ring-primary ring-offset-background"
+                      )}
+                      style={{ backgroundColor: cor }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Preview</Label>
+                <div className="flex items-center gap-3 p-4 rounded-xl bg-muted/50 border border-border">
+                  <span 
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-white"
+                    style={{ backgroundColor: tagForm.cor }}
+                  >
+                    <Tag className="h-3.5 w-3.5" />
+                    {tagForm.nome || 'Nome da tag'}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setTagModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={saveTag} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingTag ? 'Salvar' : 'Criar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setTagModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={saveTag} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingTag ? 'Salvar' : 'Criar Tag'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </TooltipProvider>
     </MainLayout>
   );
 }
