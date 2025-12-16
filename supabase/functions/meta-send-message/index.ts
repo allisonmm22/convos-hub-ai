@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { conexao_id, telefone, mensagem, tipo = 'texto', media_url, template_name, template_params } = await req.json();
+    const { conexao_id, telefone, mensagem, tipo = 'texto', media_url, template_name, template_params, template_language = 'en_US' } = await req.json();
 
     console.log('=== META API: ENVIANDO MENSAGEM ===');
     console.log('Conexão:', conexao_id);
@@ -70,7 +70,7 @@ serve(async (req) => {
         type: 'template',
         template: {
           name: template_name,
-          language: { code: 'pt_BR' },
+          language: { code: template_language },
           components: template_params ? [
             {
               type: 'body',
