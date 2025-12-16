@@ -62,24 +62,9 @@ export function OnboardingProgress({
     navigate(route);
   };
 
+  // Ocultar completamente quando tudo estiver configurado
   if (allCompleted) {
-    return (
-      <Card className="border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-transparent">
-        <CardContent className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-full bg-emerald-500/20">
-              <Sparkles className="h-6 w-6 text-emerald-500" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-lg">Tudo configurado! 🎉</h3>
-              <p className="text-sm text-muted-foreground">
-                Seu CRM está pronto para uso. Comece a atender seus clientes!
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
+    return null;
   }
 
   return (
