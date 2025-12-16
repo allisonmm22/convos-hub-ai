@@ -399,7 +399,7 @@ serve(async (req) => {
               }
             }
 
-            // Se for documento PDF, extrair texto (não precisa de API key)
+            // Se for documento PDF, extrair texto usando OpenAI
             if (messageType === 'documento' && downloadData.mimeType?.includes('pdf') && downloadData.base64) {
               console.log('=== EXTRAINDO TEXTO DO PDF ===');
               try {
@@ -414,6 +414,7 @@ serve(async (req) => {
                     body: JSON.stringify({
                       pdf_base64: downloadData.base64,
                       mime_type: downloadData.mimeType,
+                      conta_id: conexao.conta_id,
                     }),
                   }
                 );
