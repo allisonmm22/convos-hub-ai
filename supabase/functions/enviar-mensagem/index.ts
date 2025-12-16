@@ -7,6 +7,103 @@ const corsHeaders = {
 };
 
 const EVOLUTION_API_URL = 'https://evolution.cognityx.com.br';
+const META_API_URL = 'https://graph.facebook.com/v18.0';
+
+// Função para enviar via Meta API
+async function enviarViaMeta(
+  conexao: any,
+  telefone: string,
+  mensagem: string,
+  tipo: string,
+  mediaUrl: string | null,
+  supabase: any
+): Promise<Response> {
+  console.log('=== ENVIANDO VIA META API ===');
+
+  if (!conexao.meta_phone_number_id || !conexao.meta_access_token) {
+    return new Response(JSON.stringify({ error: 'Credenciais Meta API não configuradas' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const formattedNumber = telefone.replace(/\D/g, '');
+  let body: Record<string, unknown>;
+
+  switch (tipo) {
+    case 'imagem':
+      body = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: formattedNumber,
+        type: 'image',
+        image: { link: mediaUrl, caption: mensagem || undefined },
+      };
+      break;
+    case 'audio':
+      body = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: formattedNumber,
+        type: 'audio',
+        audio: { link: mediaUrl },
+      };
+      break;
+    case 'documento':
+      body = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: formattedNumber,
+        type: 'document',
+        document: { link: mediaUrl, filename: mensagem || 'documento' },
+      };
+      break;
+    default:
+      body = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: formattedNumber,
+        type: 'text',
+        text: { preview_url: false, body: mensagem },
+      };
+  }
+
+  console.log('Enviando para Meta API:', JSON.stringify(body, null, 2));
+
+  const response = await fetch(
+    `${META_API_URL}/${conexao.meta_phone_number_id}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${conexao.meta_access_token}`,
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  const result = await response.json();
+  console.log('Resposta Meta API:', JSON.stringify(result, null, 2));
+
+  if (!response.ok) {
+    await supabase.from('logs_atividade').insert({
+      conta_id: conexao.conta_id,
+      tipo: 'erro_whatsapp',
+      descricao: `Erro ao enviar mensagem via Meta API para ${telefone}`,
+      metadata: { erro: result, status_code: response.status, tipo_mensagem: tipo },
+    });
+
+    return new Response(JSON.stringify({ error: 'Erro ao enviar mensagem', details: result }), {
+      status: response.status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const metaMsgId = result?.messages?.[0]?.id;
+  return new Response(JSON.stringify({ success: true, result, meta_msg_id: metaMsgId }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -37,6 +134,13 @@ serve(async (req) => {
       });
     }
 
+    // ===== ROTEADOR: META API vs EVOLUTION API =====
+    if (conexao.tipo_provedor === 'meta') {
+      // Enviar via Meta API
+      return await enviarViaMeta(conexao, telefone, mensagem, tipo, media_url, supabase);
+    }
+
+    // ===== CÓDIGO EVOLUTION (100% ORIGINAL ABAIXO) =====
     const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
     if (!evolutionApiKey) {
       console.error('EVOLUTION_API_KEY não configurada');

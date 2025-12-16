@@ -89,3 +89,15 @@ verify_jwt = false
 
 [functions.processar-lembretes]
 verify_jwt = false
+
+[functions.meta-verify-webhook]
+verify_jwt = false
+
+[functions.meta-send-message]
+verify_jwt = false
+
+[functions.meta-get-templates]
+verify_jwt = false
+
+[functions.meta-configure-webhook]
+verify_jwt = false
