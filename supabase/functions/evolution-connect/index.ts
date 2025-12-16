@@ -50,6 +50,16 @@ serve(async (req) => {
       });
     }
 
+    // Meta API connections don't use QR codes
+    if (conexao.tipo_provedor === 'meta') {
+      return new Response(JSON.stringify({ 
+        error: 'Conexões Meta API não utilizam QR Code. Configure as credenciais diretamente.' 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     console.log('Gerando QR Code para instância:', conexao.instance_name);
 
     // Buscar QR Code da Evolution API
