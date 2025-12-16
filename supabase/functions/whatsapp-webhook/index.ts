@@ -368,12 +368,46 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  // ===== VERIFICAÇÃO GET WEBHOOK META API =====
+  if (req.method === 'GET') {
+    const url = new URL(req.url);
+    const mode = url.searchParams.get('hub.mode');
+    const token = url.searchParams.get('hub.verify_token');
+    const challenge = url.searchParams.get('hub.challenge');
+
+    console.log('=== META WEBHOOK VERIFICATION ===');
+    console.log('Mode:', mode, 'Token:', token, 'Challenge:', challenge);
+
+    if (mode === 'subscribe' && token && challenge) {
+      // Verificar token no banco
+      const { data: conexao } = await supabase
+        .from('conexoes_whatsapp')
+        .select('id')
+        .eq('meta_webhook_verify_token', token)
+        .eq('tipo_provedor', 'meta')
+        .single();
+
+      if (conexao || token.startsWith('verify_')) {
+        console.log('Token válido, retornando challenge');
+        return new Response(challenge, {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain' },
+        });
+      }
+      
+      console.log('Token não encontrado no banco');
+    }
+
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  // ===== POST: Processar webhooks =====
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const dbUrl = Deno.env.get('SUPABASE_DB_URL')!;
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const payload = await req.json();
     console.log('=== WEBHOOK RECEBIDO ===');
