@@ -213,7 +213,7 @@ async function enviarViaMeta(
 // Função para enviar via Instagram API
 async function enviarViaInstagram(
   conexao: any,
-  recipientId: string, // Instagram Scoped User ID (IGSID)
+  recipientId: string, // Instagram Scoped User ID (IGSID) - pode vir com prefixo "ig_"
   mensagem: string,
   tipo: string,
   mediaUrl: string | null,
@@ -223,6 +223,10 @@ async function enviarViaInstagram(
 
   // Instagram usa os mesmos campos: meta_phone_number_id (Page ID) e meta_access_token
   if (!conexao.meta_phone_number_id || !conexao.meta_access_token) {
+    console.error('Credenciais Instagram faltando:', {
+      hasPageId: !!conexao.meta_phone_number_id,
+      hasToken: !!conexao.meta_access_token
+    });
     return new Response(JSON.stringify({ error: 'Credenciais Instagram não configuradas' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -230,7 +234,20 @@ async function enviarViaInstagram(
   }
 
   const pageId = conexao.meta_phone_number_id;
-  const accessToken = conexao.meta_access_token;
+  const accessToken = conexao.meta_access_token.trim(); // Remover espaços em branco
+
+  // Remover prefixo "ig_" do recipientId se existir
+  const cleanRecipientId = recipientId.startsWith('ig_') 
+    ? recipientId.substring(3) 
+    : recipientId;
+
+  console.log('Instagram Config:', {
+    pageId,
+    recipientId: cleanRecipientId,
+    originalRecipientId: recipientId,
+    tokenLength: accessToken.length,
+    tokenPreview: accessToken.substring(0, 20) + '...'
+  });
 
   let body: Record<string, unknown>;
 
@@ -243,7 +260,7 @@ async function enviarViaInstagram(
         });
       }
       body = {
-        recipient: { id: recipientId },
+        recipient: { id: cleanRecipientId },
         message: {
           attachment: {
             type: 'image',
@@ -260,7 +277,7 @@ async function enviarViaInstagram(
         });
       }
       body = {
-        recipient: { id: recipientId },
+        recipient: { id: cleanRecipientId },
         message: {
           attachment: {
             type: 'audio',
@@ -277,7 +294,7 @@ async function enviarViaInstagram(
         });
       }
       body = {
-        recipient: { id: recipientId },
+        recipient: { id: cleanRecipientId },
         message: {
           attachment: {
             type: 'file',
@@ -288,14 +305,20 @@ async function enviarViaInstagram(
       break;
     default:
       body = {
-        recipient: { id: recipientId },
+        recipient: { id: cleanRecipientId },
         message: { text: mensagem }
       };
   }
 
-  console.log('Enviando para Instagram API:', JSON.stringify(body, null, 2));
+  // Instagram API usa endpoint "me/messages" com Page Access Token
+  const instagramApiUrl = `${META_API_URL}/me/messages`;
+  
+  console.log('Enviando para Instagram API:', {
+    url: instagramApiUrl,
+    body: JSON.stringify(body, null, 2)
+  });
 
-  const response = await fetch(`${META_API_URL}/${pageId}/messages`, {
+  const response = await fetch(instagramApiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -310,8 +333,8 @@ async function enviarViaInstagram(
   if (!response.ok) {
     await supabase.from('logs_atividade').insert({
       conta_id: conexao.conta_id,
-      tipo: 'erro_whatsapp',
-      descricao: `Erro ao enviar mensagem via Instagram para ${recipientId}`,
+      tipo: 'erro_instagram',
+      descricao: `Erro ao enviar mensagem via Instagram para ${cleanRecipientId}`,
       metadata: { erro: result, status_code: response.status, tipo_mensagem: tipo },
     });
 
