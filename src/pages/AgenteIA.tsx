@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, Key, Save, Eye, EyeOff, Trash2, Play, MessageSquare } from 'lucide-react';
+import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, Key, Save, Eye, EyeOff, Trash2, Play, MessageSquare, RefreshCw, User } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -925,18 +925,20 @@ function ConfiguracaoPage() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [reabrirComIA, setReabrirComIA] = useState(true);
+  const [savingReabrir, setSavingReabrir] = useState(false);
 
   useEffect(() => {
     if (usuario?.conta_id) {
-      fetchApiKey();
+      fetchConfig();
     }
   }, [usuario?.conta_id]);
 
-  const fetchApiKey = async () => {
+  const fetchConfig = async () => {
     try {
       const { data, error } = await supabase
         .from('contas')
-        .select('openai_api_key')
+        .select('openai_api_key, reabrir_com_ia')
         .eq('id', usuario!.conta_id)
         .single();
 
@@ -945,8 +947,9 @@ function ConfiguracaoPage() {
       if (data?.openai_api_key) {
         setApiKey(data.openai_api_key);
       }
+      setReabrirComIA(data?.reabrir_com_ia ?? true);
     } catch (error) {
-      console.error('Erro ao buscar API key:', error);
+      console.error('Erro ao buscar configurações:', error);
     } finally {
       setLoading(false);
     }
@@ -972,15 +975,37 @@ function ConfiguracaoPage() {
     }
   };
 
+  const handleReabrirChange = async (value: boolean) => {
+    if (!usuario?.conta_id) return;
+
+    setSavingReabrir(true);
+    try {
+      const { error } = await supabase
+        .from('contas')
+        .update({ reabrir_com_ia: value })
+        .eq('id', usuario.conta_id);
+
+      if (error) throw error;
+      setReabrirComIA(value);
+      toast.success('Configuração salva!');
+    } catch (error) {
+      console.error('Erro ao salvar configuração:', error);
+      toast.error('Erro ao salvar configuração');
+    } finally {
+      setSavingReabrir(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Configuração</h1>
         <p className="text-muted-foreground mt-1">
-          Configure sua chave de API para habilitar os agentes de IA
+          Configure sua chave de API e comportamento dos agentes de IA
         </p>
       </div>
 
+      {/* API Key Section */}
       <div className="max-w-2xl rounded-xl bg-card border border-border p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -1045,6 +1070,77 @@ function ConfiguracaoPage() {
               )}
               Salvar API Key
             </button>
+          </div>
+        )}
+      </div>
+
+      {/* Comportamento ao Reabrir Conversa */}
+      <div className="max-w-2xl rounded-xl bg-card border border-border p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <RefreshCw className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Comportamento ao Reabrir Conversa</h2>
+            <p className="text-sm text-muted-foreground">
+              Defina como conversas encerradas devem ser reabertas quando o lead envia nova mensagem
+            </p>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <label 
+              className={`flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all ${
+                reabrirComIA 
+                  ? 'border-primary bg-primary/5' 
+                  : 'border-border hover:border-muted-foreground/50'
+              } ${savingReabrir ? 'opacity-50 pointer-events-none' : ''}`}
+              onClick={() => handleReabrirChange(true)}
+            >
+              <div className={`mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center ${
+                reabrirComIA ? 'border-primary' : 'border-muted-foreground/50'
+              }`}>
+                {reabrirComIA && <div className="h-2.5 w-2.5 rounded-full bg-primary" />}
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <Bot className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-foreground">Reabrir com Agente IA Principal</span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  O agente de IA principal assume automaticamente a conversa, pronto para atender o lead
+                </p>
+              </div>
+            </label>
+
+            <label 
+              className={`flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all ${
+                !reabrirComIA 
+                  ? 'border-primary bg-primary/5' 
+                  : 'border-border hover:border-muted-foreground/50'
+              } ${savingReabrir ? 'opacity-50 pointer-events-none' : ''}`}
+              onClick={() => handleReabrirChange(false)}
+            >
+              <div className={`mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center ${
+                !reabrirComIA ? 'border-primary' : 'border-muted-foreground/50'
+              }`}>
+                {!reabrirComIA && <div className="h-2.5 w-2.5 rounded-full bg-primary" />}
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-orange-500" />
+                  <span className="font-medium text-foreground">Reabrir com Atendimento Humano</span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  A conversa reabre aguardando um atendente humano assumir manualmente
+                </p>
+              </div>
+            </label>
           </div>
         )}
       </div>

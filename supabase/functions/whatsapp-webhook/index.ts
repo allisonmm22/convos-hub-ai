@@ -492,7 +492,7 @@ serve(async (req) => {
       
       // Usar fetch direto para a API REST do Supabase com header para ignorar cache
       const conversaResponse = await fetch(
-        `${supabaseUrl}/rest/v1/conversas?conta_id=eq.${conexao.conta_id}&contato_id=eq.${contato!.id}&arquivada=eq.false&select=id,agente_ia_ativo,nao_lidas,agente_ia_id`,
+        `${supabaseUrl}/rest/v1/conversas?conta_id=eq.${conexao.conta_id}&contato_id=eq.${contato!.id}&arquivada=eq.false&select=id,agente_ia_ativo,nao_lidas,agente_ia_id,status`,
         {
           headers: {
             'apikey': supabaseKey,
@@ -504,13 +504,13 @@ serve(async (req) => {
         }
       );
 
-      let conversa: { id: string; agente_ia_ativo: boolean; nao_lidas: number; agente_ia_id: string | null } | null = null;
+      let conversa: { id: string; agente_ia_ativo: boolean; nao_lidas: number; agente_ia_id: string | null; status: string | null } | null = null;
       
       if (conversaResponse.ok) {
         const conversaData = await conversaResponse.json();
         if (conversaData && !conversaData.code) {
           conversa = conversaData;
-          console.log('Conversa encontrada:', conversa?.id);
+          console.log('Conversa encontrada:', conversa?.id, 'status:', conversa?.status);
         }
       }
 
@@ -622,6 +622,47 @@ serve(async (req) => {
 
       console.log('Mensagem inserida com sucesso');
 
+      // Verificar se conversa estava encerrada e está sendo reaberta pelo lead
+      const conversaEstaReabrindo = conversa?.status === 'encerrado' && !fromMe && !isGrupo;
+      let agenteIaAtivoFinal = conversa?.agente_ia_ativo || false;
+      let agenteIaIdFinal = conversa?.agente_ia_id;
+
+      if (conversaEstaReabrindo) {
+        console.log('=== CONVERSA ENCERRADA RECEBENDO NOVA MENSAGEM ===');
+        
+        // Buscar configuração da conta para saber como reabrir
+        const { data: contaConfig } = await supabase
+          .from('contas')
+          .select('reabrir_com_ia')
+          .eq('id', conexao.conta_id)
+          .single();
+        
+        const reabrirComIA = contaConfig?.reabrir_com_ia ?? true;
+        console.log('Configuração reabrir_com_ia:', reabrirComIA);
+        
+        if (reabrirComIA) {
+          // Buscar agente principal ativo da conta
+          const { data: agentePrincipal } = await supabase
+            .from('agent_ia')
+            .select('id')
+            .eq('conta_id', conexao.conta_id)
+            .eq('tipo', 'principal')
+            .eq('ativo', true)
+            .maybeSingle();
+          
+          if (agentePrincipal) {
+            agenteIaAtivoFinal = true;
+            agenteIaIdFinal = agentePrincipal.id;
+            console.log('Agente principal reativado:', agentePrincipal.id);
+          } else {
+            console.log('Nenhum agente principal ativo encontrado');
+          }
+        } else {
+          console.log('Configuração define reabertura com atendimento humano');
+          agenteIaAtivoFinal = false;
+        }
+      }
+
       // Atualizar conversa usando fetch direto
       const updateData: Record<string, any> = {
         ultima_mensagem: messageContent,
@@ -629,6 +670,15 @@ serve(async (req) => {
         nao_lidas: fromMe ? 0 : (conversa?.nao_lidas || 0) + 1,
         status: fromMe ? 'aguardando_cliente' : 'em_atendimento',
       };
+
+      // Se conversa está reabrindo, aplicar configurações de reativação
+      if (conversaEstaReabrindo) {
+        updateData.agente_ia_ativo = agenteIaAtivoFinal;
+        updateData.agente_ia_id = agenteIaIdFinal;
+        updateData.etapa_ia_atual = null; // Começar do início
+        updateData.memoria_limpa_em = new Date().toISOString(); // Limpar memória anterior
+        console.log('Dados de reabertura:', { agente_ia_ativo: agenteIaAtivoFinal, agente_ia_id: agenteIaIdFinal });
+      }
 
       // Se mensagem veio do dispositivo externo, pausar o agente IA automaticamente
       if (fromMe) {
@@ -657,18 +707,19 @@ serve(async (req) => {
 
       // Sistema de debounce: agendar resposta com tempo_espera_segundos
       // IMPORTANTE: Nunca agendar resposta IA para grupos
-      if (conversa?.agente_ia_ativo && !fromMe && !isGrupo) {
+      // Usar agenteIaAtivoFinal para considerar reativação em conversas reabertas
+      if (agenteIaAtivoFinal && !fromMe && !isGrupo) {
         console.log('=== AGENDANDO RESPOSTA IA COM DEBOUNCE ===');
         
         try {
           // Buscar tempo de espera do agente
           let tempoEspera = 5; // default 5 segundos
           
-          if (conversa.agente_ia_id) {
+          if (agenteIaIdFinal) {
             const { data: agenteConfig } = await supabase
               .from('agent_ia')
               .select('tempo_espera_segundos')
-              .eq('id', conversa.agente_ia_id)
+              .eq('id', agenteIaIdFinal)
               .single();
             
             if (agenteConfig?.tempo_espera_segundos) {
@@ -685,7 +736,7 @@ serve(async (req) => {
           const { error: upsertError } = await supabase
             .from('respostas_pendentes')
             .upsert({
-              conversa_id: conversa.id,
+              conversa_id: conversa!.id,
               responder_em: responderEm,
             }, { 
               onConflict: 'conversa_id',
@@ -696,6 +747,8 @@ serve(async (req) => {
           } else {
             console.log('Resposta agendada para:', responderEm);
             
+            const conversaId = conversa!.id;
+            
             // Usar EdgeRuntime.waitUntil para agendar processamento após delay
             // @ts-ignore - EdgeRuntime é disponível no ambiente Deno/Supabase
             if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
@@ -704,7 +757,7 @@ serve(async (req) => {
                 new Promise<void>((resolve) => {
                   setTimeout(async () => {
                     try {
-                      console.log('Executando processamento agendado para conversa:', conversa.id);
+                      console.log('Executando processamento agendado para conversa:', conversaId);
                       
                       await fetch(
                         `${supabaseUrl}/functions/v1/processar-resposta-agora`,
@@ -714,7 +767,7 @@ serve(async (req) => {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${supabaseKey}`,
                           },
-                          body: JSON.stringify({ conversa_id: conversa.id }),
+                          body: JSON.stringify({ conversa_id: conversaId }),
                         }
                       );
                     } catch (err) {
@@ -736,7 +789,7 @@ serve(async (req) => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${supabaseKey}`,
                   },
-                  body: JSON.stringify({ conversa_id: conversa.id }),
+                  body: JSON.stringify({ conversa_id: conversaId }),
                 }
               ).catch(err => console.error('Erro no fallback:', err));
             }
