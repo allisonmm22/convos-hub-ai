@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import * as pdfjs from "https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,6 +6,64 @@ const corsHeaders = {
 };
 
 const MAX_TEXT_LENGTH = 4000;
+
+// Função simples para extrair texto de PDF usando regex patterns
+// PDFs têm texto entre parênteses em streams de texto
+function extractTextFromPdfBuffer(bytes: Uint8Array): string {
+  const decoder = new TextDecoder('latin1');
+  const pdfContent = decoder.decode(bytes);
+  
+  const textParts: string[] = [];
+  
+  // Padrão 1: Texto entre parênteses em operadores Tj e TJ
+  const tjPattern = /\(([^)]*)\)\s*Tj/g;
+  let match;
+  while ((match = tjPattern.exec(pdfContent)) !== null) {
+    if (match[1]) {
+      textParts.push(decodeEscapedText(match[1]));
+    }
+  }
+  
+  // Padrão 2: Arrays TJ
+  const tjArrayPattern = /\[((?:[^[\]]*|\[[^\]]*\])*)\]\s*TJ/gi;
+  while ((match = tjArrayPattern.exec(pdfContent)) !== null) {
+    const arrayContent = match[1];
+    const stringPattern = /\(([^)]*)\)/g;
+    let stringMatch;
+    while ((stringMatch = stringPattern.exec(arrayContent)) !== null) {
+      if (stringMatch[1]) {
+        textParts.push(decodeEscapedText(stringMatch[1]));
+      }
+    }
+  }
+  
+  // Padrão 3: Streams de texto entre BT e ET
+  const btEtPattern = /BT\s*([\s\S]*?)\s*ET/g;
+  while ((match = btEtPattern.exec(pdfContent)) !== null) {
+    const btContent = match[1];
+    // Extrair texto de dentro do bloco BT/ET
+    const innerTjPattern = /\(([^)]*)\)\s*Tj/g;
+    let innerMatch;
+    while ((innerMatch = innerTjPattern.exec(btContent)) !== null) {
+      if (innerMatch[1] && !textParts.includes(decodeEscapedText(innerMatch[1]))) {
+        textParts.push(decodeEscapedText(innerMatch[1]));
+      }
+    }
+  }
+  
+  return textParts.join(' ').trim();
+}
+
+function decodeEscapedText(text: string): string {
+  return text
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\t/g, '\t')
+    .replace(/\\\(/g, '(')
+    .replace(/\\\)/g, ')')
+    .replace(/\\\\/g, '\\')
+    .replace(/\\(\d{3})/g, (_, octal) => String.fromCharCode(parseInt(octal, 8)));
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -41,38 +98,18 @@ serve(async (req) => {
 
     console.log('PDF size:', bytes.length, 'bytes');
 
-    // Carregar o documento PDF
-    const loadingTask = pdfjs.getDocument({ data: bytes });
-    const pdfDocument = await loadingTask.promise;
-    
-    console.log('Número de páginas:', pdfDocument.numPages);
+    // Extrair texto do PDF
+    let texto = extractTextFromPdfBuffer(bytes);
 
-    // Extrair texto de todas as páginas
-    let textoCompleto = '';
-    
-    for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
-      const page = await pdfDocument.getPage(pageNum);
-      const textContent = await page.getTextContent();
-      
-      const pageText = textContent.items
-        .map((item: any) => item.str)
-        .join(' ');
-      
-      textoCompleto += pageText + '\n\n';
-      
-      // Parar se já tiver texto suficiente
-      if (textoCompleto.length > MAX_TEXT_LENGTH) {
-        break;
-      }
-    }
+    console.log('Texto extraído (bruto):', texto.length, 'caracteres');
 
     // Limpar texto (remover múltiplos espaços/quebras de linha)
-    let texto = textoCompleto
+    texto = texto
       .replace(/\s+/g, ' ')
       .replace(/\n\s*\n/g, '\n\n')
       .trim();
 
-    console.log('Texto extraído:', texto.length, 'caracteres');
+    console.log('Texto limpo:', texto.length, 'caracteres');
 
     // Limitar o tamanho do texto
     if (texto.length > MAX_TEXT_LENGTH) {
@@ -84,20 +121,19 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           sucesso: false, 
-          erro: 'Não foi possível extrair texto do PDF (pode ser um PDF de imagem/escaneado)' 
+          erro: 'Não foi possível extrair texto do PDF (pode ser um PDF de imagem/escaneado ou protegido)' 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     console.log('Extração concluída com sucesso');
-    console.log('Preview:', texto.substring(0, 100) + '...');
+    console.log('Preview:', texto.substring(0, 200) + '...');
 
     return new Response(
       JSON.stringify({ 
         sucesso: true, 
         texto,
-        paginas: pdfDocument.numPages,
         caracteres: texto.length
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
