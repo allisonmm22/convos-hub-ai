@@ -875,7 +875,10 @@ export default function Conversas() {
   const handleFileSelect = (type: 'imagem' | 'documento' | 'audio') => {
     setFileType(type);
     setShowAttachMenu(false);
-    fileInputRef.current?.click();
+    // Usar setTimeout para garantir que o estado foi atualizado antes de abrir o diálogo
+    setTimeout(() => {
+      fileInputRef.current?.click();
+    }, 0);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
