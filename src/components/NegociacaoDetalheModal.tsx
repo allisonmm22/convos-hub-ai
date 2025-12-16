@@ -67,6 +67,8 @@ interface Negociacao {
   probabilidade?: number;
   notas?: string;
   data_fechamento?: string;
+  resumo_ia?: string;
+  resumo_gerado_em?: string;
   contatos: {
     nome: string;
     telefone: string;
@@ -118,6 +120,7 @@ export function NegociacaoDetalheModal({
   const [conversaId, setConversaId] = useState<string | null>(null);
   const [loadingMensagens, setLoadingMensagens] = useState(false);
   const [resumo, setResumo] = useState<string | null>(null);
+  const [resumoGeradoEm, setResumoGeradoEm] = useState<string | null>(null);
   const [gerandoResumo, setGerandoResumo] = useState(false);
   const [mensagensExpandidas, setMensagensExpandidas] = useState(false);
 
@@ -132,7 +135,9 @@ export function NegociacaoDetalheModal({
       setProbabilidade(negociacao.probabilidade || 50);
       setNotas(negociacao.notas || '');
       setEstagioId(negociacao.estagio_id || '');
-      setResumo(null);
+      // Load saved summary if exists
+      setResumo(negociacao.resumo_ia || null);
+      setResumoGeradoEm(negociacao.resumo_gerado_em || null);
       setMensagensExpandidas(false);
       
       // Fetch conversation
@@ -239,7 +244,7 @@ export function NegociacaoDetalheModal({
   };
 
   const gerarResumo = async () => {
-    if (!conversaId) {
+    if (!conversaId || !negociacao) {
       toast.error('Nenhuma conversa encontrada para este contato');
       return;
     }
@@ -247,12 +252,16 @@ export function NegociacaoDetalheModal({
     setGerandoResumo(true);
     try {
       const { data, error } = await supabase.functions.invoke('resumir-conversa', {
-        body: { conversa_id: conversaId }
+        body: { 
+          conversa_id: conversaId,
+          negociacao_id: negociacao.id
+        }
       });
 
       if (error) throw error;
       
       setResumo(data.resumo);
+      setResumoGeradoEm(new Date().toISOString());
       toast.success('Resumo gerado com sucesso!');
     } catch (error) {
       console.error('Erro ao gerar resumo:', error);
@@ -506,16 +515,29 @@ export function NegociacaoDetalheModal({
                   ) : (
                     <Sparkles className="h-4 w-4 mr-1" />
                   )}
-                  Gerar Resumo IA
+                  {resumo ? '🔄 Atualizar Resumo' : 'Gerar Resumo IA'}
                 </Button>
               </div>
 
               {/* Resumo IA */}
               {resumo && (
                 <div className="mb-4 p-4 rounded-lg bg-primary/5 border border-primary/20">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sparkles className="h-4 w-4 text-primary" />
-                    <span className="font-medium text-primary text-sm">Resumo da IA</span>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                      <span className="font-medium text-primary text-sm">Resumo da IA</span>
+                    </div>
+                    {resumoGeradoEm && (
+                      <span className="text-xs text-muted-foreground">
+                        Gerado em: {new Date(resumoGeradoEm).toLocaleString('pt-BR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    )}
                   </div>
                   <div className="text-sm text-foreground whitespace-pre-wrap">{resumo}</div>
                 </div>

@@ -45,6 +45,8 @@ interface Negociacao {
   notas?: string;
   data_fechamento?: string;
   created_at?: string;
+  resumo_ia?: string;
+  resumo_gerado_em?: string;
   contatos: {
     nome: string;
     telefone: string;

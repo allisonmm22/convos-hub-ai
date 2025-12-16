@@ -979,6 +979,8 @@ export type Database = {
           notas: string | null
           probabilidade: number | null
           responsavel_id: string | null
+          resumo_gerado_em: string | null
+          resumo_ia: string | null
           status: Database["public"]["Enums"]["status_negociacao"] | null
           titulo: string
           updated_at: string
@@ -994,6 +996,8 @@ export type Database = {
           notas?: string | null
           probabilidade?: number | null
           responsavel_id?: string | null
+          resumo_gerado_em?: string | null
+          resumo_ia?: string | null
           status?: Database["public"]["Enums"]["status_negociacao"] | null
           titulo: string
           updated_at?: string
@@ -1009,6 +1013,8 @@ export type Database = {
           notas?: string | null
           probabilidade?: number | null
           responsavel_id?: string | null
+          resumo_gerado_em?: string | null
+          resumo_ia?: string | null
           status?: Database["public"]["Enums"]["status_negociacao"] | null
           titulo?: string
           updated_at?: string
