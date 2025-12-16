@@ -371,7 +371,9 @@ serve(async (req) => {
 
     if (conexao.tipo_provedor === 'instagram') {
       // Para Instagram, o "telefone" é o Instagram Scoped User ID (IGSID)
-      return await enviarViaInstagram(conexao, telefone, mensagem, tipo, media_url, supabase);
+      // Remove o prefixo "ig_" se existir, pois a API espera apenas o ID numérico
+      const instagramUserId = telefone.startsWith('ig_') ? telefone.replace('ig_', '') : telefone;
+      return await enviarViaInstagram(conexao, instagramUserId, mensagem, tipo, media_url, supabase);
     }
 
     // ===== CÓDIGO EVOLUTION (100% ORIGINAL ABAIXO) =====
