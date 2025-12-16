@@ -1,6 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Declaração do EdgeRuntime para Supabase Edge Functions
+declare const EdgeRuntime: {
+  waitUntil: (promise: Promise<unknown>) => void;
+};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -241,6 +246,17 @@ async function processInstagramMessaging(
 
   const openaiKey = conta?.openai_api_key;
 
+  // Buscar agente principal da conta
+  const { data: agentePrincipal } = await supabase
+    .from('agent_ia')
+    .select('id, tempo_espera_segundos')
+    .eq('conta_id', conexao.conta_id)
+    .eq('tipo', 'principal')
+    .eq('ativo', true)
+    .maybeSingle();
+
+  console.log('[instagram-webhook] Agente principal:', agentePrincipal?.id || 'nenhum');
+
   // Determinar tipo e conteúdo da mensagem
   let messageContent = '';
   let tipo = 'texto';
@@ -387,18 +403,19 @@ async function processInstagramMessaging(
     .single();
 
   if (!conversa) {
-    // Instagram não usa IA por padrão (similar a grupos)
+    // Criar conversa com IA ativa se tiver agente principal
     const { data: novaConversa, error: conversaError } = await supabase
       .from('conversas')
       .insert({
         conta_id: conexao.conta_id,
         contato_id: contato.id,
         conexao_id: conexao.id,
-        agente_ia_ativo: false, // IA desativada por padrão no Instagram
+        agente_ia_ativo: !!agentePrincipal,
+        agente_ia_id: agentePrincipal?.id || null,
         canal: 'instagram',
         status: 'em_atendimento',
       })
-      .select()
+      .select('id, agente_ia_ativo, nao_lidas, agente_ia_id, status')
       .single();
 
     if (conversaError) {
@@ -409,6 +426,7 @@ async function processInstagramMessaging(
       });
     }
     conversa = novaConversa;
+    console.log('[instagram-webhook] Nova conversa criada com IA:', conversa.agente_ia_ativo);
   }
 
   // Verificar duplicatas
@@ -455,6 +473,45 @@ async function processInstagramMessaging(
     })
     .eq('id', conversa.id);
 
+  // Agendar resposta da IA se estiver ativa
+  if (conversa.agente_ia_ativo && agentePrincipal) {
+    const tempoEspera = agentePrincipal.tempo_espera_segundos || 5;
+    const responderEm = new Date(Date.now() + tempoEspera * 1000).toISOString();
+
+    console.log('[instagram-webhook] Agendando resposta IA em', tempoEspera, 'segundos');
+
+    // Upsert na tabela de respostas pendentes
+    await supabase
+      .from('respostas_pendentes')
+      .upsert(
+        {
+          conversa_id: conversa.id,
+          responder_em: responderEm,
+          processando: false,
+        },
+        { onConflict: 'conversa_id' }
+      );
+
+    // Agendar processamento da resposta
+    EdgeRuntime.waitUntil(
+      (async () => {
+        await new Promise(resolve => setTimeout(resolve, tempoEspera * 1000));
+        try {
+          await fetch(`${supabaseUrl}/functions/v1/processar-resposta-agora`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseKey}`,
+            },
+            body: JSON.stringify({ conversa_id: conversa.id }),
+          });
+        } catch (e) {
+          console.error('[instagram-webhook] Erro ao chamar processar-resposta-agora:', e);
+        }
+      })()
+    );
+  }
+
   return new Response(JSON.stringify({ success: true }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
@@ -497,6 +554,15 @@ async function processInstagramChanges(
     });
   }
 
+  // Buscar agente principal da conta
+  const { data: agentePrincipal } = await supabase
+    .from('agent_ia')
+    .select('id, tempo_espera_segundos')
+    .eq('conta_id', conexao.conta_id)
+    .eq('tipo', 'principal')
+    .eq('ativo', true)
+    .maybeSingle();
+
   // Processar cada mensagem similar ao meta-verify-webhook
   for (const msg of messages) {
     const fromId = msg.from;
@@ -506,7 +572,8 @@ async function processInstagramChanges(
     let messageContent = msg.text?.body || `Mensagem do tipo: ${messageType}`;
     let tipo = 'texto';
 
-    const contactPhone = `ig_${fromId}`;
+    // Instagram usa IGSID como identificador (armazenamos apenas o ID numérico)
+    const contactPhone = fromId;
 
     // Buscar ou criar contato
     let { data: contato } = await supabase
@@ -548,11 +615,12 @@ async function processInstagramChanges(
           conta_id: conexao.conta_id,
           contato_id: contato.id,
           conexao_id: conexao.id,
-          agente_ia_ativo: false,
+          agente_ia_ativo: !!agentePrincipal,
+          agente_ia_id: agentePrincipal?.id || null,
           canal: 'instagram',
           status: 'em_atendimento',
         })
-        .select()
+        .select('id, agente_ia_ativo, nao_lidas, agente_ia_id')
         .single();
       conversa = novaConversa;
     }
@@ -586,8 +654,44 @@ async function processInstagramChanges(
         ultima_mensagem: messageContent.substring(0, 255),
         ultima_mensagem_at: new Date().toISOString(),
         nao_lidas: (conversa.nao_lidas || 0) + 1,
+        status: 'em_atendimento',
       })
       .eq('id', conversa.id);
+
+    // Agendar resposta da IA se estiver ativa
+    if (conversa.agente_ia_ativo && agentePrincipal) {
+      const tempoEspera = agentePrincipal.tempo_espera_segundos || 5;
+      const responderEm = new Date(Date.now() + tempoEspera * 1000).toISOString();
+
+      await supabase
+        .from('respostas_pendentes')
+        .upsert(
+          {
+            conversa_id: conversa.id,
+            responder_em: responderEm,
+            processando: false,
+          },
+          { onConflict: 'conversa_id' }
+        );
+
+      EdgeRuntime.waitUntil(
+        (async () => {
+          await new Promise(resolve => setTimeout(resolve, tempoEspera * 1000));
+          try {
+            await fetch(`${supabaseUrl}/functions/v1/processar-resposta-agora`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseKey}`,
+              },
+              body: JSON.stringify({ conversa_id: conversa.id }),
+            });
+          } catch (e) {
+            console.error('[instagram-webhook] Erro ao chamar processar-resposta-agora:', e);
+          }
+        })()
+      );
+    }
   }
 
   return new Response(JSON.stringify({ success: true }), {
