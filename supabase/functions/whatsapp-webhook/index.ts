@@ -556,9 +556,12 @@ serve(async (req) => {
       // Buscar conexão pela instância
       const { data: conexao, error: conexaoError } = await supabase
         .from('conexoes_whatsapp')
-        .select('id, conta_id, instance_name, token')
+        .select('id, conta_id, instance_name, token, tipo_canal')
         .eq('instance_name', instance)
         .single();
+      
+      // Determinar canal (whatsapp ou instagram)
+      const canal = conexao?.tipo_canal || 'whatsapp';
 
       if (conexaoError || !conexao) {
         console.log('Conexão não encontrada para instância:', instance);
@@ -757,6 +760,7 @@ serve(async (req) => {
             avatar_url: avatarUrl,
             is_grupo: isGrupo,
             grupo_jid: grupoJid,
+            canal: canal, // Salvar canal de origem
           })
           .select()
           .single();
@@ -876,6 +880,7 @@ serve(async (req) => {
               agente_ia_ativo: agenteIaAtivo,
               agente_ia_id: agenteIaId,
               status: 'em_atendimento',
+              canal: canal, // Salvar canal de origem (whatsapp ou instagram)
             }),
           }
         );

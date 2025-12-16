@@ -340,6 +340,7 @@ export type Database = {
           numero: string | null
           qrcode: string | null
           status: Database["public"]["Enums"]["status_conexao"] | null
+          tipo_canal: string | null
           tipo_provedor: string | null
           token: string
           updated_at: string
@@ -358,6 +359,7 @@ export type Database = {
           numero?: string | null
           qrcode?: string | null
           status?: Database["public"]["Enums"]["status_conexao"] | null
+          tipo_canal?: string | null
           tipo_provedor?: string | null
           token: string
           updated_at?: string
@@ -376,6 +378,7 @@ export type Database = {
           numero?: string | null
           qrcode?: string | null
           status?: Database["public"]["Enums"]["status_conexao"] | null
+          tipo_canal?: string | null
           tipo_provedor?: string | null
           token?: string
           updated_at?: string
@@ -438,6 +441,7 @@ export type Database = {
       contatos: {
         Row: {
           avatar_url: string | null
+          canal: string | null
           conta_id: string
           created_at: string
           email: string | null
@@ -452,6 +456,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          canal?: string | null
           conta_id: string
           created_at?: string
           email?: string | null
@@ -466,6 +471,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          canal?: string | null
           conta_id?: string
           created_at?: string
           email?: string | null
@@ -494,6 +500,7 @@ export type Database = {
           agente_ia_id: string | null
           arquivada: boolean | null
           atendente_id: string | null
+          canal: string | null
           conexao_id: string | null
           conta_id: string
           contato_id: string
@@ -512,6 +519,7 @@ export type Database = {
           agente_ia_id?: string | null
           arquivada?: boolean | null
           atendente_id?: string | null
+          canal?: string | null
           conexao_id?: string | null
           conta_id: string
           contato_id: string
@@ -530,6 +538,7 @@ export type Database = {
           agente_ia_id?: string | null
           arquivada?: boolean | null
           atendente_id?: string | null
+          canal?: string | null
           conexao_id?: string | null
           conta_id?: string
           contato_id?: string
