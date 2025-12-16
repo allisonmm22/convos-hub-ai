@@ -3,9 +3,11 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { Plug, PlugZap, RefreshCw, Check, Loader2, QrCode, Power, Plus, Smartphone, Trash2, Globe, Zap, Info, ExternalLink, Copy, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOnboarding } from '@/contexts/OnboardingContext';
 import { toast } from 'sonner';
 import { validarEExibirErro } from '@/hooks/useValidarLimitePlano';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { OnboardingTooltip } from '@/components/onboarding/OnboardingTooltip';
 
 type TipoProvedor = 'evolution' | 'meta';
 
@@ -28,6 +30,7 @@ interface Conexao {
 export default function Conexao() {
   const { usuario } = useAuth();
   const isMobile = useIsMobile();
+  const { isOnboardingActive, currentStep, completeStep, nextStep } = useOnboarding();
   const [conexao, setConexao] = useState<Conexao | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -75,6 +78,13 @@ export default function Conexao() {
           setMetaBusinessAccountId(data.meta_business_account_id || '');
           setMetaAccessToken(data.meta_access_token || '');
           setMetaWebhookVerifyToken(data.meta_webhook_verify_token || '');
+        }
+        // Detectar conexão para onboarding
+        if (data.status === 'conectado' && isOnboardingActive && 
+            (currentStep === 'configurar_conexao' || currentStep === 'aguardar_conexao')) {
+          completeStep('configurar_conexao');
+          completeStep('aguardar_conexao');
+          nextStep();
         }
       }
     } catch (error) {

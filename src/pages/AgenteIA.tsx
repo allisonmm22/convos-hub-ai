@@ -3,6 +3,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, Key, Save, Eye, EyeOff, Trash2, Play, MessageSquare, RefreshCw, User, Sparkles, Crown, Zap, Power, PowerOff, Bell } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOnboarding } from '@/contexts/OnboardingContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { NovoAgenteModal } from '@/components/NovoAgenteModal';
@@ -15,6 +16,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import { OnboardingTooltip } from '@/components/onboarding/OnboardingTooltip';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,6 +45,7 @@ export default function AgenteIA() {
   const { usuario } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { isOnboardingActive, currentStep, completeStep, goToStep } = useOnboarding();
   const [agentes, setAgentes] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
@@ -54,6 +57,14 @@ export default function AgenteIA() {
       fetchAgentes();
     }
   }, [usuario]);
+
+  // Completar onboarding quando visitar página de agentes
+  useEffect(() => {
+    if (isOnboardingActive && currentStep === 'configurar_agente' && agentes.length > 0) {
+      completeStep('configurar_agente');
+      goToStep('concluido');
+    }
+  }, [isOnboardingActive, currentStep, agentes.length]);
 
   const fetchAgentes = async () => {
     try {

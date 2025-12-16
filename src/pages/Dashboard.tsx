@@ -9,10 +9,15 @@ import {
   PlugZap,
   ArrowUpRight,
   ArrowDownRight,
+  Sparkles,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useOnboarding } from '@/contexts/OnboardingContext';
+import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
+import { EscolhaConexaoModal } from '@/components/onboarding/EscolhaConexaoModal';
+import { Button } from '@/components/ui/button';
 
 interface DashboardStats {
   totalNegociacoes: number;
@@ -20,17 +25,23 @@ interface DashboardStats {
   totalContatos: number;
   totalMensagens: number;
   conexaoStatus: 'conectado' | 'desconectado' | 'aguardando';
+  openaiConfigurado: boolean;
+  agenteConfigurado: boolean;
 }
 
 export default function Dashboard() {
   const { usuario } = useAuth();
   const isMobile = useIsMobile();
+  const { isOnboardingActive, currentStep, startOnboarding } = useOnboarding();
+  const [showEscolhaConexao, setShowEscolhaConexao] = useState(false);
   const [stats, setStats] = useState<DashboardStats>({
     totalNegociacoes: 0,
     valorTotal: 0,
     totalContatos: 0,
     totalMensagens: 0,
     conexaoStatus: 'desconectado',
+    openaiConfigurado: false,
+    agenteConfigurado: false,
   });
   const [loading, setLoading] = useState(true);
 
@@ -40,14 +51,26 @@ export default function Dashboard() {
     }
   }, [usuario]);
 
+  // Abrir modal de escolha quando onboarding inicia
+  useEffect(() => {
+    if (isOnboardingActive && currentStep === 'escolha_conexao') {
+      setShowEscolhaConexao(true);
+    }
+  }, [isOnboardingActive, currentStep]);
+
   const fetchStats = async () => {
     try {
-      const [negociacoes, contatos, mensagens, conexao] = await Promise.all([
+      const [negociacoes, contatos, mensagens, conexao, conta, agentes] = await Promise.all([
         supabase.from('negociacoes').select('valor').eq('conta_id', usuario!.conta_id),
         supabase.from('contatos').select('id', { count: 'exact' }).eq('conta_id', usuario!.conta_id),
         supabase.from('mensagens').select('id', { count: 'exact' }),
         supabase.from('conexoes_whatsapp').select('status').eq('conta_id', usuario!.conta_id).maybeSingle(),
+        supabase.from('contas').select('openai_api_key').eq('id', usuario!.conta_id).single(),
+        supabase.from('agent_ia').select('id, prompt_sistema').eq('conta_id', usuario!.conta_id),
       ]);
+
+      const temAgente = agentes.data && agentes.data.length > 0 && 
+        agentes.data.some(a => a.prompt_sistema && a.prompt_sistema.length > 50);
 
       setStats({
         totalNegociacoes: negociacoes.data?.length || 0,
@@ -55,6 +78,8 @@ export default function Dashboard() {
         totalContatos: contatos.count || 0,
         totalMensagens: mensagens.count || 0,
         conexaoStatus: (conexao.data?.status as any) || 'desconectado',
+        openaiConfigurado: !!conta.data?.openai_api_key,
+        agenteConfigurado: temAgente,
       });
     } catch (error) {
       console.error('Erro ao buscar stats:', error);
@@ -68,6 +93,11 @@ export default function Dashboard() {
       style: 'currency',
       currency: 'BRL',
     }).format(value);
+  };
+
+  const handleStartTutorial = () => {
+    startOnboarding();
+    setShowEscolhaConexao(true);
   };
 
   const cards = [
@@ -109,16 +139,38 @@ export default function Dashboard() {
     },
   ];
 
+  // Verificar se é um novo usuário (nenhuma config feita)
+  const isNewUser = stats.conexaoStatus === 'desconectado' && 
+    !stats.openaiConfigurado && 
+    !stats.agenteConfigurado;
+
   return (
     <MainLayout>
       <div className="space-y-6 md:space-y-8 animate-fade-in px-4 md:px-0">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-sm md:text-base text-muted-foreground mt-1">
-            Bem-vindo, {usuario?.nome?.split(' ')[0]}!
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground">Dashboard</h1>
+            <p className="text-sm md:text-base text-muted-foreground mt-1">
+              Bem-vindo, {usuario?.nome?.split(' ')[0]}!
+            </p>
+          </div>
+          {!isOnboardingActive && isNewUser && (
+            <Button onClick={handleStartTutorial} className="gap-2">
+              <Sparkles className="h-4 w-4" />
+              <span className="hidden sm:inline">Iniciar Tutorial</span>
+            </Button>
+          )}
         </div>
+
+        {/* Onboarding Progress Card */}
+        {!loading && (stats.conexaoStatus !== 'conectado' || !stats.openaiConfigurado || !stats.agenteConfigurado) && (
+          <OnboardingProgress 
+            conexaoStatus={stats.conexaoStatus === 'conectado'}
+            openaiStatus={stats.openaiConfigurado}
+            agenteStatus={stats.agenteConfigurado}
+          />
+        )}
 
         {/* Status da Conexão */}
         <div className="flex items-center gap-3 md:gap-4 p-3 md:p-4 rounded-xl bg-card border border-border">
@@ -256,6 +308,12 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Modal de Escolha de Conexão */}
+      <EscolhaConexaoModal 
+        open={showEscolhaConexao} 
+        onOpenChange={setShowEscolhaConexao} 
+      />
     </MainLayout>
   );
 }
