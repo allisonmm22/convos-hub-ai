@@ -37,6 +37,10 @@ import {
   ChevronDown,
   Lock,
   Unlock,
+  FileSpreadsheet,
+  Archive,
+  File as FileIcon,
+  Download,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -1284,17 +1288,69 @@ export default function Conversas() {
                       variant={msg.direcao === 'saida' ? 'sent' : 'received'}
                     />
                   )}
-                  {msg.tipo === 'documento' && (
-                    <a 
-                      href={msg.media_url!} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 underline hover:opacity-80 transition-opacity"
-                    >
-                      <FileText className="h-4 w-4" />
-                      {msg.conteudo}
-                    </a>
-                  )}
+                  {msg.tipo === 'documento' && (() => {
+                    const fileName = msg.conteudo || 'Documento';
+                    const extension = fileName.split('.').pop()?.toLowerCase() || '';
+                    
+                    const getFileIcon = () => {
+                      switch (extension) {
+                        case 'pdf':
+                          return <FileText className="h-8 w-8 text-red-500" />;
+                        case 'doc':
+                        case 'docx':
+                          return <FileText className="h-8 w-8 text-blue-500" />;
+                        case 'xls':
+                        case 'xlsx':
+                          return <FileSpreadsheet className="h-8 w-8 text-green-500" />;
+                        case 'zip':
+                        case 'rar':
+                        case '7z':
+                          return <Archive className="h-8 w-8 text-amber-500" />;
+                        default:
+                          return <FileIcon className="h-8 w-8 text-muted-foreground" />;
+                      }
+                    };
+                    
+                    const getFileType = () => {
+                      switch (extension) {
+                        case 'pdf': return 'PDF';
+                        case 'doc':
+                        case 'docx': return 'Word';
+                        case 'xls':
+                        case 'xlsx': return 'Excel';
+                        case 'zip':
+                        case 'rar':
+                        case '7z': return 'Arquivo';
+                        case 'ppt':
+                        case 'pptx': return 'PowerPoint';
+                        default: return extension.toUpperCase() || 'Documento';
+                      }
+                    };
+                    
+                    return (
+                      <a 
+                        href={msg.media_url!} 
+                        download={fileName}
+                        className={cn(
+                          "flex items-center gap-3 p-3 rounded-xl border transition-all hover:shadow-md",
+                          msg.direcao === 'saida' 
+                            ? "bg-background/30 border-primary-foreground/20 hover:bg-background/50" 
+                            : "bg-muted/50 border-border hover:bg-muted"
+                        )}
+                      >
+                        <div className="flex-shrink-0">
+                          {getFileIcon()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{fileName}</p>
+                          <p className="text-xs opacity-70">{getFileType()} • Clique para baixar</p>
+                        </div>
+                        <div className="flex-shrink-0">
+                          <Download className="h-5 w-5 opacity-60" />
+                        </div>
+                      </a>
+                    );
+                  })()}
                   {msg.tipo === 'video' && (
                     <video controls className="max-w-full rounded-xl shadow-md">
                       <source src={msg.media_url!} />
