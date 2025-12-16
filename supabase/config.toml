@@ -110,3 +110,6 @@ verify_jwt = false
 
 [functions.instagram-connect]
 verify_jwt = false
+
+[functions.instagram-webhook]
+verify_jwt = false

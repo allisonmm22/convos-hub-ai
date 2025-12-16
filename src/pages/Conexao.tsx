@@ -362,8 +362,19 @@ export default function Conexao() {
     return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-verify-webhook`;
   };
 
+  const getInstagramWebhookUrl = () => {
+    return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/instagram-webhook`;
+  };
+
   const copyMetaWebhookUrl = () => {
     navigator.clipboard.writeText(getMetaWebhookUrl());
+    setCopiedWebhook(true);
+    toast.success('URL do Webhook copiada!');
+    setTimeout(() => setCopiedWebhook(false), 2000);
+  };
+
+  const copyInstagramWebhookUrl = () => {
+    navigator.clipboard.writeText(getInstagramWebhookUrl());
     setCopiedWebhook(true);
     toast.success('URL do Webhook copiada!');
     setTimeout(() => setCopiedWebhook(false), 2000);
@@ -872,10 +883,10 @@ export default function Conexao() {
                               <label className="text-xs text-muted-foreground">URL do Webhook</label>
                               <div className="flex items-center gap-2 mt-1">
                                 <code className="flex-1 text-xs bg-background p-2 rounded truncate">
-                                  {getMetaWebhookUrl()}
+                                  {getInstagramWebhookUrl()}
                                 </code>
                                 <button
-                                  onClick={copyMetaWebhookUrl}
+                                  onClick={copyInstagramWebhookUrl}
                                   className="p-2 rounded bg-background hover:bg-muted transition-colors"
                                 >
                                   {copiedWebhook ? <CheckCircle2 className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
