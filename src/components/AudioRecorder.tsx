@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { Mic, Square, Send, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { convertWebmToMp3 } from '@/lib/audioConverter';
 
 interface AudioRecorderProps {
-  onSend: (audioBase64: string, duration: number) => Promise<void>;
+  onSend: (audioBase64: string, duration: number, mimeType?: string) => Promise<void>;
   disabled?: boolean;
 }
 
@@ -113,16 +114,21 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
     
     setIsSending(true);
     try {
+      // Converter webm para MP3 (compatível com Meta WhatsApp API)
+      console.log('Convertendo áudio webm para MP3...');
+      const mp3Blob = await convertWebmToMp3(audioBlob);
+      console.log('Conversão concluída:', { originalSize: audioBlob.size, mp3Size: mp3Blob.size });
+      
       // Converter blob para base64
       const reader = new FileReader();
-      reader.readAsDataURL(audioBlob);
+      reader.readAsDataURL(mp3Blob);
       
       reader.onloadend = async () => {
         const base64 = reader.result as string;
-        // Remover o prefixo "data:audio/webm;base64,"
+        // Remover o prefixo "data:audio/mpeg;base64,"
         const base64Data = base64.split(',')[1];
         
-        await onSend(base64Data, duration);
+        await onSend(base64Data, duration, 'audio/mpeg');
         
         setAudioBlob(null);
         setDuration(0);
