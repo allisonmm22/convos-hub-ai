@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Plus, DollarSign, User, MoreVertical, GripVertical, Loader2, Settings, Calendar, Percent } from 'lucide-react';
+import { Plus, DollarSign, User, MoreVertical, GripVertical, Loader2, Settings, Calendar, Percent, Bell, BellOff } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
@@ -32,6 +32,7 @@ interface Estagio {
   cor: string;
   ordem: number;
   funil_id?: string;
+  followup_ativo?: boolean;
 }
 
 interface Negociacao {
@@ -449,6 +450,16 @@ export default function CRM() {
                     <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                       {getNegociacoesPorEstagio(estagio.id).length}
                     </span>
+                    {/* Indicador Follow-up */}
+                    {estagio.followup_ativo === false ? (
+                      <span title="Follow-up desativado nesta etapa" className="text-muted-foreground/50">
+                        <BellOff className="h-4 w-4" />
+                      </span>
+                    ) : (
+                      <span title="Follow-up ativo nesta etapa" className="text-primary/70">
+                        <Bell className="h-4 w-4" />
+                      </span>
+                    )}
                   </div>
                   <button className="p-1 rounded hover:bg-muted transition-colors">
                     <MoreVertical className="h-4 w-4 text-muted-foreground" />
