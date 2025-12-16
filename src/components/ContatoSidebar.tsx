@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   X, Phone, Edit2, Save, Briefcase, Mail, Tag, Plus, 
   History, ChevronDown, ChevronUp, Check, MessageSquare,
-  TrendingUp, Trophy, XCircle, Clock, ArrowRight, Eye
+  TrendingUp, Trophy, XCircle, Clock, ArrowRight, Eye, Megaphone
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -41,6 +41,19 @@ interface Contato {
   tags?: string[] | null;
   is_grupo?: boolean | null;
   grupo_jid?: string | null;
+  metadata?: {
+    origem_anuncio?: {
+      ad_id?: string;
+      ad_title?: string;
+      ad_body?: string;
+      ad_source?: string;
+      ad_url?: string;
+      ad_image?: string;
+      media_type?: string;
+      ctwa_clid?: string;
+      captured_at?: string;
+    };
+  } | null;
 }
 
 interface Estagio {
@@ -717,6 +730,42 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
               )}
             </div>
           </div>
+
+          {/* Card de Origem do Anúncio */}
+          {contato.metadata?.origem_anuncio && (
+            <div className="bg-purple-500/10 border border-purple-500/20 rounded-2xl p-4 mt-4">
+              <div className="flex items-center gap-2 text-purple-400 text-sm font-semibold mb-3">
+                <Megaphone className="h-4 w-4" />
+                Origem: Anúncio Meta
+              </div>
+              <div className="space-y-2 text-xs">
+                {contato.metadata.origem_anuncio.ad_title && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-muted-foreground shrink-0">Anúncio:</span>
+                    <span className="text-foreground font-medium">{contato.metadata.origem_anuncio.ad_title}</span>
+                  </div>
+                )}
+                {contato.metadata.origem_anuncio.ad_body && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-muted-foreground shrink-0">Descrição:</span>
+                    <span className="text-foreground">{contato.metadata.origem_anuncio.ad_body}</span>
+                  </div>
+                )}
+                {contato.metadata.origem_anuncio.ad_id && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-muted-foreground shrink-0">ID:</span>
+                    <span className="text-foreground font-mono text-[10px] bg-muted/50 px-1.5 py-0.5 rounded">{contato.metadata.origem_anuncio.ad_id}</span>
+                  </div>
+                )}
+                {contato.metadata.origem_anuncio.captured_at && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-muted-foreground shrink-0">Data:</span>
+                    <span className="text-foreground">{format(new Date(contato.metadata.origem_anuncio.captured_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Seção de Negociações */}
           <div className="mt-4 space-y-4">
