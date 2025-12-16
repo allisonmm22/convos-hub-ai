@@ -948,52 +948,6 @@ export default function Conexao() {
                 </div>
               )}
 
-              {/* Campos Instagram */}
-              {tipoProvedor === 'instagram' && (
-                <div className="space-y-4 pt-2 border-t border-border">
-                  <div className="flex items-center gap-2 text-sm text-pink-400">
-                    <Info className="h-4 w-4" />
-                    <span>Configure as credenciais do Instagram Business</span>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Instagram Page ID *
-                    </label>
-                    <input
-                      type="text"
-                      value={instagramPageId}
-                      onChange={(e) => setInstagramPageId(e.target.value)}
-                      placeholder="Ex: 123456789012345"
-                      className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Access Token *
-                    </label>
-                    <input
-                      type="password"
-                      value={instagramAccessToken}
-                      onChange={(e) => setInstagramAccessToken(e.target.value)}
-                      placeholder="Token de acesso do Instagram"
-                      className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-
-                  <a 
-                    href="https://developers.facebook.com/docs/instagram-api/getting-started"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-pink-400 hover:text-pink-300"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Guia de configuração Instagram API
-                  </a>
-                </div>
-              )}
-
         {/* Modal de Nova Conexão */}
         <Dialog open={showNovaConexao} onOpenChange={setShowNovaConexao}>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -1110,6 +1064,52 @@ export default function Conexao() {
                   >
                     <ExternalLink className="h-4 w-4" />
                     Guia de configuração Meta API
+                  </a>
+                </div>
+              )}
+
+              {/* Campos Instagram */}
+              {tipoProvedor === 'instagram' && (
+                <div className="space-y-4 pt-2 border-t border-border">
+                  <div className="flex items-center gap-2 text-sm text-pink-400">
+                    <Info className="h-4 w-4" />
+                    <span>Configure as credenciais do Instagram Business</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Instagram Page ID *
+                    </label>
+                    <input
+                      type="text"
+                      value={instagramPageId}
+                      onChange={(e) => setInstagramPageId(e.target.value)}
+                      placeholder="Ex: 123456789012345"
+                      className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Access Token *
+                    </label>
+                    <input
+                      type="password"
+                      value={instagramAccessToken}
+                      onChange={(e) => setInstagramAccessToken(e.target.value)}
+                      placeholder="Token de acesso do Instagram"
+                      className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+
+                  <a 
+                    href="https://developers.facebook.com/docs/instagram-api/getting-started"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-pink-400 hover:text-pink-300"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Guia de configuração Instagram API
                   </a>
                 </div>
               )}
