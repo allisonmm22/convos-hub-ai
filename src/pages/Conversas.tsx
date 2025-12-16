@@ -232,6 +232,7 @@ export default function Conversas() {
   const [uploading, setUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
   const [fileType, setFileType] = useState<'imagem' | 'documento' | 'audio'>('imagem');
   const [imagemExpandida, setImagemExpandida] = useState<string | null>(null);
   const [showContatoSidebar, setShowContatoSidebar] = useState(false);
@@ -361,8 +362,11 @@ export default function Conversas() {
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
-    const handleClickOutside = () => {
-      setShowAttachMenu(false);
+    const handleClickOutside = (event: MouseEvent) => {
+      // Só fecha se o clique foi FORA do menu de anexos
+      if (attachMenuRef.current && !attachMenuRef.current.contains(event.target as Node)) {
+        setShowAttachMenu(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -2173,7 +2177,7 @@ export default function Conversas() {
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
-                  <div className="relative">
+                  <div className="relative" ref={attachMenuRef}>
                     <button 
                       onClick={() => setShowAttachMenu(!showAttachMenu)}
                       className="p-2.5 rounded-xl hover:bg-muted transition-all duration-200"
