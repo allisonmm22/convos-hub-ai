@@ -8,6 +8,77 @@ const corsHeaders = {
 
 const META_API_URL = 'https://graph.facebook.com/v18.0';
 
+// Função para fazer upload de mídia para Meta
+async function uploadMediaToMeta(
+  mediaUrl: string, 
+  accessToken: string, 
+  phoneNumberId: string,
+  tipo: string
+): Promise<string | null> {
+  try {
+    console.log('Fazendo download da mídia:', mediaUrl);
+    
+    // Baixar a mídia
+    const mediaResponse = await fetch(mediaUrl);
+    if (!mediaResponse.ok) {
+      console.error('Erro ao baixar mídia:', mediaResponse.status);
+      return null;
+    }
+    
+    const mediaBlob = await mediaResponse.blob();
+    console.log('Mídia baixada, tamanho:', mediaBlob.size, 'tipo:', mediaBlob.type);
+    
+    // Determinar o tipo MIME correto para Meta API
+    let mimeType = mediaBlob.type;
+    
+    // Ajustar tipo MIME para formatos suportados
+    if (tipo === 'audio') {
+      // Meta API aceita: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
+      if (mimeType === 'audio/webm' || mimeType === 'audio/webm;codecs=opus') {
+        // webm não é suportado diretamente, mas podemos tentar como ogg
+        mimeType = 'audio/ogg';
+      }
+    } else if (tipo === 'imagem') {
+      // Meta API aceita: image/jpeg, image/png
+      if (!['image/jpeg', 'image/png'].includes(mimeType)) {
+        mimeType = 'image/jpeg';
+      }
+    }
+    
+    // Criar FormData para upload
+    const formData = new FormData();
+    formData.append('messaging_product', 'whatsapp');
+    formData.append('file', mediaBlob, `media.${tipo === 'audio' ? 'ogg' : 'jpg'}`);
+    formData.append('type', mimeType);
+    
+    console.log('Fazendo upload para Meta API com tipo:', mimeType);
+    
+    const uploadResponse = await fetch(
+      `${META_API_URL}/${phoneNumberId}/media`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: formData,
+      }
+    );
+    
+    const uploadResult = await uploadResponse.json();
+    console.log('Resultado do upload:', JSON.stringify(uploadResult, null, 2));
+    
+    if (!uploadResponse.ok) {
+      console.error('Erro no upload para Meta:', uploadResult);
+      return null;
+    }
+    
+    return uploadResult.id;
+  } catch (error) {
+    console.error('Erro ao fazer upload de mídia:', error);
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -20,6 +91,7 @@ serve(async (req) => {
     console.log('Conexão:', conexao_id);
     console.log('Telefone:', telefone);
     console.log('Tipo:', tipo);
+    console.log('Media URL:', media_url);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -83,7 +155,31 @@ serve(async (req) => {
         },
       };
     } else {
-      // Mensagem normal
+      // Mensagem normal - para mídia, fazer upload primeiro
+      let mediaId: string | null = null;
+      
+      if (media_url && (tipo === 'imagem' || tipo === 'audio' || tipo === 'documento')) {
+        console.log('Tipo de mídia detectado, fazendo upload para Meta...');
+        mediaId = await uploadMediaToMeta(
+          media_url, 
+          conexao.meta_access_token, 
+          conexao.meta_phone_number_id,
+          tipo
+        );
+        
+        if (!mediaId) {
+          console.error('Falha no upload da mídia para Meta');
+          return new Response(JSON.stringify({ 
+            error: 'Falha ao fazer upload da mídia para WhatsApp', 
+            details: 'O formato de áudio webm não é suportado pela API oficial do WhatsApp. Tente enviar uma mensagem de texto.' 
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        console.log('Media ID obtido:', mediaId);
+      }
+      
       switch (tipo) {
         case 'imagem':
           body = {
@@ -91,21 +187,27 @@ serve(async (req) => {
             recipient_type: 'individual',
             to: formattedNumber,
             type: 'image',
-            image: {
-              link: media_url,
-              caption: mensagem || undefined,
-            },
+            image: mediaId 
+              ? { id: mediaId, caption: mensagem || undefined }
+              : { link: media_url, caption: mensagem || undefined },
           };
           break;
         case 'audio':
+          if (!mediaId) {
+            return new Response(JSON.stringify({ 
+              error: 'Áudio requer upload para Meta API', 
+              details: 'O formato de áudio não é suportado diretamente' 
+            }), {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
           body = {
             messaging_product: 'whatsapp',
             recipient_type: 'individual',
             to: formattedNumber,
             type: 'audio',
-            audio: {
-              link: media_url,
-            },
+            audio: { id: mediaId },
           };
           break;
         case 'documento':
@@ -114,10 +216,9 @@ serve(async (req) => {
             recipient_type: 'individual',
             to: formattedNumber,
             type: 'document',
-            document: {
-              link: media_url,
-              filename: mensagem || 'documento',
-            },
+            document: mediaId 
+              ? { id: mediaId, filename: mensagem || 'documento' }
+              : { link: media_url, filename: mensagem || 'documento' },
           };
           break;
         default:
