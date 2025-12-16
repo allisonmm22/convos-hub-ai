@@ -362,10 +362,14 @@ serve(async (req) => {
       return await enviarViaMeta(conexao, telefone, mensagem, tipo, media_url, supabase);
     }
 
-    if (conexao.tipo_provedor === 'instagram') {
-      // Para Instagram, o "telefone" é o Instagram Scoped User ID (IGSID)
+    // Instagram via Meta API direta (somente se tiver credenciais Meta configuradas)
+    if (conexao.tipo_provedor === 'instagram' && conexao.meta_phone_number_id && conexao.meta_access_token) {
+      // Para Instagram via Meta API, o "telefone" é o Instagram Scoped User ID (IGSID)
       return await enviarViaInstagram(conexao, telefone, mensagem, tipo, media_url, supabase);
     }
+    
+    // Instagram via Evolution API (quando não tem credenciais Meta, usa Evolution como provedor)
+    // Continua para o código Evolution abaixo...
 
     // ===== CÓDIGO EVOLUTION (100% ORIGINAL ABAIXO) =====
     const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
@@ -378,7 +382,12 @@ serve(async (req) => {
     }
 
     // Formatar número (remover caracteres especiais) ou usar grupo_jid diretamente
-    const formattedNumber = grupo_jid || telefone.replace(/\D/g, '');
+    // Para Instagram via Evolution, preservar o formato ig_XXXXX do IGSID
+    const formattedNumber = grupo_jid || (
+      conexao.tipo_provedor === 'instagram' 
+        ? telefone // Preservar IGSID completo para Instagram
+        : telefone.replace(/\D/g, '') // Limpar para WhatsApp
+    );
 
     let evolutionUrl: string;
     let body: Record<string, unknown>;
