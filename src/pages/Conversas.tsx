@@ -1186,7 +1186,7 @@ export default function Conversas() {
             msg.direcao === 'saida' ? 'justify-end' : 'justify-start'
           )}
         >
-          <div className="relative">
+          <div className="relative max-w-[70%]">
             {/* Menu de opções - aparece no hover apenas para mensagens de saída */}
             {msg.direcao === 'saida' && (
               <div className="absolute top-0 -left-8 opacity-0 group-hover:opacity-100 transition-opacity z-10">
@@ -1211,7 +1211,7 @@ export default function Conversas() {
 
             <div
               className={cn(
-                'min-w-[120px] max-w-[70%] rounded-2xl px-4 py-2.5 message-bubble',
+                'min-w-[120px] rounded-2xl px-4 py-2.5 message-bubble',
                 msg.direcao === 'saida'
                   ? 'message-bubble-sent text-primary-foreground rounded-br-md'
                   : 'message-bubble-received text-foreground rounded-bl-md'
