@@ -332,10 +332,15 @@ export type Database = {
           created_at: string
           id: string
           instance_name: string
+          meta_access_token: string | null
+          meta_business_account_id: string | null
+          meta_phone_number_id: string | null
+          meta_webhook_verify_token: string | null
           nome: string
           numero: string | null
           qrcode: string | null
           status: Database["public"]["Enums"]["status_conexao"] | null
+          tipo_provedor: string | null
           token: string
           updated_at: string
           webhook_url: string | null
@@ -345,10 +350,15 @@ export type Database = {
           created_at?: string
           id?: string
           instance_name: string
+          meta_access_token?: string | null
+          meta_business_account_id?: string | null
+          meta_phone_number_id?: string | null
+          meta_webhook_verify_token?: string | null
           nome?: string
           numero?: string | null
           qrcode?: string | null
           status?: Database["public"]["Enums"]["status_conexao"] | null
+          tipo_provedor?: string | null
           token: string
           updated_at?: string
           webhook_url?: string | null
@@ -358,10 +368,15 @@ export type Database = {
           created_at?: string
           id?: string
           instance_name?: string
+          meta_access_token?: string | null
+          meta_business_account_id?: string | null
+          meta_phone_number_id?: string | null
+          meta_webhook_verify_token?: string | null
           nome?: string
           numero?: string | null
           qrcode?: string | null
           status?: Database["public"]["Enums"]["status_conexao"] | null
+          tipo_provedor?: string | null
           token?: string
           updated_at?: string
           webhook_url?: string | null

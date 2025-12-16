@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Plug, PlugZap, RefreshCw, Check, Loader2, QrCode, Power, Plus, Smartphone, Trash2 } from 'lucide-react';
+import { Plug, PlugZap, RefreshCw, Check, Loader2, QrCode, Power, Plus, Smartphone, Trash2, Globe, Zap, Info, ExternalLink, Copy, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { validarEExibirErro } from '@/hooks/useValidarLimitePlano';
 import { useIsMobile } from '@/hooks/use-mobile';
+
+type TipoProvedor = 'evolution' | 'meta';
 
 interface Conexao {
   id: string;
@@ -16,6 +18,11 @@ interface Conexao {
   status: 'conectado' | 'desconectado' | 'aguardando';
   qrcode: string | null;
   numero: string | null;
+  tipo_provedor: TipoProvedor;
+  meta_phone_number_id: string | null;
+  meta_business_account_id: string | null;
+  meta_access_token: string | null;
+  meta_webhook_verify_token: string | null;
 }
 
 export default function Conexao() {
@@ -32,6 +39,15 @@ export default function Conexao() {
   const [reconfiguringWebhook, setReconfiguringWebhook] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  
+  // Novos estados para Meta API
+  const [tipoProvedor, setTipoProvedor] = useState<TipoProvedor>('evolution');
+  const [metaPhoneNumberId, setMetaPhoneNumberId] = useState('');
+  const [metaBusinessAccountId, setMetaBusinessAccountId] = useState('');
+  const [metaAccessToken, setMetaAccessToken] = useState('');
+  const [metaWebhookVerifyToken, setMetaWebhookVerifyToken] = useState('');
+  const [savingMeta, setSavingMeta] = useState(false);
+  const [copiedWebhook, setCopiedWebhook] = useState(false);
 
   const fetchConexao = useCallback(async () => {
     if (!usuario?.conta_id) return;
@@ -46,12 +62,19 @@ export default function Conexao() {
       if (error) throw error;
 
       if (data) {
-        setConexao(data);
-        // Só mostra QR code se NÃO estiver conectado
-        if (data.qrcode && data.status !== 'conectado') {
+        setConexao(data as Conexao);
+        // Só mostra QR code se NÃO estiver conectado e for Evolution
+        if (data.qrcode && data.status !== 'conectado' && data.tipo_provedor !== 'meta') {
           setQrCode(data.qrcode);
         } else {
           setQrCode(null);
+        }
+        // Se existir conexão Meta, preencher campos
+        if (data.tipo_provedor === 'meta') {
+          setMetaPhoneNumberId(data.meta_phone_number_id || '');
+          setMetaBusinessAccountId(data.meta_business_account_id || '');
+          setMetaAccessToken(data.meta_access_token || '');
+          setMetaWebhookVerifyToken(data.meta_webhook_verify_token || '');
         }
       }
     } catch (error) {
@@ -65,15 +88,15 @@ export default function Conexao() {
     fetchConexao();
   }, [fetchConexao]);
 
-  // Auto-refresh status when aguardando
+  // Auto-refresh status when aguardando (apenas para Evolution)
   useEffect(() => {
-    if (conexao?.status === 'aguardando') {
+    if (conexao?.status === 'aguardando' && conexao?.tipo_provedor !== 'meta') {
       const interval = setInterval(() => {
         handleCheckStatus(true);
       }, 5000);
       return () => clearInterval(interval);
     }
-  }, [conexao?.status]);
+  }, [conexao?.status, conexao?.tipo_provedor]);
 
   const handleCreateInstance = async () => {
     if (!instanceName.trim()) {
@@ -113,6 +136,102 @@ export default function Conexao() {
     } finally {
       setCreating(false);
     }
+  };
+
+  // Criar conexão Meta API
+  const handleCreateMetaConnection = async () => {
+    if (!instanceName.trim()) {
+      toast.error('Digite o nome da conexão');
+      return;
+    }
+
+    if (!metaPhoneNumberId.trim() || !metaAccessToken.trim()) {
+      toast.error('Preencha Phone Number ID e Access Token');
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const permitido = await validarEExibirErro(usuario!.conta_id, 'conexoes');
+      if (!permitido) {
+        setCreating(false);
+        return;
+      }
+
+      // Gerar instance_name único para Meta
+      const instanceKey = `meta_${usuario!.conta_id.slice(0, 8)}_${Date.now().toString(36)}`;
+      const verifyToken = `verify_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+
+      const { error } = await supabase
+        .from('conexoes_whatsapp')
+        .insert({
+          nome: instanceName.trim(),
+          instance_name: instanceKey,
+          token: 'meta-api',
+          conta_id: usuario!.conta_id,
+          tipo_provedor: 'meta',
+          status: 'conectado', // Meta API não usa QR Code
+          meta_phone_number_id: metaPhoneNumberId.trim(),
+          meta_business_account_id: metaBusinessAccountId.trim() || null,
+          meta_access_token: metaAccessToken.trim(),
+          meta_webhook_verify_token: verifyToken,
+        });
+
+      if (error) throw error;
+
+      toast.success('Conexão Meta API criada com sucesso!');
+      setInstanceName('');
+      setMetaPhoneNumberId('');
+      setMetaBusinessAccountId('');
+      setMetaAccessToken('');
+      await fetchConexao();
+    } catch (error) {
+      console.error('Erro ao criar conexão Meta:', error);
+      toast.error('Erro ao criar conexão Meta API');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Salvar/Atualizar credenciais Meta
+  const handleSaveMetaCredentials = async () => {
+    if (!conexao) return;
+
+    if (!metaPhoneNumberId.trim() || !metaAccessToken.trim()) {
+      toast.error('Preencha Phone Number ID e Access Token');
+      return;
+    }
+
+    setSavingMeta(true);
+    try {
+      const { error } = await supabase
+        .from('conexoes_whatsapp')
+        .update({
+          meta_phone_number_id: metaPhoneNumberId.trim(),
+          meta_business_account_id: metaBusinessAccountId.trim() || null,
+          meta_access_token: metaAccessToken.trim(),
+          status: 'conectado',
+        })
+        .eq('id', conexao.id);
+
+      if (error) throw error;
+
+      toast.success('Credenciais atualizadas com sucesso!');
+      await fetchConexao();
+    } catch (error) {
+      console.error('Erro ao salvar credenciais:', error);
+      toast.error('Erro ao salvar credenciais');
+    } finally {
+      setSavingMeta(false);
+    }
+  };
+
+  const copyWebhookUrl = () => {
+    const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`;
+    navigator.clipboard.writeText(webhookUrl);
+    setCopiedWebhook(true);
+    toast.success('URL copiada!');
+    setTimeout(() => setCopiedWebhook(false), 2000);
   };
 
   const handleConnect = async () => {
@@ -326,7 +445,15 @@ export default function Conexao() {
               <p className="text-xs md:text-sm text-muted-foreground">Status da Conexão</p>
               <p className={`text-lg md:text-xl font-semibold ${getStatusColor()}`}>{getStatusText()}</p>
               {conexao?.nome && (
-                <p className="text-sm text-muted-foreground truncate">{conexao.nome}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-muted-foreground truncate">{conexao.nome}</p>
+                  {conexao.tipo_provedor === 'meta' && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">Meta API</span>
+                  )}
+                  {conexao.tipo_provedor === 'evolution' && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">Evolution</span>
+                  )}
+                </div>
               )}
               {conexao?.numero && (
                 <p className="text-sm text-muted-foreground flex items-center gap-1">
@@ -343,12 +470,66 @@ export default function Conexao() {
 
         {/* Criar Instância - Se não existe */}
         {!conexao && (
-          <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-4">
-            <h2 className="text-lg font-semibold text-foreground">Criar Nova Instância</h2>
-            <p className="text-sm text-muted-foreground">
-              Crie uma instância do WhatsApp para começar a receber e enviar mensagens.
-            </p>
+          <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Criar Nova Conexão</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Escolha o tipo de conexão e configure sua integração com WhatsApp.
+              </p>
+            </div>
 
+            {/* Seletor de Tipo de Provedor */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button
+                onClick={() => setTipoProvedor('evolution')}
+                className={`p-4 rounded-xl border-2 text-left transition-all ${
+                  tipoProvedor === 'evolution'
+                    ? 'border-emerald-500 bg-emerald-500/10'
+                    : 'border-border hover:border-muted-foreground/50'
+                }`}
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                    <Zap className="h-5 w-5 text-emerald-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">Evolution API</h3>
+                    <p className="text-xs text-muted-foreground">Via QR Code</p>
+                  </div>
+                </div>
+                <ul className="text-xs text-muted-foreground space-y-1 ml-13">
+                  <li className="flex items-center gap-1"><Check className="h-3 w-3 text-emerald-500" /> Gratuito</li>
+                  <li className="flex items-center gap-1"><Check className="h-3 w-3 text-emerald-500" /> Conexão rápida</li>
+                  <li className="flex items-center gap-1"><Info className="h-3 w-3 text-amber-500" /> Não-oficial</li>
+                </ul>
+              </button>
+
+              <button
+                onClick={() => setTipoProvedor('meta')}
+                className={`p-4 rounded-xl border-2 text-left transition-all ${
+                  tipoProvedor === 'meta'
+                    ? 'border-blue-500 bg-blue-500/10'
+                    : 'border-border hover:border-muted-foreground/50'
+                }`}
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                    <Globe className="h-5 w-5 text-blue-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">Meta Business API</h3>
+                    <p className="text-xs text-muted-foreground">Oficial</p>
+                  </div>
+                </div>
+                <ul className="text-xs text-muted-foreground space-y-1 ml-13">
+                  <li className="flex items-center gap-1"><Check className="h-3 w-3 text-blue-500" /> API Oficial</li>
+                  <li className="flex items-center gap-1"><Check className="h-3 w-3 text-blue-500" /> Zero risco de ban</li>
+                  <li className="flex items-center gap-1"><Info className="h-3 w-3 text-amber-500" /> Pago por mensagem</li>
+                </ul>
+              </button>
+            </div>
+
+            {/* Nome da Conexão (comum para ambos) */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
                 Nome da Conexão
@@ -360,25 +541,107 @@ export default function Conexao() {
                 placeholder="Ex: WhatsApp Vendas"
                 className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                Nome para identificar esta conexão.
-              </p>
             </div>
 
-            <button
-              onClick={handleCreateInstance}
-              disabled={creating || !instanceName.trim()}
-              className="w-full h-11 rounded-lg bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              {creating ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <>
-                  <Plus className="h-5 w-5" />
-                  Criar Instância
-                </>
-              )}
-            </button>
+            {/* Campos específicos para Meta API */}
+            {tipoProvedor === 'meta' && (
+              <div className="space-y-4 pt-2 border-t border-border">
+                <div className="flex items-center gap-2 text-sm text-blue-400">
+                  <Info className="h-4 w-4" />
+                  <span>Configure as credenciais do Meta Business</span>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Phone Number ID *
+                  </label>
+                  <input
+                    type="text"
+                    value={metaPhoneNumberId}
+                    onChange={(e) => setMetaPhoneNumberId(e.target.value)}
+                    placeholder="Ex: 123456789012345"
+                    className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Encontre no Facebook Developer {'>'} WhatsApp {'>'} API Setup
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Business Account ID
+                  </label>
+                  <input
+                    type="text"
+                    value={metaBusinessAccountId}
+                    onChange={(e) => setMetaBusinessAccountId(e.target.value)}
+                    placeholder="Ex: 123456789012345"
+                    className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Opcional - necessário para buscar templates
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Access Token *
+                  </label>
+                  <input
+                    type="password"
+                    value={metaAccessToken}
+                    onChange={(e) => setMetaAccessToken(e.target.value)}
+                    placeholder="Token de acesso permanente"
+                    className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Gere um token permanente no Facebook Developer
+                  </p>
+                </div>
+
+                <a 
+                  href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Guia de configuração Meta API
+                </a>
+              </div>
+            )}
+
+            {/* Botão de Criar */}
+            {tipoProvedor === 'evolution' ? (
+              <button
+                onClick={handleCreateInstance}
+                disabled={creating || !instanceName.trim()}
+                className="w-full h-11 rounded-lg bg-emerald-600 text-white font-medium flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors disabled:opacity-50"
+              >
+                {creating ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <Zap className="h-5 w-5" />
+                    Criar Instância Evolution
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={handleCreateMetaConnection}
+                disabled={creating || !instanceName.trim() || !metaPhoneNumberId.trim() || !metaAccessToken.trim()}
+                className="w-full h-11 rounded-lg bg-blue-600 text-white font-medium flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {creating ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <Globe className="h-5 w-5" />
+                    Criar Conexão Meta API
+                  </>
+                )}
+              </button>
           </div>
         )}
 
