@@ -925,6 +925,22 @@ serve(async (req) => {
         console.log('Conversa criada:', conversa?.id);
       }
 
+      // VERIFICAR SE MENSAGEM JÁ FOI PROCESSADA (tabela independente)
+      // Isso previne reprocessamento mesmo após exclusão de contato/conversa
+      if (messageId) {
+        const { data: jaProcessada } = await supabase
+          .from('mensagens_processadas')
+          .select('id')
+          .eq('evolution_msg_id', messageId)
+          .eq('conta_id', conexao.conta_id)
+          .maybeSingle();
+
+        if (jaProcessada) {
+          console.log('Mensagem já foi processada anteriormente:', messageId);
+          return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+        }
+      }
+
       // Verificar se mensagem já existe (evitar duplicação com polling)
       if (messageId) {
         const { data: existingMsg } = await supabase
@@ -979,6 +995,15 @@ serve(async (req) => {
       }
 
       console.log('Mensagem inserida com sucesso');
+
+      // REGISTRAR MENSAGEM COMO PROCESSADA (previne reprocessamento após exclusão)
+      if (messageId) {
+        await supabase.from('mensagens_processadas').upsert({
+          evolution_msg_id: messageId,
+          conta_id: conexao.conta_id,
+          telefone,
+        }, { onConflict: 'evolution_msg_id,conta_id', ignoreDuplicates: true });
+      }
 
       // Verificar se conversa estava encerrada e está sendo reaberta pelo lead
       const conversaEstaReabrindo = conversa?.status === 'encerrado' && !fromMe && !isGrupo;

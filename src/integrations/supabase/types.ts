@@ -1035,6 +1035,38 @@ export type Database = {
           },
         ]
       }
+      mensagens_processadas: {
+        Row: {
+          conta_id: string
+          created_at: string | null
+          evolution_msg_id: string
+          id: string
+          telefone: string
+        }
+        Insert: {
+          conta_id: string
+          created_at?: string | null
+          evolution_msg_id: string
+          id?: string
+          telefone: string
+        }
+        Update: {
+          conta_id?: string
+          created_at?: string | null
+          evolution_msg_id?: string
+          id?: string
+          telefone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mensagens_processadas_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       negociacao_historico: {
         Row: {
           created_at: string
