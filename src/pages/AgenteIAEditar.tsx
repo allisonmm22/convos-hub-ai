@@ -32,6 +32,7 @@ interface AgentConfig {
   fracionar_mensagens: boolean;
   tamanho_max_fracao: number;
   delay_entre_fracoes: number;
+  simular_digitacao: boolean;
 }
 
 type Tab = 'regras' | 'etapas' | 'perguntas' | 'horario' | 'configuracao';
@@ -127,6 +128,7 @@ export default function AgenteIAEditar() {
           fracionar_mensagens: data.fracionar_mensagens ?? false,
           tamanho_max_fracao: data.tamanho_max_fracao ?? 500,
           delay_entre_fracoes: data.delay_entre_fracoes ?? 2,
+          simular_digitacao: data.simular_digitacao ?? false,
         });
         setTempName(data.nome || '');
         
@@ -172,6 +174,7 @@ export default function AgenteIAEditar() {
           fracionar_mensagens: config.fracionar_mensagens,
           tamanho_max_fracao: config.tamanho_max_fracao,
           delay_entre_fracoes: config.delay_entre_fracoes,
+          simular_digitacao: config.simular_digitacao,
         })
         .eq('id', config.id);
 
@@ -1480,6 +1483,28 @@ function ConfiguracaoAPITab({
               </p>
             </>
           )}
+
+          {/* Toggle Simular Digitação */}
+          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+            <div>
+              <span className="font-medium text-foreground">Simular digitação</span>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Exibe indicador "digitando..." antes de enviar cada mensagem
+              </p>
+            </div>
+            <button
+              onClick={() => setConfig({ ...config, simular_digitacao: !config.simular_digitacao })}
+              className={`relative h-6 w-11 rounded-full transition-colors ${
+                config.simular_digitacao ? 'bg-primary' : 'bg-muted-foreground/30'
+              }`}
+            >
+              <span 
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                  config.simular_digitacao ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </div>
 
