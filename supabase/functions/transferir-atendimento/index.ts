@@ -40,7 +40,8 @@ serve(async (req) => {
       para_usuario_id, 
       para_agente_ia_id,
       para_ia,
-      conta_id 
+      conta_id,
+      para_estagio_id 
     } = await req.json();
 
     console.log('=== TRANSFERIR ATENDIMENTO ===');
@@ -49,6 +50,7 @@ serve(async (req) => {
     console.log('Para Usuario ID:', para_usuario_id);
     console.log('Para Agente IA ID:', para_agente_ia_id);
     console.log('Para IA:', para_ia);
+    console.log('Para Estagio ID:', para_estagio_id);
 
     // Buscar nomes para mensagem de sistema
     let deUsuarioNome: string | null = null;
@@ -112,7 +114,7 @@ serve(async (req) => {
       .update(updateData)
       .eq('id', conversa_id);
 
-    // 3. Registrar mensagem de sistema
+    // 3. Registrar mensagem de sistema de transferência
     const mensagemSistema = gerarMensagemSistema(para_ia || !!para_agente_ia_id, paraUsuarioNome, paraAgenteNome, deUsuarioNome);
     
     await supabase
@@ -134,7 +136,137 @@ serve(async (req) => {
 
     console.log('Mensagem de sistema registrada:', mensagemSistema);
 
-    // 4. Se transferiu para agente IA, disparar resposta automática
+    // 4. Se para_estagio_id foi fornecido, mover/criar negociação
+    if (para_estagio_id) {
+      console.log('Movendo lead para estágio:', para_estagio_id);
+
+      // Buscar contato_id da conversa
+      const { data: conversaData } = await supabase
+        .from('conversas')
+        .select('contato_id')
+        .eq('id', conversa_id)
+        .single();
+
+      if (conversaData?.contato_id) {
+        // Buscar nome do estágio para a mensagem de sistema
+        const { data: estagioData } = await supabase
+          .from('estagios')
+          .select('nome, funil_id, funis(nome)')
+          .eq('id', para_estagio_id)
+          .single();
+
+        const estagioNome = estagioData?.nome || 'Novo estágio';
+        const funilNome = (estagioData?.funis as any)?.nome || 'Funil';
+
+        // Verificar se existe negociação aberta para o contato
+        const { data: negociacaoExistente } = await supabase
+          .from('negociacoes')
+          .select('id, estagio_id, estagios(nome)')
+          .eq('contato_id', conversaData.contato_id)
+          .eq('status', 'aberto')
+          .limit(1)
+          .single();
+
+        if (negociacaoExistente) {
+          // Atualizar negociação existente
+          const estagioAnteriorNome = (negociacaoExistente.estagios as any)?.nome || 'Sem estágio';
+
+          await supabase
+            .from('negociacoes')
+            .update({ 
+              estagio_id: para_estagio_id,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', negociacaoExistente.id);
+
+          // Registrar no histórico
+          await supabase
+            .from('negociacao_historico')
+            .insert({
+              negociacao_id: negociacaoExistente.id,
+              estagio_anterior_id: negociacaoExistente.estagio_id,
+              estagio_novo_id: para_estagio_id,
+              usuario_id: de_usuario_id,
+              tipo: 'mudanca_estagio',
+              descricao: `Lead movido de "${estagioAnteriorNome}" para "${estagioNome}" durante transferência`,
+            });
+
+          // Mensagem de sistema sobre movimentação
+          await supabase
+            .from('mensagens')
+            .insert({
+              conversa_id,
+              conteudo: `📊 ${deUsuarioNome || 'Sistema'} moveu negociação de "${estagioAnteriorNome}" para "${estagioNome}"`,
+              direcao: 'saida',
+              tipo: 'sistema',
+              enviada_por_ia: false,
+              metadata: { 
+                interno: true, 
+                acao_tipo: 'mover_estagio',
+                estagio_anterior: estagioAnteriorNome,
+                estagio_novo: estagioNome,
+              }
+            });
+
+          console.log(`Negociação ${negociacaoExistente.id} movida para estágio ${estagioNome}`);
+        } else {
+          // Criar nova negociação
+          const { data: contato } = await supabase
+            .from('contatos')
+            .select('nome')
+            .eq('id', conversaData.contato_id)
+            .single();
+
+          const { data: novaNegociacao } = await supabase
+            .from('negociacoes')
+            .insert({
+              conta_id,
+              contato_id: conversaData.contato_id,
+              estagio_id: para_estagio_id,
+              titulo: contato?.nome || 'Nova Negociação',
+              status: 'aberto',
+              probabilidade: 50,
+              valor: 0,
+            })
+            .select('id')
+            .single();
+
+          if (novaNegociacao) {
+            // Registrar no histórico
+            await supabase
+              .from('negociacao_historico')
+              .insert({
+                negociacao_id: novaNegociacao.id,
+                estagio_novo_id: para_estagio_id,
+                usuario_id: de_usuario_id,
+                tipo: 'criacao',
+                descricao: `Negociação criada no estágio "${estagioNome}" durante transferência`,
+              });
+
+            // Mensagem de sistema sobre criação
+            await supabase
+              .from('mensagens')
+              .insert({
+                conversa_id,
+                conteudo: `📊 ${deUsuarioNome || 'Sistema'} criou negociação no funil "${funilNome}" - estágio "${estagioNome}"`,
+                direcao: 'saida',
+                tipo: 'sistema',
+                enviada_por_ia: false,
+                metadata: { 
+                  interno: true, 
+                  acao_tipo: 'criar_negociacao',
+                  funil: funilNome,
+                  estagio: estagioNome,
+                }
+              });
+
+            console.log(`Nova negociação criada: ${novaNegociacao.id}`);
+          }
+        }
+      }
+    }
+
+    // 5. Se transferiu para agente IA, disparar resposta automática
     if (para_ia || para_agente_ia_id) {
       console.log('Disparando resposta automática do agente IA...');
 
@@ -208,7 +340,7 @@ serve(async (req) => {
               .eq('id', conversa_id);
 
             // Enviar via Evolution API
-            const evolutionUrl = Deno.env.get('EVOLUTION_API_URL') || 'https://api.evolution.mendsolutions.com.br';
+            const evolutionUrl = 'https://evolution.cognityx.com.br';
             const sendResponse = await fetch(`${evolutionUrl}/message/sendText/${conexao.instance_name}`, {
               method: 'POST',
               headers: {
