@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Plug, PlugZap, RefreshCw, Check, Loader2, QrCode, Power, Plus, Smartphone, Trash2, Globe, Zap, Info, ExternalLink, Copy, CheckCircle2, Instagram } from 'lucide-react';
+import { Plug, PlugZap, RefreshCw, Check, Loader2, QrCode, Power, Plus, Smartphone, Trash2, Globe, Zap, Info, ExternalLink, Copy, CheckCircle2, Instagram, Settings, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOnboarding } from '@/contexts/OnboardingContext';
@@ -8,6 +8,12 @@ import { toast } from 'sonner';
 import { validarEExibirErro } from '@/hooks/useValidarLimitePlano';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { OnboardingTooltip } from '@/components/onboarding/OnboardingTooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 type TipoProvedor = 'evolution' | 'meta' | 'instagram';
 
@@ -32,7 +38,12 @@ export default function Conexao() {
   const { usuario } = useAuth();
   const isMobile = useIsMobile();
   const { isOnboardingActive, currentStep, completeStep, nextStep } = useOnboarding();
-  const [conexao, setConexao] = useState<Conexao | null>(null);
+  
+  // Múltiplas conexões
+  const [conexoes, setConexoes] = useState<Conexao[]>([]);
+  const [conexaoSelecionada, setConexaoSelecionada] = useState<Conexao | null>(null);
+  const [showNovaConexao, setShowNovaConexao] = useState(false);
+  
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -43,8 +54,9 @@ export default function Conexao() {
   const [reconfiguringWebhook, setReconfiguringWebhook] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [conexaoParaDeletar, setConexaoParaDeletar] = useState<Conexao | null>(null);
   
-  // Novos estados para Meta API
+  // Estados para Meta API
   const [tipoProvedor, setTipoProvedor] = useState<TipoProvedor>('evolution');
   const [metaPhoneNumberId, setMetaPhoneNumberId] = useState('');
   const [metaBusinessAccountId, setMetaBusinessAccountId] = useState('');
@@ -52,10 +64,11 @@ export default function Conexao() {
   const [metaWebhookVerifyToken, setMetaWebhookVerifyToken] = useState('');
   const [savingMeta, setSavingMeta] = useState(false);
   const [copiedWebhook, setCopiedWebhook] = useState(false);
+  const [copiedVerifyToken, setCopiedVerifyToken] = useState(false);
   const [creatingInstagram, setCreatingInstagram] = useState(false);
   const [connectingInstagram, setConnectingInstagram] = useState(false);
 
-  const fetchConexao = useCallback(async () => {
+  const fetchConexoes = useCallback(async () => {
     if (!usuario?.conta_id) return;
     
     try {
@@ -63,27 +76,16 @@ export default function Conexao() {
         .from('conexoes_whatsapp')
         .select('*')
         .eq('conta_id', usuario.conta_id)
-        .maybeSingle();
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
 
       if (data) {
-        setConexao(data as Conexao);
-        // Só mostra QR code se NÃO estiver conectado e for Evolution
-        if (data.qrcode && data.status !== 'conectado' && data.tipo_provedor !== 'meta') {
-          setQrCode(data.qrcode);
-        } else {
-          setQrCode(null);
-        }
-        // Se existir conexão Meta, preencher campos
-        if (data.tipo_provedor === 'meta') {
-          setMetaPhoneNumberId(data.meta_phone_number_id || '');
-          setMetaBusinessAccountId(data.meta_business_account_id || '');
-          setMetaAccessToken(data.meta_access_token || '');
-          setMetaWebhookVerifyToken(data.meta_webhook_verify_token || '');
-        }
+        setConexoes(data as Conexao[]);
+        
         // Detectar conexão para onboarding
-        if (data.status === 'conectado' && isOnboardingActive && 
+        const conectada = data.find(c => c.status === 'conectado');
+        if (conectada && isOnboardingActive && 
             (currentStep === 'configurar_conexao' || currentStep === 'aguardar_conexao')) {
           completeStep('configurar_conexao');
           completeStep('aguardar_conexao');
@@ -91,25 +93,34 @@ export default function Conexao() {
         }
       }
     } catch (error) {
-      console.error('Erro ao buscar conexão:', error);
+      console.error('Erro ao buscar conexões:', error);
     } finally {
       setLoading(false);
     }
-  }, [usuario?.conta_id]);
+  }, [usuario?.conta_id, isOnboardingActive, currentStep, completeStep, nextStep]);
 
   useEffect(() => {
-    fetchConexao();
-  }, [fetchConexao]);
+    fetchConexoes();
+  }, [fetchConexoes]);
 
-  // Auto-refresh status when aguardando (apenas para Evolution)
+  // Auto-refresh status quando aguardando (apenas para Evolution)
   useEffect(() => {
-    if (conexao?.status === 'aguardando' && conexao?.tipo_provedor !== 'meta') {
+    const aguardando = conexoes.find(c => c.status === 'aguardando' && c.tipo_provedor !== 'meta');
+    if (aguardando && conexaoSelecionada?.id === aguardando.id) {
       const interval = setInterval(() => {
-        handleCheckStatus(true);
+        handleCheckStatus(aguardando, true);
       }, 5000);
       return () => clearInterval(interval);
     }
-  }, [conexao?.status, conexao?.tipo_provedor]);
+  }, [conexoes, conexaoSelecionada]);
+
+  const resetFormulario = () => {
+    setInstanceName('');
+    setTipoProvedor('evolution');
+    setMetaPhoneNumberId('');
+    setMetaBusinessAccountId('');
+    setMetaAccessToken('');
+  };
 
   const handleCreateInstance = async () => {
     if (!instanceName.trim()) {
@@ -119,7 +130,6 @@ export default function Conexao() {
 
     setCreating(true);
     try {
-      // Validar limite do plano
       const permitido = await validarEExibirErro(usuario!.conta_id, 'conexoes');
       if (!permitido) {
         setCreating(false);
@@ -141,8 +151,9 @@ export default function Conexao() {
       }
 
       toast.success('Conexão criada com sucesso!');
-      setInstanceName('');
-      await fetchConexao();
+      resetFormulario();
+      setShowNovaConexao(false);
+      await fetchConexoes();
     } catch (error) {
       console.error('Erro ao criar conexão:', error);
       toast.error('Erro ao criar conexão');
@@ -151,7 +162,6 @@ export default function Conexao() {
     }
   };
 
-  // Criar conexão Meta API
   const handleCreateMetaConnection = async () => {
     if (!instanceName.trim()) {
       toast.error('Digite o nome da conexão');
@@ -171,7 +181,6 @@ export default function Conexao() {
         return;
       }
 
-      // Gerar instance_name único para Meta
       const instanceKey = `meta_${usuario!.conta_id.slice(0, 8)}_${Date.now().toString(36)}`;
       const verifyToken = `verify_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 
@@ -183,7 +192,7 @@ export default function Conexao() {
           token: 'meta-api',
           conta_id: usuario!.conta_id,
           tipo_provedor: 'meta',
-          status: 'conectado', // Meta API não usa QR Code
+          status: 'conectado',
           meta_phone_number_id: metaPhoneNumberId.trim(),
           meta_business_account_id: metaBusinessAccountId.trim() || null,
           meta_access_token: metaAccessToken.trim(),
@@ -193,11 +202,9 @@ export default function Conexao() {
       if (error) throw error;
 
       toast.success('Conexão Meta API criada com sucesso!');
-      setInstanceName('');
-      setMetaPhoneNumberId('');
-      setMetaBusinessAccountId('');
-      setMetaAccessToken('');
-      await fetchConexao();
+      resetFormulario();
+      setShowNovaConexao(false);
+      await fetchConexoes();
     } catch (error) {
       console.error('Erro ao criar conexão Meta:', error);
       toast.error('Erro ao criar conexão Meta API');
@@ -206,7 +213,6 @@ export default function Conexao() {
     }
   };
 
-  // Criar conexão Instagram via Evolution API
   const handleCreateInstagramConnection = async () => {
     if (!instanceName.trim()) {
       toast.error('Digite o nome da conexão');
@@ -236,10 +242,10 @@ export default function Conexao() {
       }
 
       toast.success('Conexão Instagram criada! Agora conecte sua conta.');
-      setInstanceName('');
-      await fetchConexao();
+      resetFormulario();
+      setShowNovaConexao(false);
+      await fetchConexoes();
 
-      // Se retornou URL de OAuth, abrir em nova janela
       if (data.oauth_url) {
         window.open(data.oauth_url, '_blank');
       }
@@ -251,10 +257,7 @@ export default function Conexao() {
     }
   };
 
-  // Conectar Instagram (OAuth)
-  const handleConnectInstagram = async () => {
-    if (!conexao) return;
-
+  const handleConnectInstagram = async (conexao: Conexao) => {
     setConnectingInstagram(true);
     try {
       const { data, error } = await supabase.functions.invoke('instagram-connect', {
@@ -271,11 +274,9 @@ export default function Conexao() {
       if (data.oauth_url) {
         window.open(data.oauth_url, '_blank');
         toast.success('Complete a autenticação na janela que abriu');
-      } else {
-        toast.info('Processando conexão...');
       }
 
-      await fetchConexao();
+      await fetchConexoes();
     } catch (error) {
       console.error('Erro ao conectar Instagram:', error);
       toast.error('Erro ao conectar Instagram');
@@ -284,10 +285,7 @@ export default function Conexao() {
     }
   };
 
-  // Salvar/Atualizar credenciais Meta
-  const handleSaveMetaCredentials = async () => {
-    if (!conexao) return;
-
+  const handleSaveMetaCredentials = async (conexao: Conexao) => {
     if (!metaPhoneNumberId.trim() || !metaAccessToken.trim()) {
       toast.error('Preencha Phone Number ID e Access Token');
       return;
@@ -308,7 +306,7 @@ export default function Conexao() {
       if (error) throw error;
 
       toast.success('Credenciais atualizadas com sucesso!');
-      await fetchConexao();
+      await fetchConexoes();
     } catch (error) {
       console.error('Erro ao salvar credenciais:', error);
       toast.error('Erro ao salvar credenciais');
@@ -317,18 +315,8 @@ export default function Conexao() {
     }
   };
 
-  const [copiedVerifyToken, setCopiedVerifyToken] = useState(false);
-
   const getMetaWebhookUrl = () => {
     return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-verify-webhook`;
-  };
-
-  const copyWebhookUrl = () => {
-    const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`;
-    navigator.clipboard.writeText(webhookUrl);
-    setCopiedWebhook(true);
-    toast.success('URL copiada!');
-    setTimeout(() => setCopiedWebhook(false), 2000);
   };
 
   const copyMetaWebhookUrl = () => {
@@ -338,8 +326,8 @@ export default function Conexao() {
     setTimeout(() => setCopiedWebhook(false), 2000);
   };
 
-  const copyVerifyToken = () => {
-    if (conexao?.meta_webhook_verify_token) {
+  const copyVerifyToken = (conexao: Conexao) => {
+    if (conexao.meta_webhook_verify_token) {
       navigator.clipboard.writeText(conexao.meta_webhook_verify_token);
       setCopiedVerifyToken(true);
       toast.success('Token de verificação copiado!');
@@ -347,11 +335,10 @@ export default function Conexao() {
     }
   };
 
-  const handleConnect = async () => {
-    if (!conexao) return;
-
+  const handleConnect = async (conexao: Conexao) => {
     setConnecting(true);
     setQrCode(null);
+    setConexaoSelecionada(conexao);
     
     try {
       const { data, error } = await supabase.functions.invoke('evolution-connect', {
@@ -370,7 +357,7 @@ export default function Conexao() {
         toast.success('QR Code gerado! Escaneie com seu WhatsApp');
       }
 
-      await fetchConexao();
+      await fetchConexoes();
     } catch (error) {
       console.error('Erro ao conectar:', error);
       toast.error('Erro ao gerar QR Code');
@@ -379,9 +366,7 @@ export default function Conexao() {
     }
   };
 
-  const handleDisconnect = async () => {
-    if (!conexao) return;
-
+  const handleDisconnect = async (conexao: Conexao) => {
     setDisconnecting(true);
     try {
       const { data, error } = await supabase.functions.invoke('evolution-disconnect', {
@@ -397,7 +382,8 @@ export default function Conexao() {
 
       toast.success('Desconectado com sucesso');
       setQrCode(null);
-      await fetchConexao();
+      setConexaoSelecionada(null);
+      await fetchConexoes();
     } catch (error) {
       console.error('Erro ao desconectar:', error);
       toast.error('Erro ao desconectar');
@@ -406,9 +392,7 @@ export default function Conexao() {
     }
   };
 
-  const handleCheckStatus = async (silent = false) => {
-    if (!conexao) return;
-
+  const handleCheckStatus = async (conexao: Conexao, silent = false) => {
     setCheckingStatus(true);
     try {
       const { data, error } = await supabase.functions.invoke('evolution-connection-status', {
@@ -422,7 +406,7 @@ export default function Conexao() {
         if (!silent) toast.success('WhatsApp conectado!');
       }
 
-      await fetchConexao();
+      await fetchConexoes();
     } catch (error) {
       console.error('Erro ao verificar status:', error);
       if (!silent) toast.error('Erro ao verificar status');
@@ -431,48 +415,7 @@ export default function Conexao() {
     }
   };
 
-  const getStatusIcon = () => {
-    if (!conexao) return <Plug className="h-8 w-8 text-muted-foreground" />;
-
-    switch (conexao.status) {
-      case 'conectado':
-        return <PlugZap className="h-8 w-8 text-success" />;
-      case 'aguardando':
-        return <QrCode className="h-8 w-8 text-warning" />;
-      default:
-        return <Plug className="h-8 w-8 text-muted-foreground" />;
-    }
-  };
-
-  const getStatusText = () => {
-    if (!conexao) return 'Nenhuma instância configurada';
-
-    switch (conexao.status) {
-      case 'conectado':
-        return 'Conectado';
-      case 'aguardando':
-        return 'Aguardando leitura do QR Code';
-      default:
-        return 'Desconectado';
-    }
-  };
-
-  const getStatusColor = () => {
-    if (!conexao) return 'text-muted-foreground';
-
-    switch (conexao.status) {
-      case 'conectado':
-        return 'text-success';
-      case 'aguardando':
-        return 'text-warning';
-      default:
-        return 'text-muted-foreground';
-    }
-  };
-
-  const handleReconfigureWebhook = async () => {
-    if (!conexao) return;
-
+  const handleReconfigureWebhook = async (conexao: Conexao) => {
     setReconfiguringWebhook(true);
     try {
       const { data, error } = await supabase.functions.invoke('evolution-set-webhook', {
@@ -495,13 +438,10 @@ export default function Conexao() {
     }
   };
 
-  const handleDeleteConnection = async () => {
-    if (!conexao) return;
-
+  const handleDeleteConnection = async (conexao: Conexao) => {
     setDeleting(true);
     try {
       if (conexao.tipo_provedor === 'meta') {
-        // Para Meta API, só deletar do banco
         const { error } = await supabase
           .from('conexoes_whatsapp')
           .delete()
@@ -509,7 +449,6 @@ export default function Conexao() {
 
         if (error) throw error;
       } else {
-        // Para Evolution, chamar Edge Function
         const { data, error } = await supabase.functions.invoke('evolution-delete-instance', {
           body: { conexao_id: conexao.id }
         });
@@ -519,15 +458,70 @@ export default function Conexao() {
       }
 
       toast.success('Conexão deletada com sucesso');
-      setConexao(null);
+      setConexaoSelecionada(null);
       setQrCode(null);
       setShowDeleteConfirm(false);
+      setConexaoParaDeletar(null);
+      await fetchConexoes();
     } catch (error) {
       console.error('Erro ao deletar conexão:', error);
       toast.error('Erro ao deletar conexão');
     } finally {
       setDeleting(false);
     }
+  };
+
+  const getStatusIcon = (conexao: Conexao) => {
+    switch (conexao.status) {
+      case 'conectado':
+        return <PlugZap className="h-5 w-5 text-success" />;
+      case 'aguardando':
+        return <QrCode className="h-5 w-5 text-warning" />;
+      default:
+        return <Plug className="h-5 w-5 text-muted-foreground" />;
+    }
+  };
+
+  const getStatusText = (conexao: Conexao) => {
+    switch (conexao.status) {
+      case 'conectado':
+        return 'Conectado';
+      case 'aguardando':
+        return 'Aguardando';
+      default:
+        return 'Desconectado';
+    }
+  };
+
+  const getStatusColor = (conexao: Conexao) => {
+    switch (conexao.status) {
+      case 'conectado':
+        return 'text-success';
+      case 'aguardando':
+        return 'text-warning';
+      default:
+        return 'text-muted-foreground';
+    }
+  };
+
+  const getProviderBadge = (conexao: Conexao) => {
+    if (conexao.tipo_provedor === 'meta') {
+      return <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">Meta API</span>;
+    }
+    if (conexao.tipo_provedor === 'instagram' || conexao.tipo_canal === 'instagram') {
+      return <span className="text-xs px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-pink-400">Instagram</span>;
+    }
+    return <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">Evolution</span>;
+  };
+
+  const getProviderIcon = (conexao: Conexao) => {
+    if (conexao.tipo_provedor === 'meta') {
+      return <Globe className="h-6 w-6 text-blue-500" />;
+    }
+    if (conexao.tipo_provedor === 'instagram' || conexao.tipo_canal === 'instagram') {
+      return <Instagram className="h-6 w-6 text-pink-500" />;
+    }
+    return <Zap className="h-6 w-6 text-emerald-500" />;
   };
 
   if (loading) {
@@ -542,153 +536,339 @@ export default function Conexao() {
 
   return (
     <MainLayout>
-      <div className={`max-w-3xl space-y-6 md:space-y-8 animate-fade-in ${isMobile ? 'px-4 py-4' : ''}`}>
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Conexão WhatsApp</h1>
-          <p className="text-muted-foreground mt-1 text-sm md:text-base">
-            Conecte seu WhatsApp para receber e enviar mensagens.
-          </p>
-        </div>
-
-        {/* Status Card */}
-        <div className="p-4 md:p-6 rounded-xl bg-card border border-border">
-          <div className="flex items-center gap-3 md:gap-4">
-            <div
-              className={`flex h-12 w-12 md:h-16 md:w-16 items-center justify-center rounded-xl flex-shrink-0 ${
-                conexao?.status === 'conectado'
-                  ? 'bg-success/20'
-                  : conexao?.status === 'aguardando'
-                  ? 'bg-warning/20'
-                  : 'bg-muted'
-              }`}
-            >
-              {getStatusIcon()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs md:text-sm text-muted-foreground">Status da Conexão</p>
-              <p className={`text-lg md:text-xl font-semibold ${getStatusColor()}`}>{getStatusText()}</p>
-              {conexao?.nome && (
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-muted-foreground truncate">{conexao.nome}</p>
-                  {conexao.tipo_provedor === 'meta' && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">Meta API</span>
-                  )}
-                  {conexao.tipo_provedor === 'evolution' && !conexao.tipo_canal?.includes('instagram') && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">Evolution</span>
-                  )}
-                  {(conexao.tipo_provedor === 'instagram' || conexao.tipo_canal === 'instagram') && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-pink-400">Instagram</span>
-                  )}
-                </div>
-              )}
-              {conexao?.numero && (
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  <Smartphone className="h-3 w-3" />
-                  {conexao.numero}
-                </p>
-              )}
-            </div>
-            {conexao?.status === 'conectado' && (
-              <Check className="h-6 w-6 md:h-8 md:w-8 text-success flex-shrink-0" />
-            )}
+      <div className={`max-w-4xl space-y-6 md:space-y-8 animate-fade-in ${isMobile ? 'px-4 py-4' : ''}`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground">Conexões</h1>
+            <p className="text-muted-foreground mt-1 text-sm md:text-base">
+              Gerencie suas conexões WhatsApp e Instagram.
+            </p>
           </div>
+          <OnboardingTooltip
+            title="Adicione sua primeira conexão"
+            description="Clique aqui para conectar seu WhatsApp ou Instagram"
+            step={2}
+            totalSteps={5}
+            position="left"
+            isVisible={isOnboardingActive && currentStep === 'configurar_conexao' && conexoes.length === 0}
+            showNextButton={false}
+          >
+            <button
+              onClick={() => setShowNovaConexao(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="h-5 w-5" />
+              <span className="hidden sm:inline">Nova Conexão</span>
+            </button>
+          </OnboardingTooltip>
         </div>
 
-        {/* Criar Instância - Se não existe */}
-        {!conexao && (
-          <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-6">
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">Criar Nova Conexão</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Escolha o tipo de conexão e configure sua integração com WhatsApp.
-              </p>
+        {/* Lista de Conexões */}
+        {conexoes.length === 0 ? (
+          <div className="p-8 md:p-12 rounded-xl bg-card border border-border text-center">
+            <div className="h-16 w-16 mx-auto rounded-full bg-muted flex items-center justify-center mb-4">
+              <Plug className="h-8 w-8 text-muted-foreground" />
             </div>
-
-            {/* Seletor de Tipo de Provedor */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <button
-                onClick={() => setTipoProvedor('evolution')}
-                className={`p-4 rounded-xl border-2 text-left transition-all ${
-                  tipoProvedor === 'evolution'
-                    ? 'border-emerald-500 bg-emerald-500/10'
-                    : 'border-border hover:border-muted-foreground/50'
-                }`}
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                    <Zap className="h-5 w-5 text-emerald-500" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">Evolution API</h3>
-                    <p className="text-xs text-muted-foreground">Via QR Code</p>
-                  </div>
-                </div>
-                <ul className="text-xs text-muted-foreground space-y-1 ml-13">
-                  <li className="flex items-center gap-1"><Check className="h-3 w-3 text-emerald-500" /> Gratuito</li>
-                  <li className="flex items-center gap-1"><Check className="h-3 w-3 text-emerald-500" /> Conexão rápida</li>
-                  <li className="flex items-center gap-1"><Info className="h-3 w-3 text-amber-500" /> Não-oficial</li>
-                </ul>
-              </button>
-
-              <button
-                onClick={() => setTipoProvedor('meta')}
-                className={`p-4 rounded-xl border-2 text-left transition-all ${
-                  tipoProvedor === 'meta'
-                    ? 'border-blue-500 bg-blue-500/10'
-                    : 'border-border hover:border-muted-foreground/50'
-                }`}
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                    <Globe className="h-5 w-5 text-blue-500" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">Meta Business API</h3>
-                    <p className="text-xs text-muted-foreground">Oficial</p>
-                  </div>
-                </div>
-                <ul className="text-xs text-muted-foreground space-y-1 ml-13">
-                  <li className="flex items-center gap-1"><Check className="h-3 w-3 text-blue-500" /> API Oficial</li>
-                  <li className="flex items-center gap-1"><Check className="h-3 w-3 text-blue-500" /> Zero risco de ban</li>
-                  <li className="flex items-center gap-1"><Info className="h-3 w-3 text-amber-500" /> Pago por mensagem</li>
-                </ul>
-              </button>
-
-              <button
-                onClick={() => setTipoProvedor('instagram')}
-                className={`p-4 rounded-xl border-2 text-left transition-all ${
-                  tipoProvedor === 'instagram'
-                    ? 'border-pink-500 bg-pink-500/10'
-                    : 'border-border hover:border-muted-foreground/50'
-                }`}
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                    <Instagram className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">Instagram Direct</h3>
-                    <p className="text-xs text-muted-foreground">Via Evolution API</p>
-                  </div>
-                </div>
-                <ul className="text-xs text-muted-foreground space-y-1 ml-13">
-                  <li className="flex items-center gap-1"><Check className="h-3 w-3 text-pink-500" /> Mensagens do Direct</li>
-                  <li className="flex items-center gap-1"><Check className="h-3 w-3 text-pink-500" /> Mesmo AI Agent</li>
-                  <li className="flex items-center gap-1"><Check className="h-3 w-3 text-pink-500" /> Inbox unificado</li>
-                </ul>
-              </button>
-            </div>
-
-            {/* Nome da Conexão (comum para ambos) */}
-            <OnboardingTooltip
-              title="Nome da sua conexão"
-              description="Dê um nome para identificar esta conexão, como 'WhatsApp Vendas' ou 'Atendimento'"
-              step={2}
-              totalSteps={5}
-              position="top"
-              isVisible={isOnboardingActive && (currentStep === 'configurar_conexao' || currentStep === 'aguardar_conexao') && !conexao}
-              showNextButton={false}
+            <h3 className="text-lg font-semibold text-foreground mb-2">Nenhuma conexão configurada</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              Adicione uma conexão para começar a receber mensagens.
+            </p>
+            <button
+              onClick={() => setShowNovaConexao(true)}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
             >
+              <Plus className="h-5 w-5" />
+              Adicionar Conexão
+            </button>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {conexoes.map((conexao) => (
+              <div
+                key={conexao.id}
+                className="p-4 md:p-5 rounded-xl bg-card border border-border hover:border-primary/50 transition-all"
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    conexao.status === 'conectado' ? 'bg-success/20' : 
+                    conexao.status === 'aguardando' ? 'bg-warning/20' : 'bg-muted'
+                  }`}>
+                    {getProviderIcon(conexao)}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-semibold text-foreground truncate">{conexao.nome}</h3>
+                      {getProviderBadge(conexao)}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className={`text-sm flex items-center gap-1 ${getStatusColor(conexao)}`}>
+                        {getStatusIcon(conexao)}
+                        {getStatusText(conexao)}
+                      </span>
+                      {conexao.numero && (
+                        <span className="text-sm text-muted-foreground flex items-center gap-1">
+                          <Smartphone className="h-3 w-3" />
+                          {conexao.numero}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Botões de ação baseados no status e tipo */}
+                    {conexao.tipo_provedor === 'evolution' && conexao.status !== 'conectado' && (
+                      <button
+                        onClick={() => handleConnect(conexao)}
+                        disabled={connecting}
+                        className="p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                        title="Conectar"
+                      >
+                        {connecting && conexaoSelecionada?.id === conexao.id ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <QrCode className="h-5 w-5" />
+                        )}
+                      </button>
+                    )}
+                    
+                    {conexao.tipo_provedor === 'instagram' && conexao.status !== 'conectado' && (
+                      <button
+                        onClick={() => handleConnectInstagram(conexao)}
+                        disabled={connectingInstagram}
+                        className="p-2 rounded-lg bg-pink-500/10 text-pink-500 hover:bg-pink-500/20 transition-colors"
+                        title="Conectar Instagram"
+                      >
+                        {connectingInstagram ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <ExternalLink className="h-5 w-5" />
+                        )}
+                      </button>
+                    )}
+
+                    {conexao.status === 'conectado' && conexao.tipo_provedor !== 'meta' && (
+                      <button
+                        onClick={() => handleDisconnect(conexao)}
+                        disabled={disconnecting}
+                        className="p-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                        title="Desconectar"
+                      >
+                        {disconnecting ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <Power className="h-5 w-5" />
+                        )}
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        setConexaoSelecionada(conexaoSelecionada?.id === conexao.id ? null : conexao);
+                        if (conexao.tipo_provedor === 'meta') {
+                          setMetaPhoneNumberId(conexao.meta_phone_number_id || '');
+                          setMetaBusinessAccountId(conexao.meta_business_account_id || '');
+                          setMetaAccessToken(conexao.meta_access_token || '');
+                        }
+                      }}
+                      className="p-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+                      title="Gerenciar"
+                    >
+                      <Settings className="h-5 w-5 text-muted-foreground" />
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setConexaoParaDeletar(conexao);
+                        setShowDeleteConfirm(true);
+                      }}
+                      className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                      title="Deletar"
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* QR Code expandido */}
+                {conexaoSelecionada?.id === conexao.id && qrCode && conexao.status === 'aguardando' && (
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <div className="flex flex-col items-center space-y-4">
+                      <h4 className="text-sm font-medium text-foreground">Escaneie o QR Code</h4>
+                      <div className="p-3 bg-background rounded-xl border border-border">
+                        <img
+                          src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
+                          alt="QR Code"
+                          className="w-48 h-48"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <RefreshCw className={`h-4 w-4 ${checkingStatus ? 'animate-spin' : ''}`} />
+                        <span>Verificando conexão...</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Painel de configurações expandido */}
+                {conexaoSelecionada?.id === conexao.id && !qrCode && (
+                  <div className="mt-4 pt-4 border-t border-border space-y-4">
+                    {/* Ações para Evolution */}
+                    {conexao.tipo_provedor === 'evolution' && (
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => handleCheckStatus(conexao)}
+                          disabled={checkingStatus}
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted text-sm hover:bg-muted/80 transition-colors"
+                        >
+                          <RefreshCw className={`h-4 w-4 ${checkingStatus ? 'animate-spin' : ''}`} />
+                          Verificar Status
+                        </button>
+                        <button
+                          onClick={() => handleReconfigureWebhook(conexao)}
+                          disabled={reconfiguringWebhook}
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted text-sm hover:bg-muted/80 transition-colors"
+                        >
+                          {reconfiguringWebhook ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Settings className="h-4 w-4" />
+                          )}
+                          Reconfigurar Webhook
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Configurações Meta API */}
+                    {conexao.tipo_provedor === 'meta' && (
+                      <div className="space-y-4">
+                        <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                          <h4 className="text-sm font-medium text-blue-400 mb-3">Configuração do Webhook</h4>
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-xs text-muted-foreground">URL do Webhook</label>
+                              <div className="flex items-center gap-2 mt-1">
+                                <code className="flex-1 text-xs bg-background p-2 rounded truncate">
+                                  {getMetaWebhookUrl()}
+                                </code>
+                                <button
+                                  onClick={copyMetaWebhookUrl}
+                                  className="p-2 rounded bg-background hover:bg-muted transition-colors"
+                                >
+                                  {copiedWebhook ? <CheckCircle2 className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+                                </button>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-xs text-muted-foreground">Token de Verificação</label>
+                              <div className="flex items-center gap-2 mt-1">
+                                <code className="flex-1 text-xs bg-background p-2 rounded truncate">
+                                  {conexao.meta_webhook_verify_token}
+                                </code>
+                                <button
+                                  onClick={() => copyVerifyToken(conexao)}
+                                  className="p-2 rounded bg-background hover:bg-muted transition-colors"
+                                >
+                                  {copiedVerifyToken ? <CheckCircle2 className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3">
+                          <div>
+                            <label className="text-sm text-muted-foreground">Phone Number ID</label>
+                            <input
+                              type="text"
+                              value={metaPhoneNumberId}
+                              onChange={(e) => setMetaPhoneNumberId(e.target.value)}
+                              className="w-full mt-1 h-10 px-3 rounded-lg bg-input border border-border text-foreground text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm text-muted-foreground">Business Account ID</label>
+                            <input
+                              type="text"
+                              value={metaBusinessAccountId}
+                              onChange={(e) => setMetaBusinessAccountId(e.target.value)}
+                              className="w-full mt-1 h-10 px-3 rounded-lg bg-input border border-border text-foreground text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm text-muted-foreground">Access Token</label>
+                            <input
+                              type="password"
+                              value={metaAccessToken}
+                              onChange={(e) => setMetaAccessToken(e.target.value)}
+                              className="w-full mt-1 h-10 px-3 rounded-lg bg-input border border-border text-foreground text-sm"
+                            />
+                          </div>
+                          <button
+                            onClick={() => handleSaveMetaCredentials(conexao)}
+                            disabled={savingMeta}
+                            className="h-10 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+                          >
+                            {savingMeta ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Salvar Credenciais'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Modal de Nova Conexão */}
+        <Dialog open={showNovaConexao} onOpenChange={setShowNovaConexao}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Nova Conexão</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-6 py-4">
+              {/* Seletor de Tipo */}
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  onClick={() => setTipoProvedor('evolution')}
+                  className={`p-3 rounded-xl border-2 text-center transition-all ${
+                    tipoProvedor === 'evolution'
+                      ? 'border-emerald-500 bg-emerald-500/10'
+                      : 'border-border hover:border-muted-foreground/50'
+                  }`}
+                >
+                  <Zap className="h-6 w-6 mx-auto text-emerald-500 mb-1" />
+                  <span className="text-xs font-medium">Evolution</span>
+                </button>
+
+                <button
+                  onClick={() => setTipoProvedor('meta')}
+                  className={`p-3 rounded-xl border-2 text-center transition-all ${
+                    tipoProvedor === 'meta'
+                      ? 'border-blue-500 bg-blue-500/10'
+                      : 'border-border hover:border-muted-foreground/50'
+                  }`}
+                >
+                  <Globe className="h-6 w-6 mx-auto text-blue-500 mb-1" />
+                  <span className="text-xs font-medium">Meta API</span>
+                </button>
+
+                <button
+                  onClick={() => setTipoProvedor('instagram')}
+                  className={`p-3 rounded-xl border-2 text-center transition-all ${
+                    tipoProvedor === 'instagram'
+                      ? 'border-pink-500 bg-pink-500/10'
+                      : 'border-border hover:border-muted-foreground/50'
+                  }`}
+                >
+                  <Instagram className="h-6 w-6 mx-auto text-pink-500 mb-1" />
+                  <span className="text-xs font-medium">Instagram</span>
+                </button>
+              </div>
+
+              {/* Nome da Conexão */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">
                   Nome da Conexão
@@ -701,494 +881,149 @@ export default function Conexao() {
                   className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
-            </OnboardingTooltip>
 
-            {/* Campos específicos para Meta API */}
-            {tipoProvedor === 'meta' && (
-              <div className="space-y-4 pt-2 border-t border-border">
-                <div className="flex items-center gap-2 text-sm text-blue-400">
-                  <Info className="h-4 w-4" />
-                  <span>Configure as credenciais do Meta Business</span>
-                </div>
+              {/* Campos Meta API */}
+              {tipoProvedor === 'meta' && (
+                <div className="space-y-4 pt-2 border-t border-border">
+                  <div className="flex items-center gap-2 text-sm text-blue-400">
+                    <Info className="h-4 w-4" />
+                    <span>Configure as credenciais do Meta Business</span>
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Phone Number ID *
-                  </label>
-                  <input
-                    type="text"
-                    value={metaPhoneNumberId}
-                    onChange={(e) => setMetaPhoneNumberId(e.target.value)}
-                    placeholder="Ex: 123456789012345"
-                    className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Encontre no Facebook Developer {'>'} WhatsApp {'>'} API Setup
-                  </p>
-                </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Phone Number ID *
+                    </label>
+                    <input
+                      type="text"
+                      value={metaPhoneNumberId}
+                      onChange={(e) => setMetaPhoneNumberId(e.target.value)}
+                      placeholder="Ex: 123456789012345"
+                      className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Business Account ID
-                  </label>
-                  <input
-                    type="text"
-                    value={metaBusinessAccountId}
-                    onChange={(e) => setMetaBusinessAccountId(e.target.value)}
-                    placeholder="Ex: 123456789012345"
-                    className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Opcional - necessário para buscar templates
-                  </p>
-                </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Business Account ID
+                    </label>
+                    <input
+                      type="text"
+                      value={metaBusinessAccountId}
+                      onChange={(e) => setMetaBusinessAccountId(e.target.value)}
+                      placeholder="Ex: 123456789012345"
+                      className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Access Token *
-                  </label>
-                  <input
-                    type="password"
-                    value={metaAccessToken}
-                    onChange={(e) => setMetaAccessToken(e.target.value)}
-                    placeholder="Token de acesso permanente"
-                    className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Gere um token permanente no Facebook Developer
-                  </p>
-                </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Access Token *
+                    </label>
+                    <input
+                      type="password"
+                      value={metaAccessToken}
+                      onChange={(e) => setMetaAccessToken(e.target.value)}
+                      placeholder="Token de acesso permanente"
+                      className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
 
-                <a 
-                  href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Guia de configuração Meta API
-                </a>
-              </div>
-            )}
-
-            {/* Botão de Criar */}
-            {tipoProvedor === 'evolution' ? (
-              <button
-                onClick={handleCreateInstance}
-                disabled={creating || !instanceName.trim()}
-                className="w-full h-11 rounded-lg bg-emerald-600 text-white font-medium flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors disabled:opacity-50"
-              >
-                {creating ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <>
-                    <Zap className="h-5 w-5" />
-                    Criar Instância Evolution (WhatsApp)
-                  </>
-                )}
-              </button>
-            ) : tipoProvedor === 'instagram' ? (
-              <button
-                onClick={handleCreateInstagramConnection}
-                disabled={creatingInstagram || !instanceName.trim()}
-                className="w-full h-11 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium flex items-center justify-center gap-2 hover:from-purple-700 hover:to-pink-700 transition-colors disabled:opacity-50"
-              >
-                {creatingInstagram ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <>
-                    <Instagram className="h-5 w-5" />
-                    Criar Conexão Instagram
-                  </>
-                )}
-              </button>
-            ) : (
-              <button
-                onClick={handleCreateMetaConnection}
-                disabled={creating || !instanceName.trim() || !metaPhoneNumberId.trim() || !metaAccessToken.trim()}
-                className="w-full h-11 rounded-lg bg-blue-600 text-white font-medium flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                {creating ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <>
-                    <Globe className="h-5 w-5" />
-                    Criar Conexão Meta API
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* QR Code - Se aguardando */}
-        {conexao && conexao.status === 'aguardando' && qrCode && (
-          <OnboardingTooltip
-            title="Escaneie com seu WhatsApp"
-            description="Abra o WhatsApp no celular, vá em Configurações > Dispositivos Conectados e escaneie este QR Code"
-            step={2}
-            totalSteps={5}
-            position="top"
-            isVisible={isOnboardingActive && currentStep === 'aguardar_conexao'}
-            showNextButton={false}
-          >
-            <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-4">
-              <h2 className="text-lg font-semibold text-foreground text-center">
-                Escaneie o QR Code
-              </h2>
-              <p className="text-xs md:text-sm text-muted-foreground text-center">
-                Abra o WhatsApp, vá em Configurações &gt; Dispositivos Conectados &gt; Conectar
-              </p>
-              
-              <div className="flex justify-center">
-                <div className="p-3 md:p-4 bg-background rounded-xl border border-border">
-                  <img
-                    src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
-                    alt="QR Code"
-                    className="w-48 h-48 md:w-64 md:h-64"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-center gap-2 text-xs md:text-sm text-muted-foreground">
-                <RefreshCw className={`h-4 w-4 ${checkingStatus ? 'animate-spin' : ''}`} />
-                <span>Verificando conexão...</span>
-              </div>
-            </div>
-          </OnboardingTooltip>
-        )}
-
-        {/* Ações - Se instância existe */}
-        {conexao && (
-          <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-4">
-            <h2 className="text-lg font-semibold text-foreground">Ações</h2>
-
-            <div className={`flex gap-2 md:gap-3 ${isMobile ? 'flex-col' : 'flex-wrap'}`}>
-              {conexao.status !== 'conectado' && conexao.tipo_provedor === 'evolution' && (
-                <OnboardingTooltip
-                  title="Conectar seu WhatsApp"
-                  description="Clique aqui para gerar um QR Code e conectar seu WhatsApp"
-                  step={2}
-                  totalSteps={5}
-                  position="top"
-                  isVisible={isOnboardingActive && currentStep === 'configurar_conexao' && conexao.status === 'desconectado'}
-                  showNextButton={false}
-                >
-                  <button
-                    onClick={handleConnect}
-                    disabled={connecting}
-                    className="w-full md:flex-1 md:min-w-[200px] h-11 rounded-lg bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  <a 
+                    href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300"
                   >
-                    {connecting ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <>
-                        <QrCode className="h-5 w-5" />
-                        {conexao.status === 'aguardando' ? 'Novo QR Code' : 'Conectar WhatsApp'}
-                      </>
-                    )}
-                  </button>
-                </OnboardingTooltip>
+                    <ExternalLink className="h-4 w-4" />
+                    Guia de configuração Meta API
+                  </a>
+                </div>
               )}
 
-              <button
-                onClick={() => handleCheckStatus(false)}
-                disabled={checkingStatus}
-                className="w-full md:w-auto h-11 px-6 rounded-lg bg-secondary text-secondary-foreground font-medium flex items-center justify-center gap-2 hover:bg-secondary/80 transition-colors disabled:opacity-50"
-              >
-                {checkingStatus ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <>
-                    <RefreshCw className="h-5 w-5" />
-                    Verificar Status
-                  </>
-                )}
-              </button>
-
-              {conexao.status !== 'conectado' && conexao.tipo_provedor === 'evolution' && (
+              {/* Botão de Criar */}
+              {tipoProvedor === 'evolution' ? (
                 <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  disabled={deleting}
-                  className="w-full md:w-auto h-11 px-6 rounded-lg bg-destructive text-destructive-foreground font-medium flex items-center justify-center gap-2 hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                  onClick={handleCreateInstance}
+                  disabled={creating || !instanceName.trim()}
+                  className="w-full h-11 rounded-lg bg-emerald-600 text-white font-medium flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors disabled:opacity-50"
                 >
-                  <Trash2 className="h-5 w-5" />
-                  Deletar
+                  {creating ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Zap className="h-5 w-5" />
+                      Criar Conexão WhatsApp
+                    </>
+                  )}
                 </button>
-              )}
-
-              {conexao.status === 'conectado' && conexao.tipo_provedor === 'evolution' && (
-                <>
-                  <button
-                    onClick={handleReconfigureWebhook}
-                    disabled={reconfiguringWebhook}
-                    className="w-full md:w-auto h-11 px-6 rounded-lg bg-accent text-accent-foreground font-medium flex items-center justify-center gap-2 hover:bg-accent/80 transition-colors disabled:opacity-50"
-                  >
-                    {reconfiguringWebhook ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <>
-                        <RefreshCw className="h-5 w-5" />
-                        {isMobile ? 'Webhook' : 'Reconfigurar Webhook'}
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={handleDisconnect}
-                    disabled={disconnecting}
-                    className="w-full md:w-auto h-11 px-6 rounded-lg bg-destructive text-destructive-foreground font-medium flex items-center justify-center gap-2 hover:bg-destructive/90 transition-colors disabled:opacity-50"
-                  >
-                    {disconnecting ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <>
-                        <Power className="h-5 w-5" />
-                        Desconectar
-                      </>
-                    )}
-                  </button>
-                </>
-              )}
-
-              {/* Deletar para Meta API */}
-              {conexao.tipo_provedor === 'meta' && (
+              ) : tipoProvedor === 'instagram' ? (
                 <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  disabled={deleting}
-                  className="w-full md:w-auto h-11 px-6 rounded-lg bg-destructive text-destructive-foreground font-medium flex items-center justify-center gap-2 hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                  onClick={handleCreateInstagramConnection}
+                  disabled={creatingInstagram || !instanceName.trim()}
+                  className="w-full h-11 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium flex items-center justify-center gap-2 hover:from-purple-700 hover:to-pink-700 transition-colors disabled:opacity-50"
                 >
-                  <Trash2 className="h-5 w-5" />
-                  Deletar Conexão
+                  {creatingInstagram ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Instagram className="h-5 w-5" />
+                      Criar Conexão Instagram
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={handleCreateMetaConnection}
+                  disabled={creating || !instanceName.trim() || !metaPhoneNumberId.trim() || !metaAccessToken.trim()}
+                  className="w-full h-11 rounded-lg bg-blue-600 text-white font-medium flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  {creating ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Globe className="h-5 w-5" />
+                      Criar Conexão Meta API
+                    </>
+                  )}
                 </button>
               )}
             </div>
-          </div>
-        )}
-
-        {/* Configuração do Webhook Meta API */}
-        {conexao && conexao.tipo_provedor === 'meta' && (
-          <div className="p-4 md:p-6 rounded-xl bg-card border border-blue-500/30 space-y-4">
-            <div className="flex items-center gap-2">
-              <Globe className="h-5 w-5 text-blue-500" />
-              <h2 className="text-lg font-semibold text-foreground">Configurar Webhook Meta</h2>
-            </div>
-            
-            <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
-              <p className="text-sm text-blue-400 mb-3">
-                Configure o webhook no Facebook Developer para receber mensagens.
-              </p>
-              
-              {/* URL do Webhook */}
-              <div className="space-y-2 mb-4">
-                <label className="block text-sm font-medium text-foreground">URL do Webhook</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={getMetaWebhookUrl()}
-                    readOnly
-                    className="flex-1 h-10 px-3 rounded-lg bg-input border border-border text-foreground text-sm"
-                  />
-                  <button
-                    onClick={copyMetaWebhookUrl}
-                    className="h-10 px-4 rounded-lg bg-blue-600 text-white flex items-center gap-2 hover:bg-blue-700 transition-colors"
-                  >
-                    {copiedWebhook ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Token de Verificação */}
-              <div className="space-y-2 mb-4">
-                <label className="block text-sm font-medium text-foreground">Token de Verificação</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={conexao.meta_webhook_verify_token || ''}
-                    readOnly
-                    className="flex-1 h-10 px-3 rounded-lg bg-input border border-border text-foreground text-sm font-mono"
-                  />
-                  <button
-                    onClick={copyVerifyToken}
-                    className="h-10 px-4 rounded-lg bg-blue-600 text-white flex items-center gap-2 hover:bg-blue-700 transition-colors"
-                  >
-                    {copiedVerifyToken ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Instruções */}
-              <div className="border-t border-blue-500/20 pt-4 mt-4">
-                <h3 className="text-sm font-semibold text-foreground mb-3">Passo a passo:</h3>
-                <ol className="space-y-2 text-sm text-muted-foreground">
-                  <li className="flex gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-semibold flex-shrink-0">1</span>
-                    <span>Acesse <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Facebook Developer</a> e selecione seu app</span>
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-semibold flex-shrink-0">2</span>
-                    <span>Vá em WhatsApp {'>'} Configuration {'>'} Webhook</span>
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-semibold flex-shrink-0">3</span>
-                    <span>Clique em "Edit" e cole a <strong>URL do Webhook</strong> acima</span>
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-semibold flex-shrink-0">4</span>
-                    <span>Cole o <strong>Token de Verificação</strong> no campo "Verify token"</span>
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-semibold flex-shrink-0">5</span>
-                    <span>Clique em "Verify and save"</span>
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-semibold flex-shrink-0">6</span>
-                    <span>Em "Webhook fields", ative <strong>messages</strong></span>
-                  </li>
-                </ol>
-              </div>
-            </div>
-
-            <a 
-              href="https://developers.facebook.com/docs/whatsapp/cloud-api/guides/set-up-webhooks"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Documentação oficial do webhook
-            </a>
-          </div>
-        )}
-
-        {/* Editar credenciais Meta */}
-        {conexao && conexao.tipo_provedor === 'meta' && (
-          <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-4">
-            <h2 className="text-lg font-semibold text-foreground">Credenciais Meta API</h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Phone Number ID</label>
-                <input
-                  type="text"
-                  value={metaPhoneNumberId}
-                  onChange={(e) => setMetaPhoneNumberId(e.target.value)}
-                  placeholder="Ex: 123456789012345"
-                  className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Business Account ID</label>
-                <input
-                  type="text"
-                  value={metaBusinessAccountId}
-                  onChange={(e) => setMetaBusinessAccountId(e.target.value)}
-                  placeholder="Ex: 123456789012345"
-                  className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Access Token</label>
-                <input
-                  type="password"
-                  value={metaAccessToken}
-                  onChange={(e) => setMetaAccessToken(e.target.value)}
-                  placeholder="Token de acesso permanente"
-                  className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <button
-                onClick={handleSaveMetaCredentials}
-                disabled={savingMeta || !metaPhoneNumberId.trim() || !metaAccessToken.trim()}
-                className="w-full h-11 rounded-lg bg-blue-600 text-white font-medium flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                {savingMeta ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <>
-                    <Check className="h-5 w-5" />
-                    Salvar Credenciais
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Instruções - Apenas para Evolution */}
-        {(!conexao || conexao.tipo_provedor === 'evolution') && (
-          <div className="p-6 rounded-xl bg-card border border-border">
-            <h2 className="text-lg font-semibold text-foreground mb-4">Como conectar (Evolution API)</h2>
-            <ol className="space-y-3 text-sm text-muted-foreground">
-              <li className="flex gap-3">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
-                  1
-                </span>
-                <span>Digite um nome para sua conexão e clique em "Criar Instância"</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
-                  2
-                </span>
-                <span>Clique em "Conectar WhatsApp" para gerar o QR Code</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
-                  3
-                </span>
-                <span>No seu celular, abra o WhatsApp e vá em Configurações &gt; Dispositivos Conectados</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
-                  4
-                </span>
-                <span>Toque em "Conectar Dispositivo" e escaneie o QR Code exibido acima</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
-                  5
-                </span>
-                <span>Aguarde a conexão ser estabelecida. O status será atualizado automaticamente</span>
-              </li>
-            </ol>
-          </div>
-        )}
+          </DialogContent>
+        </Dialog>
 
         {/* Modal de Confirmação de Delete */}
-        {showDeleteConfirm && (
-          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full mx-4 space-y-4">
-              <h3 className="text-lg font-semibold text-foreground">Confirmar Exclusão</h3>
+        <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Deletar Conexão</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
               <p className="text-sm text-muted-foreground">
-                Tem certeza que deseja deletar esta conexão? Esta ação não pode ser desfeita.
-                Você precisará criar uma nova instância para conectar o WhatsApp novamente.
+                Tem certeza que deseja deletar a conexão <strong>{conexaoParaDeletar?.nome}</strong>?
+                Esta ação não pode ser desfeita.
               </p>
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  disabled={deleting}
-                  className="h-10 px-4 rounded-lg bg-secondary text-secondary-foreground font-medium hover:bg-secondary/80 transition-colors disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleDeleteConnection}
-                  disabled={deleting}
-                  className="h-10 px-4 rounded-lg bg-destructive text-destructive-foreground font-medium flex items-center gap-2 hover:bg-destructive/90 transition-colors disabled:opacity-50"
-                >
-                  {deleting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                  Deletar
-                </button>
-              </div>
             </div>
-          </div>
-        )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setConexaoParaDeletar(null);
+                }}
+                className="flex-1 h-10 rounded-lg bg-muted text-foreground font-medium hover:bg-muted/80 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => conexaoParaDeletar && handleDeleteConnection(conexaoParaDeletar)}
+                disabled={deleting}
+                className="flex-1 h-10 rounded-lg bg-destructive text-destructive-foreground font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50"
+              >
+                {deleting ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : 'Deletar'}
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   );
