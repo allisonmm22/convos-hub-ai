@@ -6,6 +6,108 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Função para baixar mídia da Meta API
+async function downloadMetaMedia(
+  mediaId: string,
+  accessToken: string,
+  mediaType: string,
+  contaId: string,
+  supabaseUrl: string,
+  supabaseKey: string
+): Promise<{ success: boolean; url?: string; base64?: string; mimeType?: string; error?: string }> {
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/meta-download-media`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({
+        media_id: mediaId,
+        access_token: accessToken,
+        media_type: mediaType,
+        conta_id: contaId,
+      }),
+    });
+
+    const result = await response.json();
+    
+    if (result.success) {
+      return {
+        success: true,
+        url: result.url,
+        base64: result.base64,
+        mimeType: result.mime_type,
+      };
+    }
+
+    return { success: false, error: result.error };
+  } catch (error) {
+    console.error('Erro ao baixar mídia Meta:', error);
+    return { success: false, error: String(error) };
+  }
+}
+
+// Função para transcrever áudio
+async function transcreverAudio(
+  base64: string,
+  mimeType: string,
+  openaiKey: string,
+  supabaseUrl: string,
+  supabaseKey: string
+): Promise<string | null> {
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/transcrever-audio`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({
+        audio_base64: base64,
+        mime_type: mimeType,
+        openai_api_key: openaiKey,
+      }),
+    });
+
+    const result = await response.json();
+    return result.text || null;
+  } catch (error) {
+    console.error('Erro ao transcrever áudio:', error);
+    return null;
+  }
+}
+
+// Função para analisar imagem
+async function analisarImagem(
+  base64: string,
+  mimeType: string,
+  openaiKey: string,
+  supabaseUrl: string,
+  supabaseKey: string
+): Promise<string | null> {
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/analisar-imagem`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({
+        image_base64: base64,
+        mime_type: mimeType,
+        openai_api_key: openaiKey,
+      }),
+    });
+
+    const result = await response.json();
+    return result.description || null;
+  } catch (error) {
+    console.error('Erro ao analisar imagem:', error);
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -30,7 +132,6 @@ serve(async (req) => {
       console.log('Challenge:', challenge);
 
       if (mode === 'subscribe' && token && challenge) {
-        // Verificar se o token corresponde a alguma conexão
         const { data: conexao } = await supabase
           .from('conexoes_whatsapp')
           .select('id')
@@ -46,7 +147,6 @@ serve(async (req) => {
           });
         }
 
-        // Fallback: aceitar se o token tem formato válido
         if (token.startsWith('verify_')) {
           console.log('Token com formato válido, aceitando verificação');
           return new Response(challenge, {
@@ -68,7 +168,6 @@ serve(async (req) => {
       console.log('=== META WEBHOOK MESSAGE ===');
       console.log('Payload:', JSON.stringify(payload, null, 2));
 
-      // Processar mensagens da Meta
       const entry = payload.entry?.[0];
       const changes = entry?.changes?.[0];
       const value = changes?.value;
@@ -89,7 +188,6 @@ serve(async (req) => {
       console.log('Mensagens:', messages.length);
 
       if (!phoneNumberId || messages.length === 0) {
-        // Pode ser status update ou outro evento
         console.log('Sem mensagens para processar');
         return new Response(JSON.stringify({ success: true }), {
           status: 200,
@@ -97,10 +195,10 @@ serve(async (req) => {
         });
       }
 
-      // Buscar conexão pelo meta_phone_number_id
+      // Buscar conexão pelo meta_phone_number_id com access_token
       const { data: conexao, error: conexaoError } = await supabase
         .from('conexoes_whatsapp')
-        .select('id, conta_id, instance_name, tipo_provedor')
+        .select('id, conta_id, instance_name, tipo_provedor, meta_access_token')
         .eq('meta_phone_number_id', phoneNumberId)
         .eq('tipo_provedor', 'meta')
         .single();
@@ -115,6 +213,15 @@ serve(async (req) => {
 
       console.log('Conexão encontrada:', conexao.id);
 
+      // Buscar OpenAI API key da conta
+      const { data: conta } = await supabase
+        .from('contas')
+        .select('openai_api_key')
+        .eq('id', conexao.conta_id)
+        .single();
+
+      const openaiKey = conta?.openai_api_key;
+
       // Processar cada mensagem
       for (const msg of messages) {
         const fromNumber = msg.from;
@@ -125,32 +232,170 @@ serve(async (req) => {
         let messageContent = '';
         let tipo: string = 'texto';
         let mediaUrl: string | null = null;
+        let metadata: Record<string, any> = { meta_msg_id: metaMsgId };
 
         switch (messageType) {
           case 'text':
             messageContent = msg.text?.body || '';
             break;
-          case 'image':
+
+          case 'image': {
             tipo = 'imagem';
-            messageContent = msg.image?.caption || '📷 Imagem';
+            const imageId = msg.image?.id;
+            const imageCaption = msg.image?.caption || '';
+            
+            if (imageId && conexao.meta_access_token) {
+              console.log('Baixando imagem Meta:', imageId);
+              const downloadResult = await downloadMetaMedia(
+                imageId,
+                conexao.meta_access_token,
+                'image',
+                conexao.conta_id,
+                supabaseUrl,
+                supabaseKey
+              );
+
+              if (downloadResult.success) {
+                mediaUrl = downloadResult.url || null;
+                
+                // Analisar imagem com OpenAI se disponível
+                if (openaiKey && downloadResult.base64 && downloadResult.mimeType) {
+                  const descricao = await analisarImagem(
+                    downloadResult.base64,
+                    downloadResult.mimeType,
+                    openaiKey,
+                    supabaseUrl,
+                    supabaseKey
+                  );
+                  if (descricao) {
+                    metadata.descricao_imagem = descricao;
+                    console.log('Descrição da imagem:', descricao.substring(0, 100));
+                  }
+                }
+              }
+            }
+            messageContent = imageCaption || '📷 Imagem';
             break;
-          case 'audio':
+          }
+
+          case 'audio': {
             tipo = 'audio';
-            messageContent = '🎵 Áudio';
+            const audioId = msg.audio?.id;
+            
+            if (audioId && conexao.meta_access_token) {
+              console.log('Baixando áudio Meta:', audioId);
+              const downloadResult = await downloadMetaMedia(
+                audioId,
+                conexao.meta_access_token,
+                'audio',
+                conexao.conta_id,
+                supabaseUrl,
+                supabaseKey
+              );
+
+              if (downloadResult.success) {
+                mediaUrl = downloadResult.url || null;
+                
+                // Transcrever áudio com OpenAI se disponível
+                if (openaiKey && downloadResult.base64 && downloadResult.mimeType) {
+                  const transcricao = await transcreverAudio(
+                    downloadResult.base64,
+                    downloadResult.mimeType,
+                    openaiKey,
+                    supabaseUrl,
+                    supabaseKey
+                  );
+                  if (transcricao) {
+                    metadata.transcricao = transcricao;
+                    messageContent = transcricao;
+                    console.log('Transcrição do áudio:', transcricao.substring(0, 100));
+                  }
+                }
+              }
+            }
+            
+            if (!messageContent) {
+              messageContent = '🎵 Áudio';
+            }
             break;
-          case 'video':
+          }
+
+          case 'video': {
             tipo = 'video';
-            messageContent = msg.video?.caption || '🎬 Vídeo';
+            const videoId = msg.video?.id;
+            const videoCaption = msg.video?.caption || '';
+            
+            if (videoId && conexao.meta_access_token) {
+              console.log('Baixando vídeo Meta:', videoId);
+              const downloadResult = await downloadMetaMedia(
+                videoId,
+                conexao.meta_access_token,
+                'video',
+                conexao.conta_id,
+                supabaseUrl,
+                supabaseKey
+              );
+
+              if (downloadResult.success) {
+                mediaUrl = downloadResult.url || null;
+              }
+            }
+            messageContent = videoCaption || '🎬 Vídeo';
             break;
-          case 'document':
+          }
+
+          case 'document': {
             tipo = 'documento';
-            messageContent = msg.document?.filename || '📄 Documento';
+            const docId = msg.document?.id;
+            const docFilename = msg.document?.filename || 'documento';
+            
+            if (docId && conexao.meta_access_token) {
+              console.log('Baixando documento Meta:', docId);
+              const downloadResult = await downloadMetaMedia(
+                docId,
+                conexao.meta_access_token,
+                'document',
+                conexao.conta_id,
+                supabaseUrl,
+                supabaseKey
+              );
+
+              if (downloadResult.success) {
+                mediaUrl = downloadResult.url || null;
+              }
+            }
+            messageContent = `📄 ${docFilename}`;
             break;
+          }
+
+          case 'sticker': {
+            tipo = 'sticker';
+            const stickerId = msg.sticker?.id;
+            
+            if (stickerId && conexao.meta_access_token) {
+              console.log('Baixando sticker Meta:', stickerId);
+              const downloadResult = await downloadMetaMedia(
+                stickerId,
+                conexao.meta_access_token,
+                'sticker',
+                conexao.conta_id,
+                supabaseUrl,
+                supabaseKey
+              );
+
+              if (downloadResult.success) {
+                mediaUrl = downloadResult.url || null;
+              }
+            }
+            messageContent = '🎭 Sticker';
+            break;
+          }
+
           default:
             messageContent = `Mensagem do tipo: ${messageType}`;
         }
 
-        console.log('Processando mensagem:', { from: fromNumber, tipo, conteudo: messageContent.substring(0, 50) });
+        console.log('Processando mensagem:', { from: fromNumber, tipo, conteudo: messageContent.substring(0, 50), mediaUrl });
 
         // Buscar ou criar contato
         const contactName = contacts.find((c: any) => c.wa_id === fromNumber)?.profile?.name || fromNumber;
@@ -249,7 +494,7 @@ serve(async (req) => {
           direcao: 'entrada',
           tipo,
           media_url: mediaUrl,
-          metadata: { meta_msg_id: metaMsgId },
+          metadata,
         });
 
         if (msgError) {
