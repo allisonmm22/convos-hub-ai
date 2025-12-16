@@ -610,7 +610,6 @@ export default function Conversas() {
       setSelectedTemplate(null);
       setTemplateParams([]);
       toast.success('Template enviado!');
-      fetchMensagens(conversaSelecionada.id);
     } catch (error) {
       console.error('Erro ao enviar template:', error);
       toast.error('Erro ao enviar template');
