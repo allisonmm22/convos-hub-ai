@@ -577,6 +577,7 @@ export type Database = {
         Row: {
           cor: string | null
           created_at: string
+          followup_ativo: boolean | null
           funil_id: string
           id: string
           nome: string
@@ -586,6 +587,7 @@ export type Database = {
         Insert: {
           cor?: string | null
           created_at?: string
+          followup_ativo?: boolean | null
           funil_id: string
           id?: string
           nome: string
@@ -595,6 +597,7 @@ export type Database = {
         Update: {
           cor?: string | null
           created_at?: string
+          followup_ativo?: boolean | null
           funil_id?: string
           id?: string
           nome?: string
