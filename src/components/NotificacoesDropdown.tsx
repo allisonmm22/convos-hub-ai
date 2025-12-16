@@ -131,10 +131,13 @@ export function NotificacoesDropdown() {
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <button className="relative p-2 rounded-lg hover:bg-muted transition-colors">
-          <Bell className="h-5 w-5 text-muted-foreground" />
-          {naoLidas > 0 && (
-            <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center bg-destructive text-destructive-foreground text-xs font-bold rounded-full">
+          {naoLidas > 0 ? (
+            <span className="h-5 w-5 flex items-center justify-center bg-destructive text-destructive-foreground text-xs font-bold rounded-full">
               {naoLidas > 9 ? '9+' : naoLidas}
+            </span>
+          ) : (
+            <span className="h-5 w-5 flex items-center justify-center bg-muted text-muted-foreground text-xs font-medium rounded-full">
+              0
             </span>
           )}
         </button>
