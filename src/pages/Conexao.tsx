@@ -226,12 +226,34 @@ export default function Conexao() {
     }
   };
 
+  const [copiedVerifyToken, setCopiedVerifyToken] = useState(false);
+
+  const getMetaWebhookUrl = () => {
+    return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-verify-webhook`;
+  };
+
   const copyWebhookUrl = () => {
     const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`;
     navigator.clipboard.writeText(webhookUrl);
     setCopiedWebhook(true);
     toast.success('URL copiada!');
     setTimeout(() => setCopiedWebhook(false), 2000);
+  };
+
+  const copyMetaWebhookUrl = () => {
+    navigator.clipboard.writeText(getMetaWebhookUrl());
+    setCopiedWebhook(true);
+    toast.success('URL do Webhook copiada!');
+    setTimeout(() => setCopiedWebhook(false), 2000);
+  };
+
+  const copyVerifyToken = () => {
+    if (conexao?.meta_webhook_verify_token) {
+      navigator.clipboard.writeText(conexao.meta_webhook_verify_token);
+      setCopiedVerifyToken(true);
+      toast.success('Token de verificação copiado!');
+      setTimeout(() => setCopiedVerifyToken(false), 2000);
+    }
   };
 
   const handleConnect = async () => {
@@ -387,13 +409,23 @@ export default function Conexao() {
 
     setDeleting(true);
     try {
-      // Chamar Edge Function que deleta da Evolution API e do banco
-      const { data, error } = await supabase.functions.invoke('evolution-delete-instance', {
-        body: { conexao_id: conexao.id }
-      });
+      if (conexao.tipo_provedor === 'meta') {
+        // Para Meta API, só deletar do banco
+        const { error } = await supabase
+          .from('conexoes_whatsapp')
+          .delete()
+          .eq('id', conexao.id);
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+        if (error) throw error;
+      } else {
+        // Para Evolution, chamar Edge Function
+        const { data, error } = await supabase.functions.invoke('evolution-delete-instance', {
+          body: { conexao_id: conexao.id }
+        });
+
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+      }
 
       toast.success('Conexão deletada com sucesso');
       setConexao(null);
@@ -679,7 +711,7 @@ export default function Conexao() {
             <h2 className="text-lg font-semibold text-foreground">Ações</h2>
 
             <div className={`flex gap-2 md:gap-3 ${isMobile ? 'flex-col' : 'flex-wrap'}`}>
-              {conexao.status !== 'conectado' && (
+              {conexao.status !== 'conectado' && conexao.tipo_provedor === 'evolution' && (
                 <button
                   onClick={handleConnect}
                   disabled={connecting}
@@ -711,7 +743,7 @@ export default function Conexao() {
                 )}
               </button>
 
-              {conexao.status !== 'conectado' && (
+              {conexao.status !== 'conectado' && conexao.tipo_provedor === 'evolution' && (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
                   disabled={deleting}
@@ -722,7 +754,7 @@ export default function Conexao() {
                 </button>
               )}
 
-              {conexao.status === 'conectado' && (
+              {conexao.status === 'conectado' && conexao.tipo_provedor === 'evolution' && (
                 <>
                   <button
                     onClick={handleReconfigureWebhook}
@@ -754,46 +786,212 @@ export default function Conexao() {
                   </button>
                 </>
               )}
+
+              {/* Deletar para Meta API */}
+              {conexao.tipo_provedor === 'meta' && (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={deleting}
+                  className="w-full md:w-auto h-11 px-6 rounded-lg bg-destructive text-destructive-foreground font-medium flex items-center justify-center gap-2 hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                >
+                  <Trash2 className="h-5 w-5" />
+                  Deletar Conexão
+                </button>
+              )}
             </div>
           </div>
         )}
 
-        {/* Instruções */}
-        <div className="p-6 rounded-xl bg-card border border-border">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Como conectar</h2>
-          <ol className="space-y-3 text-sm text-muted-foreground">
-            <li className="flex gap-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
-                1
-              </span>
-              <span>Digite um nome para sua conexão e clique em "Criar Instância"</span>
-            </li>
-            <li className="flex gap-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
-                2
-              </span>
-              <span>Clique em "Conectar WhatsApp" para gerar o QR Code</span>
-            </li>
-            <li className="flex gap-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
-                3
-              </span>
-              <span>No seu celular, abra o WhatsApp e vá em Configurações &gt; Dispositivos Conectados</span>
-            </li>
-            <li className="flex gap-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
-                4
-              </span>
-              <span>Toque em "Conectar Dispositivo" e escaneie o QR Code exibido acima</span>
-            </li>
-            <li className="flex gap-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
-                5
-              </span>
-              <span>Aguarde a conexão ser estabelecida. O status será atualizado automaticamente</span>
-            </li>
-          </ol>
-        </div>
+        {/* Configuração do Webhook Meta API */}
+        {conexao && conexao.tipo_provedor === 'meta' && (
+          <div className="p-4 md:p-6 rounded-xl bg-card border border-blue-500/30 space-y-4">
+            <div className="flex items-center gap-2">
+              <Globe className="h-5 w-5 text-blue-500" />
+              <h2 className="text-lg font-semibold text-foreground">Configurar Webhook Meta</h2>
+            </div>
+            
+            <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+              <p className="text-sm text-blue-400 mb-3">
+                Configure o webhook no Facebook Developer para receber mensagens.
+              </p>
+              
+              {/* URL do Webhook */}
+              <div className="space-y-2 mb-4">
+                <label className="block text-sm font-medium text-foreground">URL do Webhook</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={getMetaWebhookUrl()}
+                    readOnly
+                    className="flex-1 h-10 px-3 rounded-lg bg-input border border-border text-foreground text-sm"
+                  />
+                  <button
+                    onClick={copyMetaWebhookUrl}
+                    className="h-10 px-4 rounded-lg bg-blue-600 text-white flex items-center gap-2 hover:bg-blue-700 transition-colors"
+                  >
+                    {copiedWebhook ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Token de Verificação */}
+              <div className="space-y-2 mb-4">
+                <label className="block text-sm font-medium text-foreground">Token de Verificação</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={conexao.meta_webhook_verify_token || ''}
+                    readOnly
+                    className="flex-1 h-10 px-3 rounded-lg bg-input border border-border text-foreground text-sm font-mono"
+                  />
+                  <button
+                    onClick={copyVerifyToken}
+                    className="h-10 px-4 rounded-lg bg-blue-600 text-white flex items-center gap-2 hover:bg-blue-700 transition-colors"
+                  >
+                    {copiedVerifyToken ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Instruções */}
+              <div className="border-t border-blue-500/20 pt-4 mt-4">
+                <h3 className="text-sm font-semibold text-foreground mb-3">Passo a passo:</h3>
+                <ol className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-semibold flex-shrink-0">1</span>
+                    <span>Acesse <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Facebook Developer</a> e selecione seu app</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-semibold flex-shrink-0">2</span>
+                    <span>Vá em WhatsApp {'>'} Configuration {'>'} Webhook</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-semibold flex-shrink-0">3</span>
+                    <span>Clique em "Edit" e cole a <strong>URL do Webhook</strong> acima</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-semibold flex-shrink-0">4</span>
+                    <span>Cole o <strong>Token de Verificação</strong> no campo "Verify token"</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-semibold flex-shrink-0">5</span>
+                    <span>Clique em "Verify and save"</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs font-semibold flex-shrink-0">6</span>
+                    <span>Em "Webhook fields", ative <strong>messages</strong></span>
+                  </li>
+                </ol>
+              </div>
+            </div>
+
+            <a 
+              href="https://developers.facebook.com/docs/whatsapp/cloud-api/guides/set-up-webhooks"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Documentação oficial do webhook
+            </a>
+          </div>
+        )}
+
+        {/* Editar credenciais Meta */}
+        {conexao && conexao.tipo_provedor === 'meta' && (
+          <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-4">
+            <h2 className="text-lg font-semibold text-foreground">Credenciais Meta API</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Phone Number ID</label>
+                <input
+                  type="text"
+                  value={metaPhoneNumberId}
+                  onChange={(e) => setMetaPhoneNumberId(e.target.value)}
+                  placeholder="Ex: 123456789012345"
+                  className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Business Account ID</label>
+                <input
+                  type="text"
+                  value={metaBusinessAccountId}
+                  onChange={(e) => setMetaBusinessAccountId(e.target.value)}
+                  placeholder="Ex: 123456789012345"
+                  className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Access Token</label>
+                <input
+                  type="password"
+                  value={metaAccessToken}
+                  onChange={(e) => setMetaAccessToken(e.target.value)}
+                  placeholder="Token de acesso permanente"
+                  className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <button
+                onClick={handleSaveMetaCredentials}
+                disabled={savingMeta || !metaPhoneNumberId.trim() || !metaAccessToken.trim()}
+                className="w-full h-11 rounded-lg bg-blue-600 text-white font-medium flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {savingMeta ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <Check className="h-5 w-5" />
+                    Salvar Credenciais
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Instruções - Apenas para Evolution */}
+        {(!conexao || conexao.tipo_provedor === 'evolution') && (
+          <div className="p-6 rounded-xl bg-card border border-border">
+            <h2 className="text-lg font-semibold text-foreground mb-4">Como conectar (Evolution API)</h2>
+            <ol className="space-y-3 text-sm text-muted-foreground">
+              <li className="flex gap-3">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
+                  1
+                </span>
+                <span>Digite um nome para sua conexão e clique em "Criar Instância"</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
+                  2
+                </span>
+                <span>Clique em "Conectar WhatsApp" para gerar o QR Code</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
+                  3
+                </span>
+                <span>No seu celular, abra o WhatsApp e vá em Configurações &gt; Dispositivos Conectados</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
+                  4
+                </span>
+                <span>Toque em "Conectar Dispositivo" e escaneie o QR Code exibido acima</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-semibold flex-shrink-0">
+                  5
+                </span>
+                <span>Aguarde a conexão ser estabelecida. O status será atualizado automaticamente</span>
+              </li>
+            </ol>
+          </div>
+        )}
 
         {/* Modal de Confirmação de Delete */}
         {showDeleteConfirm && (
