@@ -99,6 +99,12 @@ interface AgenteIA {
   tipo: string | null;
 }
 
+interface EtapaIA {
+  id: string;
+  nome: string;
+  numero: number;
+}
+
 interface Conversa {
   id: string;
   contato_id: string;
@@ -110,8 +116,10 @@ interface Conversa {
   ultima_mensagem_at: string | null;
   nao_lidas: number | null;
   status?: string | null;
+  etapa_ia_atual?: string | null;
   contatos: Contato;
   agent_ia?: AgenteIA | null;
+  etapa_ia?: EtapaIA | null;
 }
 
 interface MensagemMetadata {
@@ -422,7 +430,7 @@ export default function Conversas() {
     try {
       const { data, error } = await supabase
         .from('conversas')
-        .select(`*, contatos(*), agent_ia:agente_ia_id(id, nome, ativo, tipo)`)
+        .select(`*, contatos(*), agent_ia:agente_ia_id(id, nome, ativo, tipo), etapa_ia:etapa_ia_atual(id, nome, numero)`)
         .eq('conta_id', usuario!.conta_id)
         .eq('arquivada', false)
         .order('ultima_mensagem_at', { ascending: false });
@@ -1804,7 +1812,17 @@ export default function Conversas() {
                       {conversaSelecionada.agente_ia_ativo ? (
                         <>
                           <Bot className="h-4 w-4" />
-                          {conversaSelecionada.agent_ia?.nome || 'Agente IA'}
+                          <span className="flex items-center gap-1.5">
+                            {conversaSelecionada.agent_ia?.nome || 'Agente IA'}
+                            {conversaSelecionada.etapa_ia && (
+                              <>
+                                <span className="text-primary/60">•</span>
+                                <span className="text-xs opacity-80">
+                                  Etapa {conversaSelecionada.etapa_ia.numero}: {conversaSelecionada.etapa_ia.nome}
+                                </span>
+                              </>
+                            )}
+                          </span>
                         </>
                       ) : (
                         <>
