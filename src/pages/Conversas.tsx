@@ -1245,8 +1245,8 @@ export default function Conversas() {
                 
                 if (msg.enviada_por_ia) {
                   return (
-                    <div className="flex items-center gap-1.5 text-xs opacity-80 mb-1.5 font-medium">
-                      <Bot className="h-3.5 w-3.5" />
+                    <div className="flex items-center gap-1.5 text-xs opacity-80 mb-1 font-medium">
+                      <User className="h-3.5 w-3.5" />
                       <span>Agente IA</span>
                     </div>
                   );
