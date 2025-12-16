@@ -379,17 +379,15 @@ serve(async (req) => {
       });
     }
 
-    // ===== ROTEADOR: META API vs INSTAGRAM vs EVOLUTION API =====
+    // ===== ROTEADOR: META API vs EVOLUTION API =====
+    // Meta WhatsApp Business API (tipo_provedor = 'meta')
     if (conexao.tipo_provedor === 'meta') {
       return await enviarViaMeta(conexao, telefone, mensagem, tipo, media_url, supabase);
     }
 
-    if (conexao.tipo_provedor === 'instagram') {
-      // Para Instagram, o "telefone" é o Instagram Scoped User ID (IGSID)
-      return await enviarViaInstagram(conexao, telefone, mensagem, tipo, media_url, supabase);
-    }
-
-    // ===== CÓDIGO EVOLUTION (100% ORIGINAL ABAIXO) =====
+    // Instagram via Evolution API (tipo_provedor = 'instagram') ou WhatsApp Evolution (tipo_provedor = 'evolution' ou null)
+    // Ambos usam Evolution API para envio de mensagens
+    // ===== CÓDIGO EVOLUTION (EVOLUTION + INSTAGRAM) =====
     const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
     if (!evolutionApiKey) {
       console.error('EVOLUTION_API_KEY não configurada');
