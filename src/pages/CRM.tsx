@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Plus, DollarSign, User, MoreVertical, GripVertical, Loader2, Settings } from 'lucide-react';
+import { Plus, DollarSign, User, MoreVertical, GripVertical, Loader2, Settings, Calendar, Percent } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -42,6 +44,7 @@ interface Negociacao {
   probabilidade?: number;
   notas?: string;
   data_fechamento?: string;
+  created_at?: string;
   contatos: {
     nome: string;
     telefone: string;
@@ -469,27 +472,50 @@ export default function CRM() {
                         dragging === negociacao.id && 'opacity-50 cursor-grabbing'
                       )}
                     >
+                      {/* Header */}
                       <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
-                          <h4 className="font-medium text-foreground">{negociacao.titulo}</h4>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab flex-shrink-0" />
+                          <h4 className="font-medium text-foreground truncate">{negociacao.titulo}</h4>
+                        </div>
+                        {/* Probabilidade Badge */}
+                        <div className={cn(
+                          'flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0',
+                          negociacao.probabilidade && negociacao.probabilidade >= 70 
+                            ? 'bg-success/20 text-success'
+                            : negociacao.probabilidade && negociacao.probabilidade >= 40 
+                              ? 'bg-warning/20 text-warning'
+                              : 'bg-muted text-muted-foreground'
+                        )}>
+                          <Percent className="h-3 w-3" />
+                          {negociacao.probabilidade || 0}
                         </div>
                       </div>
 
+                      {/* Contato */}
                       <div className="flex items-center gap-2 mb-3">
-                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 flex-shrink-0">
                           <User className="h-3 w-3 text-primary" />
                         </div>
-                        <span className="text-sm text-muted-foreground">
+                        <span className="text-sm text-muted-foreground truncate">
                           {negociacao.contatos?.nome || 'Sem contato'}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="h-4 w-4 text-success" />
-                        <span className="font-semibold text-success">
-                          {formatCurrency(Number(negociacao.valor))}
-                        </span>
+                      {/* Valor e Data */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <DollarSign className="h-4 w-4 text-success" />
+                          <span className="font-semibold text-success">
+                            {formatCurrency(Number(negociacao.valor))}
+                          </span>
+                        </div>
+                        {negociacao.created_at && (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Calendar className="h-3 w-3" />
+                            <span>{format(new Date(negociacao.created_at), 'dd MMM', { locale: ptBR })}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
