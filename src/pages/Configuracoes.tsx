@@ -6,9 +6,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useNotificationPreferences } from '@/hooks/useNotificationPreferences';
 import { requestNotificationPermission } from '@/lib/notificationSound';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function Configuracoes() {
   const { usuario, refreshUsuario } = useAuth();
+  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(false);
   const [userData, setUserData] = useState({
     nome: '',
@@ -119,18 +121,18 @@ export default function Configuracoes() {
 
   return (
     <MainLayout>
-      <div className="max-w-2xl space-y-8 animate-fade-in">
+      <div className={`max-w-2xl space-y-6 md:space-y-8 animate-fade-in ${isMobile ? 'px-4 py-4' : ''}`}>
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Configurações</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Configurações</h1>
+          <p className="text-muted-foreground mt-1 text-sm md:text-base">
             Gerencie suas preferências e configurações da conta.
           </p>
         </div>
 
         {/* Perfil */}
-        <div className="p-6 rounded-xl bg-card border border-border space-y-6">
+        <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-4 md:space-y-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20 flex-shrink-0">
               <User className="h-5 w-5 text-primary" />
             </div>
             <div>
@@ -164,17 +166,17 @@ export default function Configuracoes() {
             </div>
 
             {/* Assinatura */}
-            <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border border-border">
-              <div className="flex items-center gap-3">
-                <PenLine className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium text-foreground">Assinatura nas Mensagens</p>
-                  <p className="text-sm text-muted-foreground">Adicionar seu nome ao final das mensagens enviadas</p>
+            <div className="flex items-center justify-between gap-3 p-3 md:p-4 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center gap-3 min-w-0">
+                <PenLine className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-medium text-foreground text-sm md:text-base">Assinatura nas Mensagens</p>
+                  <p className="text-xs md:text-sm text-muted-foreground truncate">Adicionar seu nome ao final das mensagens</p>
                 </div>
               </div>
               <button
                 onClick={() => handleAssinaturaToggle(!assinaturaAtiva)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
                   assinaturaAtiva ? 'bg-primary' : 'bg-muted-foreground/30'
                 }`}
               >
@@ -204,9 +206,9 @@ export default function Configuracoes() {
         </div>
 
         {/* Notificações */}
-        <div className="p-6 rounded-xl bg-card border border-border space-y-6">
+        <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-4 md:space-y-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20 flex-shrink-0">
               <Bell className="h-5 w-5 text-blue-500" />
             </div>
             <div>
@@ -217,17 +219,17 @@ export default function Configuracoes() {
 
           <div className="space-y-4">
             {/* Som */}
-            <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border border-border">
-              <div className="flex items-center gap-3">
-                <Volume2 className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium text-foreground">Notificação Sonora</p>
-                  <p className="text-sm text-muted-foreground">Tocar som quando nova mensagem chegar</p>
+            <div className="flex items-center justify-between gap-3 p-3 md:p-4 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center gap-3 min-w-0">
+                <Volume2 className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-medium text-foreground text-sm md:text-base">Notificação Sonora</p>
+                  <p className="text-xs md:text-sm text-muted-foreground truncate">Tocar som quando nova mensagem chegar</p>
                 </div>
               </div>
               <button
                 onClick={() => handleSoundToggle(!soundEnabled)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
                   soundEnabled ? 'bg-primary' : 'bg-muted-foreground/30'
                 }`}
               >
@@ -240,17 +242,17 @@ export default function Configuracoes() {
             </div>
 
             {/* Browser */}
-            <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border border-border">
-              <div className="flex items-center gap-3">
-                <Bell className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium text-foreground">Notificação do Navegador</p>
-                  <p className="text-sm text-muted-foreground">Mostrar notificação push no navegador</p>
+            <div className="flex items-center justify-between gap-3 p-3 md:p-4 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center gap-3 min-w-0">
+                <Bell className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-medium text-foreground text-sm md:text-base">Notificação do Navegador</p>
+                  <p className="text-xs md:text-sm text-muted-foreground truncate">Mostrar notificação push</p>
                 </div>
               </div>
               <button
                 onClick={() => handleBrowserNotificationToggle(!browserEnabled)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
                   browserEnabled ? 'bg-primary' : 'bg-muted-foreground/30'
                 }`}
               >
@@ -269,9 +271,9 @@ export default function Configuracoes() {
         </div>
 
         {/* Conta */}
-        <div className="p-6 rounded-xl bg-card border border-border space-y-6">
+        <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-4 md:space-y-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/20">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/20 flex-shrink-0">
               <Building className="h-5 w-5 text-warning" />
             </div>
             <div>
@@ -295,7 +297,7 @@ export default function Configuracoes() {
           <button
             onClick={handleSaveConta}
             disabled={loading}
-            className="h-10 px-6 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
+            className="w-full md:w-auto h-10 px-6 rounded-lg bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
