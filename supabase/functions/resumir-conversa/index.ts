@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { conversa_id } = await req.json();
+    const { conversa_id, negociacao_id } = await req.json();
 
     if (!conversa_id) {
       return new Response(
@@ -77,15 +77,16 @@ serve(async (req) => {
 
     const contatoNome = (conversa.contatos as any)?.nome || 'Lead';
 
-    const prompt = `Você é um assistente de vendas. Analise a conversa abaixo entre o lead "${contatoNome}" e o atendente/agente IA.
+    // Prompt mais conciso para resumos menores
+    const prompt = `Resuma esta conversa de vendas com o lead "${contatoNome}" em no máximo 100 palavras.
 
-Gere um resumo estruturado e objetivo contendo:
+Inclua apenas:
+• O que o lead busca
+• Objeções ou dúvidas principais
+• Status atual da negociação
+• Próximo passo sugerido
 
-1. **Resumo Geral** (2-3 frases): O que foi discutido na conversa
-2. **Interesse do Lead**: O que o lead está buscando ou precisa
-3. **Pontos Importantes**: Objeções, dúvidas ou preocupações levantadas
-4. **Status Atual**: Em que ponto a negociação está (inicial, qualificação, proposta, etc.)
-5. **Próximos Passos**: Sugestão de ação para avançar a venda
+Seja direto e objetivo. Máximo 100 palavras.
 
 Conversa:
 ${conversaTexto}`;
@@ -99,7 +100,7 @@ ${conversaTexto}`;
       );
     }
 
-    console.log('Chamando Lovable AI para gerar resumo...');
+    console.log('Chamando Lovable AI para gerar resumo conciso...');
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -110,10 +111,10 @@ ${conversaTexto}`;
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash',
         messages: [
-          { role: 'system', content: 'Você é um especialista em análise de conversas de vendas. Seja objetivo e direto.' },
+          { role: 'system', content: 'Você é um especialista em análise de conversas de vendas. Seja extremamente conciso e direto. Máximo 100 palavras.' },
           { role: 'user', content: prompt }
         ],
-        max_tokens: 1000,
+        max_tokens: 300,
         temperature: 0.7,
       }),
     });
@@ -143,9 +144,32 @@ ${conversaTexto}`;
     }
 
     const aiData = await aiResponse.json();
-    const resumo = aiData.choices?.[0]?.message?.content || 'Não foi possível gerar o resumo.';
+    let resumo = aiData.choices?.[0]?.message?.content || 'Não foi possível gerar o resumo.';
 
-    console.log('Resumo gerado com sucesso');
+    // Truncar se ultrapassar 600 caracteres
+    if (resumo.length > 600) {
+      resumo = resumo.substring(0, 597) + '...';
+    }
+
+    console.log('Resumo gerado com sucesso, tamanho:', resumo.length, 'caracteres');
+
+    // Salvar resumo na negociação se negociacao_id foi fornecido
+    if (negociacao_id) {
+      const { error: updateError } = await supabase
+        .from('negociacoes')
+        .update({
+          resumo_ia: resumo,
+          resumo_gerado_em: new Date().toISOString()
+        })
+        .eq('id', negociacao_id);
+
+      if (updateError) {
+        console.error('Erro ao salvar resumo na negociação:', updateError);
+        // Não retorna erro, pois o resumo foi gerado com sucesso
+      } else {
+        console.log('Resumo salvo na negociação:', negociacao_id);
+      }
+    }
 
     return new Response(
       JSON.stringify({ resumo }),
