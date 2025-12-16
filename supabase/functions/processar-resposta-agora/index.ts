@@ -142,7 +142,7 @@ serve(async (req) => {
     // Buscar dados da conversa
     const { data: conversa, error: conversaError } = await supabase
       .from('conversas')
-      .select('*, contato:contatos(*), conexao:conexoes_whatsapp(id, instance_name, token), agente:agent_ia(fracionar_mensagens, tamanho_max_fracao, delay_entre_fracoes)')
+      .select('*, contato:contatos(*), conexao:conexoes_whatsapp(id, instance_name, token), agente:agent_ia(fracionar_mensagens, tamanho_max_fracao, delay_entre_fracoes, simular_digitacao)')
       .eq('id', conversa_id)
       .single();
 
@@ -222,7 +222,7 @@ serve(async (req) => {
     if (aiData.should_respond && aiData.resposta) {
       const conexao = conversa.conexao;
       const contato = conversa.contato;
-      const agente = conversa.agente as { fracionar_mensagens?: boolean; tamanho_max_fracao?: number; delay_entre_fracoes?: number } | null;
+      const agente = conversa.agente as { fracionar_mensagens?: boolean; tamanho_max_fracao?: number; delay_entre_fracoes?: number; simular_digitacao?: boolean } | null;
       
       if (!conexao?.instance_name || !conexao?.token) {
         console.error('Conexão sem instance_name ou token');
@@ -237,6 +237,7 @@ serve(async (req) => {
       const fracionarMensagens = agente?.fracionar_mensagens ?? false;
       const tamanhoMaxFracao = agente?.tamanho_max_fracao ?? 500;
       const delayEntreFracoes = agente?.delay_entre_fracoes ?? 2;
+      const simularDigitacao = agente?.simular_digitacao ?? false;
 
       let mensagensParaEnviar: string[] = [aiData.resposta];
       
@@ -255,6 +256,34 @@ serve(async (req) => {
         if (i > 0 && fracionarMensagens) {
           console.log(`Aguardando ${delayEntreFracoes}s antes de enviar fração ${i + 1}...`);
           await sleep(delayEntreFracoes * 1000);
+        }
+
+        // Simular digitação se ativo
+        if (simularDigitacao) {
+          try {
+            console.log('Enviando indicador de digitação...');
+            await fetch(
+              `${EVOLUTION_API_URL}/chat/sendPresence/${conexao.instance_name}`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': conexao.token,
+                },
+                body: JSON.stringify({
+                  number: contato?.telefone,
+                  presence: 'composing',
+                }),
+              }
+            );
+            // Tempo de "digitação" proporcional ao tamanho da mensagem (min 1s, max 3s)
+            const tempoDigitacao = Math.min(3000, Math.max(1000, fracao.length * 15));
+            console.log(`Simulando digitação por ${tempoDigitacao}ms...`);
+            await sleep(tempoDigitacao);
+          } catch (typingError) {
+            console.error('Erro ao enviar indicador de digitação:', typingError);
+            // Continua mesmo se falhar o typing
+          }
         }
 
         const sendResponse = await fetch(
