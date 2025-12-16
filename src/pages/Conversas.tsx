@@ -69,6 +69,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface Contato {
   id: string;
@@ -1835,23 +1841,35 @@ export default function Conversas() {
 
                   {/* Transferir - não mostrar para grupos (não faz sentido transferir grupo para IA) */}
                   {!conversaSelecionada.contatos.is_grupo && (
-                    <button
-                      onClick={() => setShowTransferModal(true)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
-                    >
-                      <ArrowRightLeft className="h-4 w-4" />
-                      Transferir
-                    </button>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => setShowTransferModal(true)}
+                            className="p-2 rounded-xl bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
+                          >
+                            <ArrowRightLeft className="h-4 w-4" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>Transferir</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   )}
 
                   {/* Encerrar */}
-                  <button
-                    onClick={encerrarAtendimento}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all duration-200"
-                  >
-                    <XCircle className="h-4 w-4" />
-                    Encerrar
-                  </button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={encerrarAtendimento}
+                          className="p-2 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all duration-200"
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Encerrar</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
