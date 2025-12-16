@@ -372,17 +372,30 @@ export default function AgenteIA() {
                     {agentesPrincipais.length === 0 ? (
                       <EmptyAgentState type="principal" onCreate={() => setShowNovoAgenteModal(true)} />
                     ) : (
-                      <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                        {agentesPrincipais.map((agente) => (
-                          <AgentCard
-                            key={agente.id}
-                            agente={agente}
-                            onToggle={() => toggleAgente(agente.id, agente.ativo)}
-                            onEdit={() => navigate(`/agente-ia/${agente.id}`)}
-                            onDelete={() => deleteAgente(agente.id)}
-                          />
-                        ))}
-                      </div>
+                      <OnboardingTooltip
+                        title="Seus Agentes de IA"
+                        description="Aqui você configura o comportamento do seu assistente virtual. Clique em Editar para personalizar as regras, etapas e FAQs."
+                        step={4}
+                        totalSteps={5}
+                        position="bottom"
+                        isVisible={isOnboardingActive && currentStep === 'configurar_agente'}
+                        onNext={() => {
+                          completeStep('configurar_agente');
+                          goToStep('concluido');
+                        }}
+                      >
+                        <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                          {agentesPrincipais.map((agente) => (
+                            <AgentCard
+                              key={agente.id}
+                              agente={agente}
+                              onToggle={() => toggleAgente(agente.id, agente.ativo)}
+                              onEdit={() => navigate(`/agente-ia/${agente.id}`)}
+                              onDelete={() => deleteAgente(agente.id)}
+                            />
+                          ))}
+                        </div>
+                      </OnboardingTooltip>
                     )}
                   </div>
 
