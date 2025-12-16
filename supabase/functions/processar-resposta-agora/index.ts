@@ -175,13 +175,17 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    // Extrair transcrição/descrição se houver
+    // Extrair transcrição/descrição/texto de documento se houver
     const metadata = (ultimaMensagem?.metadata as Record<string, any>) || {};
     const transcricao = metadata.transcricao || null;
     const descricaoImagem = metadata.descricao_imagem || null;
+    const textoDocumento = metadata.texto_documento || null;
 
     console.log('Última mensagem do lead:', ultimaMensagem?.conteudo?.substring(0, 50));
     console.log('Conta ID:', conversa.conta_id);
+    if (textoDocumento) {
+      console.log('Texto de documento detectado:', textoDocumento.substring(0, 50));
+    }
 
     // Chamar ai-responder com TODOS os dados necessários
     console.log('Chamando ai-responder...');
@@ -200,6 +204,7 @@ serve(async (req) => {
           mensagem_tipo: ultimaMensagem?.tipo || 'texto',
           transcricao,
           descricao_imagem: descricaoImagem,
+          texto_documento: textoDocumento,
         }),
       }
     );

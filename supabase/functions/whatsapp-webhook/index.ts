@@ -305,6 +305,7 @@ serve(async (req) => {
       // Se é mídia, fazer download e salvar no Storage
       let transcricaoAudio: string | null = null;
       let descricaoImagem: string | null = null;
+      let textoDocumento: string | null = null;
       
       if (needsMediaDownload && messageId) {
         console.log('Baixando mídia:', messageType, messageId);
@@ -395,6 +396,39 @@ serve(async (req) => {
                 }
               } catch (analiseError) {
                 console.error('Erro ao chamar analisar-imagem:', analiseError);
+              }
+            }
+
+            // Se for documento PDF, extrair texto (não precisa de API key)
+            if (messageType === 'documento' && downloadData.mimeType?.includes('pdf') && downloadData.base64) {
+              console.log('=== EXTRAINDO TEXTO DO PDF ===');
+              try {
+                const extractResponse = await fetch(
+                  `${supabaseUrl}/functions/v1/extrair-texto-pdf`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${supabaseKey}`,
+                    },
+                    body: JSON.stringify({
+                      pdf_base64: downloadData.base64,
+                      mime_type: downloadData.mimeType,
+                    }),
+                  }
+                );
+
+                if (extractResponse.ok) {
+                  const extractData = await extractResponse.json();
+                  if (extractData.sucesso && extractData.texto) {
+                    textoDocumento = extractData.texto;
+                    console.log('Texto extraído do PDF:', textoDocumento?.substring(0, 100));
+                  }
+                } else {
+                  console.error('Erro na extração de texto:', await extractResponse.text());
+                }
+              } catch (extractError) {
+                console.error('Erro ao chamar extrair-texto-pdf:', extractError);
               }
             }
           } else {
@@ -596,6 +630,9 @@ serve(async (req) => {
       }
       if (descricaoImagem) {
         messageMetadata.descricao_imagem = descricaoImagem;
+      }
+      if (textoDocumento) {
+        messageMetadata.texto_documento = textoDocumento;
       }
       // Adicionar info do participante para mensagens de grupo
       if (isGrupo && !fromMe && participanteTelefone) {
