@@ -3,7 +3,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { 
   Plus, DollarSign, User, MoreVertical, GripVertical, Loader2, Settings, 
   Calendar, Percent, Bell, BellOff, Edit2, TrendingUp, Briefcase, Target,
-  ArrowRight, Search, X
+  ArrowRight, Search, X, ChevronLeft, ChevronRight as ChevronRightIcon
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Link, useNavigate } from 'react-router-dom';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   Select,
   SelectContent,
@@ -80,6 +81,7 @@ interface Contato {
 export default function CRM() {
   const { usuario } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [funis, setFunis] = useState<Funil[]>([]);
   const [selectedFunilId, setSelectedFunilId] = useState<string | null>(null);
   const [negociacoes, setNegociacoes] = useState<Negociacao[]>([]);
@@ -87,6 +89,7 @@ export default function CRM() {
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOverEstagio, setDragOverEstagio] = useState<string | null>(null);
   const [termoBusca, setTermoBusca] = useState('');
+  const [activeStageIndex, setActiveStageIndex] = useState(0);
   
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -379,66 +382,79 @@ export default function CRM() {
     <MainLayout>
       <div className="space-y-6 animate-fade-in">
         {/* Header com Métricas */}
-        <div className="space-y-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">CRM</h1>
-              <p className="text-muted-foreground mt-1">
+        <div className="space-y-4 md:space-y-6 px-4 md:px-0">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-2xl md:text-3xl font-bold text-foreground">CRM</h1>
+              <p className="text-sm md:text-base text-muted-foreground mt-1 hidden sm:block">
                 Gerencie suas negociações e acompanhe o funil de vendas
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
               <Link
                 to="/crm/configuracoes"
-                className="p-2.5 rounded-xl border border-border hover:bg-muted transition-all hover:scale-105"
+                className="p-2 md:p-2.5 rounded-xl border border-border hover:bg-muted transition-all"
                 title="Configurações do CRM"
               >
-                <Settings className="h-5 w-5 text-muted-foreground" />
+                <Settings className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
               </Link>
               <button 
                 onClick={openModal}
-                className="h-11 px-5 rounded-xl bg-primary text-primary-foreground font-medium flex items-center gap-2 hover:bg-primary/90 transition-all hover:scale-105 shadow-lg shadow-primary/25"
+                className="h-9 md:h-11 px-3 md:px-5 rounded-xl bg-primary text-primary-foreground font-medium flex items-center gap-2 hover:bg-primary/90 transition-all shadow-lg shadow-primary/25"
               >
-                <Plus className="h-5 w-5" />
-                Nova Negociação
+                <Plus className="h-4 w-4 md:h-5 md:w-5" />
+                <span className="hidden sm:inline">Nova Negociação</span>
               </button>
             </div>
           </div>
 
-          {/* Cards de Métricas */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border border-emerald-500/20">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-emerald-500/20">
-                  <DollarSign className="h-5 w-5 text-emerald-500" />
+          {/* Cards de Métricas - Horizontal scroll em mobile */}
+          <div className={cn(
+            "flex gap-3 md:gap-4",
+            isMobile ? "overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory" : "grid grid-cols-3"
+          )}>
+            <div className={cn(
+              "p-3 md:p-4 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border border-emerald-500/20",
+              isMobile && "flex-shrink-0 w-[160px] snap-center"
+            )}>
+              <div className="flex items-center gap-2 md:gap-3">
+                <div className="p-2 md:p-2.5 rounded-xl bg-emerald-500/20">
+                  <DollarSign className="h-4 w-4 md:h-5 md:w-5 text-emerald-500" />
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Pipeline</p>
-                  <p className="text-2xl font-bold text-foreground">{formatCurrency(metricas.totalPipeline)}</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-500/20">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-blue-500/20">
-                  <Briefcase className="h-5 w-5 text-blue-500" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Negociações</p>
-                  <p className="text-2xl font-bold text-foreground">{metricas.totalNegociacoes}</p>
+                <div className="min-w-0">
+                  <p className="text-xs md:text-sm text-muted-foreground">Pipeline</p>
+                  <p className="text-lg md:text-2xl font-bold text-foreground truncate">{formatCurrency(metricas.totalPipeline)}</p>
                 </div>
               </div>
             </div>
             
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-violet-500/10 to-violet-500/5 border border-violet-500/20">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-violet-500/20">
-                  <TrendingUp className="h-5 w-5 text-violet-500" />
+            <div className={cn(
+              "p-3 md:p-4 rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-500/20",
+              isMobile && "flex-shrink-0 w-[140px] snap-center"
+            )}>
+              <div className="flex items-center gap-2 md:gap-3">
+                <div className="p-2 md:p-2.5 rounded-xl bg-blue-500/20">
+                  <Briefcase className="h-4 w-4 md:h-5 md:w-5 text-blue-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Prob. Média</p>
-                  <p className="text-2xl font-bold text-foreground">{metricas.mediaProbabilidade}%</p>
+                  <p className="text-xs md:text-sm text-muted-foreground">Negociações</p>
+                  <p className="text-lg md:text-2xl font-bold text-foreground">{metricas.totalNegociacoes}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className={cn(
+              "p-3 md:p-4 rounded-2xl bg-gradient-to-br from-violet-500/10 to-violet-500/5 border border-violet-500/20",
+              isMobile && "flex-shrink-0 w-[140px] snap-center"
+            )}>
+              <div className="flex items-center gap-2 md:gap-3">
+                <div className="p-2 md:p-2.5 rounded-xl bg-violet-500/20">
+                  <TrendingUp className="h-4 w-4 md:h-5 md:w-5 text-violet-500" />
+                </div>
+                <div>
+                  <p className="text-xs md:text-sm text-muted-foreground">Prob. Média</p>
+                  <p className="text-lg md:text-2xl font-bold text-foreground">{metricas.mediaProbabilidade}%</p>
                 </div>
               </div>
             </div>
@@ -446,13 +462,13 @@ export default function CRM() {
 
           {/* Campo de Busca */}
           <div className="relative">
-            <div className="relative max-w-md">
+            <div className="relative w-full md:max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={termoBusca}
                 onChange={(e) => setTermoBusca(e.target.value)}
                 placeholder="Buscar por nome ou telefone..."
-                className="pl-10 pr-10 h-11 rounded-xl bg-card border-border"
+                className="pl-10 pr-10 h-10 md:h-11 rounded-xl bg-card border-border"
               />
               {termoBusca && (
                 <button
@@ -556,35 +572,37 @@ export default function CRM() {
 
         {/* Seletor de Funil Aprimorado */}
         {funis.length > 0 && (
-          <div className="flex items-center gap-4 p-4 rounded-2xl bg-card border border-border">
-            <div className="flex items-center gap-2">
-              <Target className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm font-medium text-muted-foreground">Funil:</span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 md:p-4 rounded-2xl bg-card border border-border mx-4 md:mx-0">
+            <div className="flex items-center gap-2 md:gap-4 flex-1">
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Target className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
+                <span className="text-xs md:text-sm font-medium text-muted-foreground hidden sm:inline">Funil:</span>
+              </div>
+              <Select value={selectedFunilId || ''} onValueChange={handleFunilChange}>
+                <SelectTrigger className="flex-1 sm:w-[200px] md:w-[280px] bg-background h-9 md:h-10">
+                  <SelectValue placeholder="Selecione um funil" />
+                </SelectTrigger>
+                <SelectContent>
+                  {funis.map((funil) => (
+                    <SelectItem key={funil.id} value={funil.id}>
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="h-3 w-3 rounded-full ring-2 ring-offset-1 ring-offset-background" 
+                          style={{ backgroundColor: funil.cor, boxShadow: `0 0 8px ${funil.cor}50` }}
+                        />
+                        <span className="font-medium">{funil.nome}</span>
+                        <span className="text-xs text-muted-foreground">
+                          ({funil.estagios.length} etapas)
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Select value={selectedFunilId || ''} onValueChange={handleFunilChange}>
-              <SelectTrigger className="w-[280px] bg-background">
-                <SelectValue placeholder="Selecione um funil" />
-              </SelectTrigger>
-              <SelectContent>
-                {funis.map((funil) => (
-                  <SelectItem key={funil.id} value={funil.id}>
-                    <div className="flex items-center gap-3">
-                      <div 
-                        className="h-3 w-3 rounded-full ring-2 ring-offset-1 ring-offset-background" 
-                        style={{ backgroundColor: funil.cor, boxShadow: `0 0 8px ${funil.cor}50` }}
-                      />
-                      <span className="font-medium">{funil.nome}</span>
-                      <span className="text-xs text-muted-foreground">
-                        ({funil.estagios.length} etapas)
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             
-            {selectedFunil && (
-              <div className="flex items-center gap-2 ml-auto text-sm text-muted-foreground">
+            {selectedFunil && !isMobile && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>{selectedFunil.estagios.length} etapas</span>
                 <span>•</span>
                 <span>{formatCurrency(metricas.totalPipeline)} em pipeline</span>
@@ -593,8 +611,62 @@ export default function CRM() {
           </div>
         )}
 
-        {/* Pipeline Progress Bar */}
-        {selectedFunil && selectedFunil.estagios.length > 0 && (
+        {/* Mobile Stage Navigator */}
+        {isMobile && selectedFunil && selectedFunil.estagios.length > 0 && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-card/50 border-y border-border sticky top-0 z-10">
+            <button
+              onClick={() => setActiveStageIndex(Math.max(0, activeStageIndex - 1))}
+              disabled={activeStageIndex === 0}
+              className="p-2 rounded-lg hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            
+            <div className="flex-1 flex items-center justify-center gap-2">
+              <div 
+                className="h-3 w-3 rounded-full"
+                style={{ backgroundColor: selectedFunil.estagios[activeStageIndex]?.cor }}
+              />
+              <span className="font-semibold text-sm">
+                {selectedFunil.estagios[activeStageIndex]?.nome}
+              </span>
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                {getNegociacoesPorEstagio(selectedFunil.estagios[activeStageIndex]?.id).length}
+              </span>
+            </div>
+            
+            <button
+              onClick={() => setActiveStageIndex(Math.min(selectedFunil.estagios.length - 1, activeStageIndex + 1))}
+              disabled={activeStageIndex === selectedFunil.estagios.length - 1}
+              className="p-2 rounded-lg hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRightIcon className="h-5 w-5" />
+            </button>
+          </div>
+        )}
+
+        {/* Stage Dots (Mobile) */}
+        {isMobile && selectedFunil && selectedFunil.estagios.length > 0 && (
+          <div className="flex justify-center gap-1.5 px-4 py-2">
+            {selectedFunil.estagios.map((estagio, index) => (
+              <button
+                key={estagio.id}
+                onClick={() => setActiveStageIndex(index)}
+                className={cn(
+                  "h-2 rounded-full transition-all duration-300",
+                  index === activeStageIndex ? "w-6" : "w-2"
+                )}
+                style={{ 
+                  backgroundColor: estagio.cor,
+                  opacity: index === activeStageIndex ? 1 : 0.4
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Pipeline Progress Bar (Desktop only) */}
+        {!isMobile && selectedFunil && selectedFunil.estagios.length > 0 && (
           <div className="flex items-center gap-1 px-1">
             {selectedFunil.estagios.map((estagio, index) => {
               const count = getNegociacoesPorEstagio(estagio.id).length;
@@ -625,10 +697,17 @@ export default function CRM() {
         {/* Kanban */}
         {selectedFunil ? (
           <div 
-            className="flex gap-5 overflow-x-auto pb-4 pt-2"
-            style={{ transform: 'rotateX(180deg)' }}
+            className={cn(
+              "pb-4 pt-2",
+              !isMobile && "flex gap-5 overflow-x-auto",
+              !isMobile && "px-0"
+            )}
+            style={!isMobile ? { transform: 'rotateX(180deg)' } : undefined}
           >
-            {selectedFunil.estagios.map((estagio, estagioIndex) => {
+            {(isMobile 
+              ? [selectedFunil.estagios[activeStageIndex]].filter(Boolean)
+              : selectedFunil.estagios
+            ).map((estagio, estagioIndex) => {
               const negociacoesEstagio = getNegociacoesPorEstagio(estagio.id);
               const isDropTarget = dragOverEstagio === estagio.id;
               
@@ -636,90 +715,130 @@ export default function CRM() {
                 <div
                   key={estagio.id}
                   className={cn(
-                    "flex-shrink-0 w-80 transition-all duration-300",
+                    "transition-all duration-300",
+                    !isMobile && "flex-shrink-0 w-80",
+                    isMobile && "px-4",
                     isDropTarget && "scale-[1.02]"
                   )}
-                  style={{ 
+                  style={!isMobile ? { 
                     transform: 'rotateX(180deg)',
                     animationDelay: `${estagioIndex * 50}ms`
-                  }}
+                  } : undefined}
                   onDragOver={(e) => handleDragOver(e, estagio.id)}
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, estagio.id)}
                 >
-                  {/* Header do Estágio */}
-                  <div 
-                    className={cn(
-                      "mb-4 p-4 rounded-2xl border transition-all duration-300",
-                      isDropTarget 
-                        ? "border-primary shadow-lg shadow-primary/20" 
-                        : "border-border"
-                    )}
-                    style={{
-                      background: `linear-gradient(135deg, ${estagio.cor}15, ${estagio.cor}05)`,
-                      borderLeft: `4px solid ${estagio.cor}`
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="h-3 w-3 rounded-full ring-2 ring-offset-2 ring-offset-card"
-                          style={{ 
-                            backgroundColor: estagio.cor,
-                            boxShadow: `0 0 12px ${estagio.cor}60`
-                          }}
-                        />
-                        <h3 className="font-semibold text-foreground">{estagio.nome}</h3>
-                        <span className="text-xs font-medium text-foreground bg-background/80 px-2.5 py-1 rounded-full border border-border">
-                          {negociacoesEstagio.length}
+                  {/* Header do Estágio - Esconder em mobile pois já temos o navegador */}
+                  {!isMobile && (
+                    <div 
+                      className={cn(
+                        "mb-4 p-4 rounded-2xl border transition-all duration-300",
+                        isDropTarget 
+                          ? "border-primary shadow-lg shadow-primary/20" 
+                          : "border-border"
+                      )}
+                      style={{
+                        background: `linear-gradient(135deg, ${estagio.cor}15, ${estagio.cor}05)`,
+                        borderLeft: `4px solid ${estagio.cor}`
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="h-3 w-3 rounded-full ring-2 ring-offset-2 ring-offset-card"
+                            style={{ 
+                              backgroundColor: estagio.cor,
+                              boxShadow: `0 0 12px ${estagio.cor}60`
+                            }}
+                          />
+                          <h3 className="font-semibold text-foreground">{estagio.nome}</h3>
+                          <span className="text-xs font-medium text-foreground bg-background/80 px-2.5 py-1 rounded-full border border-border">
+                            {negociacoesEstagio.length}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {estagio.followup_ativo === false ? (
+                            <span title="Follow-up desativado" className="text-muted-foreground/40">
+                              <BellOff className="h-4 w-4" />
+                            </span>
+                          ) : (
+                            <span title="Follow-up ativo" className="text-primary/60">
+                              <Bell className="h-4 w-4" />
+                            </span>
+                          )}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1.5 rounded-lg hover:bg-background/80 transition-colors">
+                                <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => navigate('/crm/configuracoes')}>
+                                <Edit2 className="h-4 w-4 mr-2" />
+                                Editar etapa
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleToggleFollowup(estagio)}>
+                                {estagio.followup_ativo === false ? (
+                                  <>
+                                    <Bell className="h-4 w-4 mr-2" />
+                                    Ativar follow-up
+                                  </>
+                                ) : (
+                                  <>
+                                    <BellOff className="h-4 w-4 mr-2" />
+                                    Desativar follow-up
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                      {/* Total */}
+                      <div className="mt-3 pt-3 border-t border-border/50 flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium text-foreground">
+                          {formatCurrency(getTotalPorEstagio(estagio.id))}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {estagio.followup_ativo === false ? (
-                          <span title="Follow-up desativado" className="text-muted-foreground/40">
-                            <BellOff className="h-4 w-4" />
-                          </span>
-                        ) : (
-                          <span title="Follow-up ativo" className="text-primary/60">
-                            <Bell className="h-4 w-4" />
-                          </span>
-                        )}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="p-1.5 rounded-lg hover:bg-background/80 transition-colors">
-                              <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => navigate('/crm/configuracoes')}>
-                              <Edit2 className="h-4 w-4 mr-2" />
-                              Editar etapa
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleToggleFollowup(estagio)}>
-                              {estagio.followup_ativo === false ? (
-                                <>
-                                  <Bell className="h-4 w-4 mr-2" />
-                                  Ativar follow-up
-                                </>
-                              ) : (
-                                <>
-                                  <BellOff className="h-4 w-4 mr-2" />
-                                  Desativar follow-up
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                    </div>
+                  )}
+                  
+                  {/* Mobile Header - Total da Etapa */}
+                  {isMobile && (
+                    <div className="flex items-center justify-between mb-3 px-1">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <DollarSign className="h-4 w-4" />
+                        <span className="font-medium">{formatCurrency(getTotalPorEstagio(estagio.id))}</span>
                       </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                            <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => navigate('/crm/configuracoes')}>
+                            <Edit2 className="h-4 w-4 mr-2" />
+                            Editar etapa
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleToggleFollowup(estagio)}>
+                            {estagio.followup_ativo === false ? (
+                              <>
+                                <Bell className="h-4 w-4 mr-2" />
+                                Ativar follow-up
+                              </>
+                            ) : (
+                              <>
+                                <BellOff className="h-4 w-4 mr-2" />
+                                Desativar follow-up
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                    {/* Total */}
-                    <div className="mt-3 pt-3 border-t border-border/50 flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium text-foreground">
-                        {formatCurrency(getTotalPorEstagio(estagio.id))}
-                      </span>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Cards */}
                   <div className="space-y-3 min-h-[200px]">
