@@ -468,6 +468,7 @@ export type Database = {
           conta_id: string
           contato_id: string
           created_at: string
+          etapa_ia_atual: string | null
           id: string
           memoria_limpa_em: string | null
           nao_lidas: number | null
@@ -485,6 +486,7 @@ export type Database = {
           conta_id: string
           contato_id: string
           created_at?: string
+          etapa_ia_atual?: string | null
           id?: string
           memoria_limpa_em?: string | null
           nao_lidas?: number | null
@@ -502,6 +504,7 @@ export type Database = {
           conta_id?: string
           contato_id?: string
           created_at?: string
+          etapa_ia_atual?: string | null
           id?: string
           memoria_limpa_em?: string | null
           nao_lidas?: number | null
@@ -544,6 +547,13 @@ export type Database = {
             columns: ["contato_id"]
             isOneToOne: false
             referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversas_etapa_ia_atual_fkey"
+            columns: ["etapa_ia_atual"]
+            isOneToOne: false
+            referencedRelation: "agent_ia_etapas"
             referencedColumns: ["id"]
           },
         ]
