@@ -168,6 +168,21 @@ interface Conexao {
   instance_name: string;
   status: 'conectado' | 'desconectado' | 'aguardando' | null;
   numero: string | null;
+  tipo_provedor?: string | null;
+}
+
+interface MetaTemplate {
+  id: string;
+  name: string;
+  category: string;
+  language: string;
+  status: string;
+  components: Array<{
+    type: string;
+    text?: string;
+    format?: string;
+    example?: { body_text?: string[][] };
+  }>;
 }
 
 type StatusFilter = 'todos' | 'abertos' | 'em_atendimento' | 'aguardando_cliente' | 'encerrado';
@@ -231,6 +246,13 @@ export default function Conversas() {
   const [pollingActive, setPollingActive] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Estados para templates Meta
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [templates, setTemplates] = useState<MetaTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<MetaTemplate | null>(null);
+  const [templateParams, setTemplateParams] = useState<string[]>([]);
+
   // Calcular total de mensagens não lidas e atualizar título
   const totalNaoLidas = conversas.reduce((acc, c) => acc + (c.nao_lidas || 0), 0);
   useDocumentTitle(totalNaoLidas);
@@ -253,7 +275,7 @@ export default function Conversas() {
     try {
       const { data, error } = await supabase
         .from('conexoes_whatsapp')
-        .select('id, instance_name, status, numero')
+        .select('id, instance_name, status, numero, tipo_provedor')
         .eq('conta_id', usuario.conta_id)
         .single();
 
@@ -501,6 +523,80 @@ export default function Conversas() {
       setTagsDisponiveis(data || []);
     } catch (error) {
       console.error('Erro ao buscar tags:', error);
+    }
+  };
+
+  // Buscar templates Meta
+  const fetchTemplates = async () => {
+    if (!conexao?.id || conexao.tipo_provedor !== 'meta') return;
+    
+    setLoadingTemplates(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('meta-get-templates', {
+        body: { conexao_id: conexao.id },
+      });
+      
+      if (error) throw error;
+      if (data?.templates) setTemplates(data.templates);
+    } catch (error) {
+      console.error('Erro ao buscar templates:', error);
+      toast.error('Erro ao buscar templates');
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  // Preview do template
+  const getTemplatePreview = (template: MetaTemplate, params: string[]): string => {
+    const bodyComponent = template.components.find(c => c.type === 'BODY');
+    if (!bodyComponent?.text) return '';
+    
+    let preview = bodyComponent.text;
+    params.forEach((param, index) => {
+      preview = preview.replace(`{{${index + 1}}}`, param || `{{${index + 1}}}`);
+    });
+    return preview;
+  };
+
+  // Enviar template
+  const enviarTemplate = async () => {
+    if (!conversaSelecionada || !selectedTemplate) return;
+    
+    setEnviando(true);
+    try {
+      const { error } = await supabase.functions.invoke('meta-send-message', {
+        body: {
+          conexao_id: conversaSelecionada.conexao_id,
+          telefone: conversaSelecionada.contatos.telefone,
+          template_name: selectedTemplate.name,
+          template_params: templateParams.filter(p => p.trim()),
+        },
+      });
+      
+      if (error) throw error;
+      
+      // Salvar mensagem localmente
+      const templateText = getTemplatePreview(selectedTemplate, templateParams);
+      await supabase.from('mensagens').insert({
+        conversa_id: conversaSelecionada.id,
+        conteudo: `📋 Template: ${selectedTemplate.name}\n${templateText}`,
+        direcao: 'saida',
+        tipo: 'texto',
+        usuario_id: usuario?.id,
+        contato_id: conversaSelecionada.contato_id,
+      });
+      
+      // Fechar modal e limpar estado
+      setShowTemplateModal(false);
+      setSelectedTemplate(null);
+      setTemplateParams([]);
+      toast.success('Template enviado!');
+      fetchMensagens(conversaSelecionada.id);
+    } catch (error) {
+      console.error('Erro ao enviar template:', error);
+      toast.error('Erro ao enviar template');
+    } finally {
+      setEnviando(false);
     }
   };
 
@@ -2091,6 +2187,23 @@ export default function Conversas() {
                           </div>
                           Áudio
                         </button>
+                        
+                        {/* Botão Template - apenas para Meta API */}
+                        {conexao?.tipo_provedor === 'meta' && (
+                          <button
+                            onClick={() => {
+                              setShowAttachMenu(false);
+                              fetchTemplates();
+                              setShowTemplateModal(true);
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted rounded-lg transition-all duration-200 text-sm group"
+                          >
+                            <div className="p-1.5 rounded-lg bg-purple-500/20 group-hover:bg-purple-500/30 transition-colors">
+                              <FileSpreadsheet className="h-4 w-4 text-purple-400" />
+                            </div>
+                            Template
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2399,6 +2512,137 @@ export default function Conversas() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Modal de Templates Meta */}
+        <Dialog open={showTemplateModal} onOpenChange={(open) => {
+          setShowTemplateModal(open);
+          if (!open) {
+            setSelectedTemplate(null);
+            setTemplateParams([]);
+          }
+        }}>
+          <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5 text-purple-500" />
+                {selectedTemplate ? 'Preencher Template' : 'Selecionar Template'}
+              </DialogTitle>
+            </DialogHeader>
+            
+            <div className="flex-1 overflow-y-auto">
+              {!selectedTemplate ? (
+                // Lista de templates
+                loadingTemplates ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+                  </div>
+                ) : templates.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FileSpreadsheet className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                    <p>Nenhum template aprovado</p>
+                    <p className="text-xs mt-2">Crie templates no Facebook Business Manager</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {templates.map((template) => (
+                      <button
+                        key={template.id}
+                        onClick={() => {
+                          setSelectedTemplate(template);
+                          // Inicializar params vazios baseado no número de variáveis
+                          const bodyComponent = template.components.find(c => c.type === 'BODY');
+                          const varCount = (bodyComponent?.text?.match(/\{\{\d+\}\}/g) || []).length;
+                          setTemplateParams(Array(varCount).fill(''));
+                        }}
+                        className="w-full text-left p-3 rounded-lg border border-border hover:border-purple-500/50 hover:bg-muted/50 transition-all"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium">{template.name}</span>
+                          <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded">
+                            {template.category}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {template.components.find(c => c.type === 'BODY')?.text || 'Sem preview'}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )
+              ) : (
+                // Formulário de preenchimento
+                <div className="space-y-4">
+                  <button
+                    onClick={() => setSelectedTemplate(null)}
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Voltar à lista
+                  </button>
+                  
+                  {/* Preview do template */}
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-sm font-medium mb-1">{selectedTemplate.name}</p>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {getTemplatePreview(selectedTemplate, templateParams)}
+                    </p>
+                  </div>
+                  
+                  {/* Campos de variáveis */}
+                  {templateParams.length > 0 && (
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Preencha as variáveis:</p>
+                      {templateParams.map((param, index) => (
+                        <div key={index}>
+                          <label className="text-xs text-muted-foreground mb-1 block">
+                            Variável {`{{${index + 1}}}`}
+                          </label>
+                          <input
+                            type="text"
+                            value={param}
+                            onChange={(e) => {
+                              const newParams = [...templateParams];
+                              newParams[index] = e.target.value;
+                              setTemplateParams(newParams);
+                            }}
+                            placeholder={`Valor para {{${index + 1}}}`}
+                            className="w-full px-3 py-2 rounded-lg bg-background border border-border focus:border-primary focus:ring-1 focus:ring-primary/50 outline-none text-sm"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {selectedTemplate && (
+              <DialogFooter className="mt-4">
+                <button
+                  onClick={() => {
+                    setSelectedTemplate(null);
+                    setTemplateParams([]);
+                  }}
+                  className="px-4 py-2 rounded-lg border border-border hover:bg-muted transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={enviarTemplate}
+                  disabled={enviando}
+                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {enviando ? (
+                    <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  Enviar Template
+                </button>
+              </DialogFooter>
+            )}
+          </DialogContent>
+        </Dialog>
 
       </div>
     </MainLayout>
