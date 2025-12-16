@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Calendar, Plus, Clock, Check, Loader2, ChevronLeft, ChevronRight, X, Pencil, Trash2, Video, MessageSquare } from 'lucide-react';
+import { Calendar, Plus, Clock, Check, Loader2, ChevronLeft, ChevronRight, X, Pencil, Trash2, Video, MessageSquare, Bell, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,14 +24,103 @@ interface Agendamento {
   } | null;
 }
 
+interface LembreteRegra {
+  id: string;
+  nome: string;
+  minutos_antes: number;
+  tipo: string;
+  ativo: boolean;
+}
+
+interface LembreteEnviado {
+  id: string;
+  agendamento_id: string;
+  regra_id: string;
+  enviado_em: string;
+  mensagem_enviada: string | null;
+}
+
+type LembreteStatus = 
+  | { status: 'enviado'; data: string }
+  | { status: 'pendente'; tempoRestante: number; dataEnvio: Date }
+  | { status: 'sem_contato' }
+  | { status: 'atrasado' }
+  | { status: 'concluido' };
+
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const WEEKDAYS_SHORT = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+
+// Helper: formatar tempo restante
+const formatarTempoRestante = (ms: number): string => {
+  const minutos = Math.floor(ms / 60000);
+  const horas = Math.floor(minutos / 60);
+  const dias = Math.floor(horas / 24);
+  
+  if (dias > 0) return `${dias}d ${horas % 24}h`;
+  if (horas > 0) return `${horas}h ${minutos % 60}min`;
+  return `${minutos}min`;
+};
+
+// Helper: calcular status do lembrete
+const getLembreteStatus = (
+  agendamento: Agendamento,
+  regra: LembreteRegra,
+  lembretesEnviados: LembreteEnviado[]
+): LembreteStatus => {
+  // Verificar se agendamento já foi concluído
+  if (agendamento.concluido) {
+    return { status: 'concluido' };
+  }
+
+  const dataAgendamento = new Date(agendamento.data_inicio);
+  const dataEnvio = new Date(dataAgendamento.getTime() - regra.minutos_antes * 60 * 1000);
+  const agora = new Date();
+  
+  // Verificar se já foi enviado
+  const enviado = lembretesEnviados.find(l => 
+    l.agendamento_id === agendamento.id && 
+    l.regra_id === regra.id
+  );
+  
+  if (enviado) {
+    return { status: 'enviado', data: enviado.enviado_em };
+  }
+  
+  // Verificar se tem contato
+  if (!agendamento.contato_id) {
+    return { status: 'sem_contato' };
+  }
+  
+  // Verificar se está atrasado (data de envio já passou)
+  if (dataEnvio < agora) {
+    return { status: 'atrasado' };
+  }
+  
+  // Calcular tempo restante
+  const diffMs = dataEnvio.getTime() - agora.getTime();
+  return { status: 'pendente', tempoRestante: diffMs, dataEnvio };
+};
+
+// Helper: formatar minutos em texto amigável
+const formatarMinutosAntes = (minutos: number): string => {
+  if (minutos >= 1440) {
+    const dias = Math.floor(minutos / 1440);
+    return `${dias}d antes`;
+  }
+  if (minutos >= 60) {
+    const horas = Math.floor(minutos / 60);
+    return `${horas}h antes`;
+  }
+  return `${minutos}min antes`;
+};
 
 export default function Agendamentos() {
   const { usuario } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
+  const [regrasLembrete, setRegrasLembrete] = useState<LembreteRegra[]>([]);
+  const [lembretesEnviados, setLembretesEnviados] = useState<LembreteEnviado[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -72,7 +161,8 @@ export default function Agendamentos() {
       const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
 
-      const { data, error } = await supabase
+      // Buscar agendamentos
+      const { data: agendamentosData, error: agendamentosError } = await supabase
         .from('agendamentos')
         .select(`*, contatos(nome)`)
         .eq('conta_id', usuario!.conta_id)
@@ -80,8 +170,30 @@ export default function Agendamentos() {
         .lte('data_inicio', endOfMonth.toISOString())
         .order('data_inicio');
 
-      if (error) throw error;
-      setAgendamentos(data || []);
+      if (agendamentosError) throw agendamentosError;
+
+      // Buscar regras de lembrete ativas
+      const { data: regrasData } = await supabase
+        .from('lembrete_regras')
+        .select('id, nome, minutos_antes, tipo, ativo')
+        .eq('conta_id', usuario!.conta_id)
+        .eq('ativo', true);
+
+      // Buscar lembretes já enviados para os agendamentos do mês
+      const agendamentoIds = (agendamentosData || []).map(a => a.id);
+      let lembretesData: LembreteEnviado[] = [];
+      
+      if (agendamentoIds.length > 0) {
+        const { data } = await supabase
+          .from('lembrete_enviados')
+          .select('id, agendamento_id, regra_id, enviado_em, mensagem_enviada')
+          .in('agendamento_id', agendamentoIds);
+        lembretesData = data || [];
+      }
+
+      setAgendamentos(agendamentosData || []);
+      setRegrasLembrete(regrasData || []);
+      setLembretesEnviados(lembretesData);
     } catch (error) {
       console.error('Erro ao buscar agendamentos:', error);
     } finally {
@@ -638,6 +750,70 @@ export default function Agendamentos() {
                               </button>
                             </div>
                           </div>
+                          
+                          {/* Seção de Lembretes */}
+                          {regrasLembrete.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-border">
+                              <div className="flex items-center gap-1.5 mb-2">
+                                <Bell className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span className="text-xs font-medium text-muted-foreground">Lembretes</span>
+                              </div>
+                              <div className="space-y-1.5">
+                                {regrasLembrete.map((regra) => {
+                                  const status = getLembreteStatus(agendamento, regra, lembretesEnviados);
+                                  
+                                  return (
+                                    <div key={regra.id} className="flex items-center gap-2 text-xs">
+                                      {status.status === 'enviado' && (
+                                        <>
+                                          <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+                                          <span className="text-muted-foreground">{formatarMinutosAntes(regra.minutos_antes)}:</span>
+                                          <span className="text-green-600">
+                                            Enviado {new Date(status.data).toLocaleString('pt-BR', { 
+                                              day: '2-digit', 
+                                              month: '2-digit', 
+                                              hour: '2-digit', 
+                                              minute: '2-digit' 
+                                            })}
+                                          </span>
+                                        </>
+                                      )}
+                                      {status.status === 'pendente' && (
+                                        <>
+                                          <Clock className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                                          <span className="text-muted-foreground">{formatarMinutosAntes(regra.minutos_antes)}:</span>
+                                          <span className="text-amber-600">
+                                            Em {formatarTempoRestante(status.tempoRestante)}
+                                          </span>
+                                        </>
+                                      )}
+                                      {status.status === 'sem_contato' && (
+                                        <>
+                                          <AlertCircle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                          <span className="text-muted-foreground">{formatarMinutosAntes(regra.minutos_antes)}:</span>
+                                          <span className="text-muted-foreground italic">Sem contato</span>
+                                        </>
+                                      )}
+                                      {status.status === 'atrasado' && (
+                                        <>
+                                          <XCircle className="h-3.5 w-3.5 text-destructive flex-shrink-0" />
+                                          <span className="text-muted-foreground">{formatarMinutosAntes(regra.minutos_antes)}:</span>
+                                          <span className="text-destructive">Não enviado</span>
+                                        </>
+                                      )}
+                                      {status.status === 'concluido' && (
+                                        <>
+                                          <Check className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                          <span className="text-muted-foreground">{formatarMinutosAntes(regra.minutos_antes)}:</span>
+                                          <span className="text-muted-foreground italic">Concluído</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
 
@@ -874,6 +1050,202 @@ export default function Agendamentos() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Mobile Drawer para detalhes do dia */}
+        {isMobile && (
+          <Drawer open={!!selectedDate} onOpenChange={(open) => !open && setSelectedDate(null)}>
+            <DrawerContent className="max-h-[85vh]">
+              <DrawerHeader className="border-b border-border pb-3">
+                <DrawerTitle>
+                  {selectedDate?.toLocaleDateString('pt-BR', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                  })}
+                </DrawerTitle>
+              </DrawerHeader>
+              <div className="p-4 overflow-y-auto">
+                {selectedDateAgendamentos.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Calendar className="h-12 w-12 mx-auto mb-3 text-muted-foreground/50" />
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Nenhum agendamento neste dia
+                    </p>
+                    <button
+                      onClick={() => {
+                        setSelectedDate(null);
+                        setTimeout(() => openNewAgendamentoModal(selectedDate!), 100);
+                      }}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      + Criar agendamento
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {selectedDateAgendamentos.map((agendamento) => (
+                      <div
+                        key={agendamento.id}
+                        className={cn(
+                          'p-3 rounded-lg bg-muted/50 border border-border',
+                          agendamento.concluido && 'opacity-50'
+                        )}
+                      >
+                        <div className="flex items-start gap-3">
+                          <button
+                            onClick={() => toggleConcluido(agendamento.id, agendamento.concluido)}
+                            className={cn(
+                              'flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors flex-shrink-0 mt-0.5',
+                              agendamento.concluido
+                                ? 'bg-primary border-primary'
+                                : 'border-muted-foreground hover:border-primary'
+                            )}
+                          >
+                            {agendamento.concluido && (
+                              <Check className="h-3 w-3 text-primary-foreground" />
+                            )}
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <h4 className={cn('font-medium text-sm text-foreground', agendamento.concluido && 'line-through')}>
+                              {agendamento.titulo}
+                            </h4>
+                            {agendamento.descricao && (
+                              <p className="text-xs text-muted-foreground mt-0.5">{agendamento.descricao}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Clock className="h-3 w-3" />
+                                {formatTime(agendamento.data_inicio)}
+                              </div>
+                              {agendamento.contatos && agendamento.contato_id && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedDate(null);
+                                    navigate(`/conversas?contato=${agendamento.contato_id}`);
+                                  }}
+                                  className="flex items-center gap-1 text-xs text-primary"
+                                >
+                                  <MessageSquare className="h-3 w-3" />
+                                  {agendamento.contatos.nome}
+                                </button>
+                              )}
+                            </div>
+                            {agendamento.google_meet_link && (
+                              <a
+                                href={agendamento.google_meet_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-xs text-blue-500 mt-1"
+                              >
+                                <Video className="h-3 w-3" />
+                                Google Meet
+                              </a>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                setSelectedDate(null);
+                                setTimeout(() => openEditModal(agendamento), 100);
+                              }}
+                              className="p-1.5 rounded hover:bg-muted transition-colors"
+                            >
+                              <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedDate(null);
+                                setTimeout(() => confirmDelete(agendamento), 100);
+                              }}
+                              className="p-1.5 rounded hover:bg-destructive/10 transition-colors"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {/* Seção de Lembretes - Mobile */}
+                        {regrasLembrete.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-border">
+                            <div className="flex items-center gap-1.5 mb-2">
+                              <Bell className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="text-xs font-medium text-muted-foreground">Lembretes</span>
+                            </div>
+                            <div className="space-y-1.5">
+                              {regrasLembrete.map((regra) => {
+                                const status = getLembreteStatus(agendamento, regra, lembretesEnviados);
+                                
+                                return (
+                                  <div key={regra.id} className="flex items-center gap-2 text-xs">
+                                    {status.status === 'enviado' && (
+                                      <>
+                                        <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+                                        <span className="text-muted-foreground">{formatarMinutosAntes(regra.minutos_antes)}:</span>
+                                        <span className="text-green-600">
+                                          Enviado {new Date(status.data).toLocaleString('pt-BR', { 
+                                            day: '2-digit', 
+                                            month: '2-digit', 
+                                            hour: '2-digit', 
+                                            minute: '2-digit' 
+                                          })}
+                                        </span>
+                                      </>
+                                    )}
+                                    {status.status === 'pendente' && (
+                                      <>
+                                        <Clock className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                                        <span className="text-muted-foreground">{formatarMinutosAntes(regra.minutos_antes)}:</span>
+                                        <span className="text-amber-600">
+                                          Em {formatarTempoRestante(status.tempoRestante)}
+                                        </span>
+                                      </>
+                                    )}
+                                    {status.status === 'sem_contato' && (
+                                      <>
+                                        <AlertCircle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                        <span className="text-muted-foreground">{formatarMinutosAntes(regra.minutos_antes)}:</span>
+                                        <span className="text-muted-foreground italic">Sem contato</span>
+                                      </>
+                                    )}
+                                    {status.status === 'atrasado' && (
+                                      <>
+                                        <XCircle className="h-3.5 w-3.5 text-destructive flex-shrink-0" />
+                                        <span className="text-muted-foreground">{formatarMinutosAntes(regra.minutos_antes)}:</span>
+                                        <span className="text-destructive">Não enviado</span>
+                                      </>
+                                    )}
+                                    {status.status === 'concluido' && (
+                                      <>
+                                        <Check className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                        <span className="text-muted-foreground">{formatarMinutosAntes(regra.minutos_antes)}:</span>
+                                        <span className="text-muted-foreground italic">Concluído</span>
+                                      </>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    
+                    <button
+                      onClick={() => {
+                        const date = selectedDate;
+                        setSelectedDate(null);
+                        setTimeout(() => openNewAgendamentoModal(date!), 100);
+                      }}
+                      className="w-full py-2 text-sm text-primary hover:underline"
+                    >
+                      + Novo agendamento
+                    </button>
+                  </div>
+                )}
+              </div>
+            </DrawerContent>
+          </Drawer>
         )}
       </div>
     </MainLayout>
