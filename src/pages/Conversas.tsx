@@ -975,23 +975,26 @@ export default function Conversas() {
     }
   };
 
-  const handleSendAudio = async (audioBase64: string, duration: number) => {
+  const handleSendAudio = async (audioBase64: string, duration: number, mimeType: string = 'audio/mpeg') => {
     if (!conversaSelecionada) return;
 
     try {
+      // Determinar extensão baseada no mimeType
+      const extension = mimeType === 'audio/mpeg' ? 'mp3' : mimeType === 'audio/ogg' ? 'ogg' : 'webm';
+      
       // Converter base64 para blob para salvar no storage
       const binaryString = atob(audioBase64);
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
-      const blob = new Blob([bytes], { type: 'audio/webm' });
+      const blob = new Blob([bytes], { type: mimeType });
       
       // Upload para o storage
-      const fileName = `${Date.now()}-audio.webm`;
+      const fileName = `${Date.now()}-audio.${extension}`;
       const { error: uploadError } = await supabase.storage
         .from('whatsapp-media')
-        .upload(fileName, blob, { contentType: 'audio/webm' });
+        .upload(fileName, blob, { contentType: mimeType });
 
       if (uploadError) throw uploadError;
 
@@ -1033,7 +1036,7 @@ export default function Conversas() {
         atendente_id: usuario!.id
       } : null);
 
-      // Enviar via WhatsApp
+      // Enviar via WhatsApp - usar media_url já que o áudio está em formato MP3 compatível
       const conexaoIdToUse = conversaSelecionada.conexao_id || conexao?.id;
       if (conexaoIdToUse && conexao?.status === 'conectado') {
         const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
@@ -1042,7 +1045,7 @@ export default function Conversas() {
             telefone: conversaSelecionada.contatos.telefone,
             mensagem: '',
             tipo: 'audio',
-            media_base64: audioBase64,
+            media_url: mediaUrl,
             grupo_jid: conversaSelecionada.contatos.grupo_jid || undefined,
             mensagem_id: novaMensagemData?.id,
           },
