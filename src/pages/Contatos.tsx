@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Search, Plus, User, Phone, Mail, MoreVertical, Loader2, Tag, X, ChevronDown, Check } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Contato {
   id: string;
@@ -25,6 +27,7 @@ interface TagItem {
 
 export default function Contatos() {
   const { usuario } = useAuth();
+  const isMobile = useIsMobile();
   const [contatos, setContatos] = useState<Contato[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -133,30 +136,30 @@ export default function Contatos() {
 
   return (
     <MainLayout>
-      <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
+      <div className="space-y-4 md:space-y-6 animate-fade-in px-4 md:px-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Contatos</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground">Contatos</h1>
+            <p className="text-sm md:text-base text-muted-foreground mt-1 hidden sm:block">
               Gerencie todos os seus contatos em um só lugar.
             </p>
           </div>
           <button
             onClick={() => setShowModal(true)}
-            className="h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors"
+            className="h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors"
           >
             <Plus className="h-5 w-5" />
-            Novo Contato
+            <span>{isMobile ? 'Novo' : 'Novo Contato'}</span>
           </button>
         </div>
 
         {/* Busca e Filtros */}
-        <div className="space-y-4">
-          <div className="relative max-w-md">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Buscar por nome, telefone ou email..."
+              placeholder="Buscar..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full h-11 pl-11 pr-4 rounded-lg bg-card border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
@@ -251,7 +254,7 @@ export default function Contatos() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
             {filteredContatos.map((contato) => (
               <div
                 key={contato.id}
@@ -308,67 +311,102 @@ export default function Contatos() {
           </div>
         )}
 
-        {/* Modal */}
-        {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="w-full max-w-md bg-card rounded-2xl border border-border p-6 animate-scale-in">
-              <h2 className="text-xl font-semibold text-foreground mb-6">Novo Contato</h2>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Nome *</label>
-                  <input
-                    type="text"
-                    value={formData.nome}
-                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                    className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Nome do contato"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Telefone *
-                  </label>
-                  <input
-                    type="tel"
-                    value={formData.telefone}
-                    onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
-                    className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="+55 11 99999-9999"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Email</label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="email@exemplo.com"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 h-11 rounded-lg bg-muted text-foreground font-medium hover:bg-muted/80 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleAddContato}
-                  className="flex-1 h-11 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
-                >
-                  Adicionar
-                </button>
+        {/* Modal / Drawer */}
+        {isMobile ? (
+          <Drawer open={showModal} onOpenChange={setShowModal}>
+            <DrawerContent className="px-4 pb-8">
+              <DrawerHeader className="px-0">
+                <DrawerTitle>Novo Contato</DrawerTitle>
+              </DrawerHeader>
+              <ContactForm 
+                formData={formData}
+                setFormData={setFormData}
+                onSubmit={handleAddContato}
+                onCancel={() => setShowModal(false)}
+              />
+            </DrawerContent>
+          </Drawer>
+        ) : (
+          showModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+              <div className="w-full max-w-md bg-card rounded-2xl border border-border p-6 animate-scale-in">
+                <h2 className="text-xl font-semibold text-foreground mb-6">Novo Contato</h2>
+                <ContactForm 
+                  formData={formData}
+                  setFormData={setFormData}
+                  onSubmit={handleAddContato}
+                  onCancel={() => setShowModal(false)}
+                />
               </div>
             </div>
-          </div>
+          )
         )}
       </div>
     </MainLayout>
+  );
+}
+
+// Contact Form Component
+function ContactForm({ 
+  formData, 
+  setFormData, 
+  onSubmit, 
+  onCancel 
+}: { 
+  formData: { nome: string; telefone: string; email: string };
+  setFormData: React.Dispatch<React.SetStateAction<{ nome: string; telefone: string; email: string }>>;
+  onSubmit: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-foreground mb-2">Nome *</label>
+        <input
+          type="text"
+          value={formData.nome}
+          onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+          className="w-full h-12 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          placeholder="Nome do contato"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-foreground mb-2">Telefone *</label>
+        <input
+          type="tel"
+          value={formData.telefone}
+          onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
+          className="w-full h-12 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          placeholder="+55 11 99999-9999"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-foreground mb-2">Email</label>
+        <input
+          type="email"
+          value={formData.email}
+          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+          className="w-full h-12 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          placeholder="email@exemplo.com"
+        />
+      </div>
+
+      <div className="flex gap-3 pt-2">
+        <button
+          onClick={onCancel}
+          className="flex-1 h-12 rounded-lg bg-muted text-foreground font-medium hover:bg-muted/80 transition-colors"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={onSubmit}
+          className="flex-1 h-12 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+        >
+          Adicionar
+        </button>
+      </div>
+    </div>
   );
 }
