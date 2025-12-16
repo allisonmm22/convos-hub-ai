@@ -213,7 +213,7 @@ async function enviarViaMeta(
 // Função para enviar via Instagram API
 async function enviarViaInstagram(
   conexao: any,
-  recipientId: string, // Instagram Scoped User ID (IGSID) - pode vir com prefixo "ig_"
+  recipientId: string, // Instagram Scoped User ID (IGSID)
   mensagem: string,
   tipo: string,
   mediaUrl: string | null,
@@ -223,10 +223,6 @@ async function enviarViaInstagram(
 
   // Instagram usa os mesmos campos: meta_phone_number_id (Page ID) e meta_access_token
   if (!conexao.meta_phone_number_id || !conexao.meta_access_token) {
-    console.error('Credenciais Instagram faltando:', {
-      hasPageId: !!conexao.meta_phone_number_id,
-      hasToken: !!conexao.meta_access_token
-    });
     return new Response(JSON.stringify({ error: 'Credenciais Instagram não configuradas' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -234,20 +230,7 @@ async function enviarViaInstagram(
   }
 
   const pageId = conexao.meta_phone_number_id;
-  const accessToken = conexao.meta_access_token.trim(); // Remover espaços em branco
-
-  // Remover prefixo "ig_" do recipientId se existir
-  const cleanRecipientId = recipientId.startsWith('ig_') 
-    ? recipientId.substring(3) 
-    : recipientId;
-
-  console.log('Instagram Config:', {
-    pageId,
-    recipientId: cleanRecipientId,
-    originalRecipientId: recipientId,
-    tokenLength: accessToken.length,
-    tokenPreview: accessToken.substring(0, 20) + '...'
-  });
+  const accessToken = conexao.meta_access_token;
 
   let body: Record<string, unknown>;
 
@@ -260,7 +243,7 @@ async function enviarViaInstagram(
         });
       }
       body = {
-        recipient: { id: cleanRecipientId },
+        recipient: { id: recipientId },
         message: {
           attachment: {
             type: 'image',
@@ -277,7 +260,7 @@ async function enviarViaInstagram(
         });
       }
       body = {
-        recipient: { id: cleanRecipientId },
+        recipient: { id: recipientId },
         message: {
           attachment: {
             type: 'audio',
@@ -294,7 +277,7 @@ async function enviarViaInstagram(
         });
       }
       body = {
-        recipient: { id: cleanRecipientId },
+        recipient: { id: recipientId },
         message: {
           attachment: {
             type: 'file',
@@ -305,20 +288,14 @@ async function enviarViaInstagram(
       break;
     default:
       body = {
-        recipient: { id: cleanRecipientId },
+        recipient: { id: recipientId },
         message: { text: mensagem }
       };
   }
 
-  // Instagram API usa endpoint "me/messages" com Page Access Token
-  const instagramApiUrl = `${META_API_URL}/me/messages`;
-  
-  console.log('Enviando para Instagram API:', {
-    url: instagramApiUrl,
-    body: JSON.stringify(body, null, 2)
-  });
+  console.log('Enviando para Instagram API:', JSON.stringify(body, null, 2));
 
-  const response = await fetch(instagramApiUrl, {
+  const response = await fetch(`${META_API_URL}/${pageId}/messages`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -333,8 +310,8 @@ async function enviarViaInstagram(
   if (!response.ok) {
     await supabase.from('logs_atividade').insert({
       conta_id: conexao.conta_id,
-      tipo: 'erro_instagram',
-      descricao: `Erro ao enviar mensagem via Instagram para ${cleanRecipientId}`,
+      tipo: 'erro_whatsapp',
+      descricao: `Erro ao enviar mensagem via Instagram para ${recipientId}`,
       metadata: { erro: result, status_code: response.status, tipo_mensagem: tipo },
     });
 
@@ -379,15 +356,17 @@ serve(async (req) => {
       });
     }
 
-    // ===== ROTEADOR: META API vs EVOLUTION API =====
-    // Meta WhatsApp Business API (tipo_provedor = 'meta')
+    // ===== ROTEADOR: META API vs INSTAGRAM vs EVOLUTION API =====
     if (conexao.tipo_provedor === 'meta') {
       return await enviarViaMeta(conexao, telefone, mensagem, tipo, media_url, supabase);
     }
 
-    // Instagram via Evolution API (tipo_provedor = 'instagram') ou WhatsApp Evolution (tipo_provedor = 'evolution' ou null)
-    // Ambos usam Evolution API para envio de mensagens
-    // ===== CÓDIGO EVOLUTION (EVOLUTION + INSTAGRAM) =====
+    if (conexao.tipo_provedor === 'instagram') {
+      // Para Instagram, o "telefone" é o Instagram Scoped User ID (IGSID)
+      return await enviarViaInstagram(conexao, telefone, mensagem, tipo, media_url, supabase);
+    }
+
+    // ===== CÓDIGO EVOLUTION (100% ORIGINAL ABAIXO) =====
     const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
     if (!evolutionApiKey) {
       console.error('EVOLUTION_API_KEY não configurada');
