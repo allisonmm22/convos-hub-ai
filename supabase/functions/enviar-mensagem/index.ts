@@ -9,6 +9,70 @@ const corsHeaders = {
 const EVOLUTION_API_URL = 'https://evolution.cognityx.com.br';
 const META_API_URL = 'https://graph.facebook.com/v18.0';
 
+// Função para fazer upload de mídia para Meta
+async function uploadMediaToMeta(
+  mediaUrl: string,
+  accessToken: string,
+  phoneNumberId: string,
+  tipo: string
+): Promise<string | null> {
+  try {
+    console.log('Meta upload: baixando mídia', { mediaUrl, tipo });
+
+    const mediaResponse = await fetch(mediaUrl);
+    if (!mediaResponse.ok) {
+      console.error('Meta upload: erro ao baixar mídia', mediaResponse.status);
+      return null;
+    }
+
+    const mediaBlob = await mediaResponse.blob();
+    console.log('Meta upload: mídia baixada', { size: mediaBlob.size, contentType: mediaBlob.type });
+
+    let mimeType = mediaBlob.type;
+
+    if (tipo === 'audio') {
+      // Meta API aceita: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg
+      if (mimeType === 'audio/webm' || mimeType === 'audio/webm;codecs=opus') {
+        mimeType = 'audio/ogg';
+      }
+    } else if (tipo === 'imagem') {
+      if (!['image/jpeg', 'image/png'].includes(mimeType)) {
+        mimeType = 'image/jpeg';
+      }
+    }
+
+    const ext = tipo === 'audio' ? 'ogg' : tipo === 'imagem' ? 'jpg' : 'bin';
+
+    const formData = new FormData();
+    formData.append('messaging_product', 'whatsapp');
+    formData.append('file', mediaBlob, `media.${ext}`);
+    formData.append('type', mimeType);
+
+    console.log('Meta upload: enviando para /media', { mimeType });
+
+    const uploadResponse = await fetch(`${META_API_URL}/${phoneNumberId}/media`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: formData,
+    });
+
+    const uploadResult = await uploadResponse.json();
+    console.log('Meta upload: resposta', JSON.stringify(uploadResult, null, 2));
+
+    if (!uploadResponse.ok) {
+      console.error('Meta upload: falhou', uploadResult);
+      return null;
+    }
+
+    return uploadResult?.id ?? null;
+  } catch (e) {
+    console.error('Meta upload: erro inesperado', e);
+    return null;
+  }
+}
+
 // Função para enviar via Meta API
 async function enviarViaMeta(
   conexao: any,
@@ -28,7 +92,47 @@ async function enviarViaMeta(
   }
 
   const formattedNumber = telefone.replace(/\D/g, '');
+
+  // Validação: mídia precisa de URL
+  if ((tipo === 'imagem' || tipo === 'audio' || tipo === 'documento') && !mediaUrl) {
+    return new Response(
+      JSON.stringify({
+        error: 'Mídia não informada',
+        details: 'Para enviar imagem/áudio/documento pela API oficial, é obrigatório informar a URL da mídia (media_url).',
+      }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
   let body: Record<string, unknown>;
+
+  // Para mídia, faça upload e envie por ID (mais confiável) 
+  let mediaId: string | null = null;
+  if (mediaUrl && (tipo === 'imagem' || tipo === 'audio' || tipo === 'documento')) {
+    mediaId = await uploadMediaToMeta(
+      mediaUrl,
+      conexao.meta_access_token,
+      conexao.meta_phone_number_id,
+      tipo
+    );
+
+    if (!mediaId) {
+      return new Response(
+        JSON.stringify({
+          error: 'Falha ao fazer upload da mídia para o WhatsApp',
+          details:
+            'A API oficial do WhatsApp pode rejeitar alguns formatos (ex.: áudio webm). Tente enviar em OGG/MP3/AAC ou envie apenas texto.',
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+  }
 
   switch (tipo) {
     case 'imagem':
@@ -37,7 +141,9 @@ async function enviarViaMeta(
         recipient_type: 'individual',
         to: formattedNumber,
         type: 'image',
-        image: { link: mediaUrl, caption: mensagem || undefined },
+        image: mediaId
+          ? { id: mediaId, caption: mensagem || undefined }
+          : { link: mediaUrl, caption: mensagem || undefined },
       };
       break;
     case 'audio':
@@ -46,7 +152,7 @@ async function enviarViaMeta(
         recipient_type: 'individual',
         to: formattedNumber,
         type: 'audio',
-        audio: { link: mediaUrl },
+        audio: mediaId ? { id: mediaId } : { link: mediaUrl },
       };
       break;
     case 'documento':
@@ -55,7 +161,9 @@ async function enviarViaMeta(
         recipient_type: 'individual',
         to: formattedNumber,
         type: 'document',
-        document: { link: mediaUrl, filename: mensagem || 'documento' },
+        document: mediaId
+          ? { id: mediaId, filename: mensagem || 'documento' }
+          : { link: mediaUrl, filename: mensagem || 'documento' },
       };
       break;
     default:
@@ -70,17 +178,14 @@ async function enviarViaMeta(
 
   console.log('Enviando para Meta API:', JSON.stringify(body, null, 2));
 
-  const response = await fetch(
-    `${META_API_URL}/${conexao.meta_phone_number_id}/messages`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${conexao.meta_access_token}`,
-      },
-      body: JSON.stringify(body),
-    }
-  );
+  const response = await fetch(`${META_API_URL}/${conexao.meta_phone_number_id}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${conexao.meta_access_token}`,
+    },
+    body: JSON.stringify(body),
+  });
 
   const result = await response.json();
   console.log('Resposta Meta API:', JSON.stringify(result, null, 2));
