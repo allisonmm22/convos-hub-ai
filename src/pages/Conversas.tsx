@@ -1127,7 +1127,7 @@ export default function Conversas() {
               <span>{formatDateSeparator(msg.created_at)}</span>
             </div>
           )}
-          <div className="flex justify-end my-1">
+          <div className="flex justify-center my-1">
             <div className="bg-muted/50 border border-border rounded-lg px-3 py-2 flex items-center gap-2">
               {msg.conteudo.includes('encerrado') ? (
                 <Lock className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
