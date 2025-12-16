@@ -185,7 +185,9 @@ export default function Conversas() {
   const [tagsFilter, setTagsFilter] = useState<string[]>(initialFilters.tags || []);
   const [tagsDisponiveis, setTagsDisponiveis] = useState<TagItem[]>([]);
   const [showTransferModal, setShowTransferModal] = useState(false);
-  const [transferType, setTransferType] = useState<'choice' | 'humano' | 'agente'>('choice');
+  const [transferType, setTransferType] = useState<'choice' | 'humano' | 'agente' | 'agente-etapa'>('choice');
+  const [agenteParaTransferir, setAgenteParaTransferir] = useState<string | null>(null);
+  const [funisTransferencia, setFunisTransferencia] = useState<any[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -659,7 +661,7 @@ export default function Conversas() {
 
   const conversaEncerrada = conversaSelecionada?.status === 'encerrado';
 
-  const transferirAtendimento = async (paraUsuarioId: string | null, paraIA: boolean, paraAgenteIAId?: string) => {
+  const transferirAtendimento = async (paraUsuarioId: string | null, paraIA: boolean, paraAgenteIAId?: string, paraEstagioId?: string) => {
     if (!conversaSelecionada) return;
 
     try {
@@ -672,6 +674,7 @@ export default function Conversas() {
           para_agente_ia_id: paraAgenteIAId,
           para_ia: paraIA,
           conta_id: usuario?.conta_id,
+          para_estagio_id: paraEstagioId,
         },
       });
 
@@ -679,6 +682,8 @@ export default function Conversas() {
 
       toast.success(data?.mensagem || (paraIA ? 'Transferido para Agente IA' : 'Atendimento transferido'));
       setShowTransferModal(false);
+      setTransferType('choice');
+      setAgenteParaTransferir(null);
       setConversaSelecionada(null);
       fetchConversas();
     } catch (error) {
@@ -686,6 +691,21 @@ export default function Conversas() {
       toast.error('Erro ao transferir atendimento');
     }
   };
+
+  // Carregar funis e etapas para seleção na transferência
+  useEffect(() => {
+    if (showTransferModal && usuario?.conta_id) {
+      const fetchFunisEtapas = async () => {
+        const { data } = await supabase
+          .from('funis')
+          .select('*, estagios(*)')
+          .eq('conta_id', usuario.conta_id)
+          .order('ordem');
+        setFunisTransferencia(data || []);
+      };
+      fetchFunisEtapas();
+    }
+  }, [showTransferModal, usuario?.conta_id]);
 
   const handleFileSelect = (type: 'imagem' | 'documento' | 'audio') => {
     setFileType(type);
@@ -1959,7 +1979,14 @@ export default function Conversas() {
               <div className="flex items-center justify-between mb-6">
                 {transferType !== 'choice' ? (
                   <button 
-                    onClick={() => setTransferType('choice')}
+                    onClick={() => {
+                      if (transferType === 'agente-etapa') {
+                        setTransferType('agente');
+                        setAgenteParaTransferir(null);
+                      } else {
+                        setTransferType('choice');
+                      }
+                    }}
                     className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <ArrowLeft className="h-4 w-4" />
@@ -1973,11 +2000,13 @@ export default function Conversas() {
                   {transferType === 'choice' && 'Transferir Atendimento'}
                   {transferType === 'humano' && 'Atendentes Humanos'}
                   {transferType === 'agente' && 'Agentes IA'}
+                  {transferType === 'agente-etapa' && 'Selecione a Etapa'}
                 </h3>
                 
                 <button onClick={() => {
                   setShowTransferModal(false);
                   setTransferType('choice');
+                  setAgenteParaTransferir(null);
                 }}>
                   <X className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
                 </button>
@@ -2063,8 +2092,8 @@ export default function Conversas() {
                         <button
                           key={agente.id}
                           onClick={() => {
-                            transferirAtendimento(null, true, agente.id);
-                            setTransferType('choice');
+                            setAgenteParaTransferir(agente.id);
+                            setTransferType('agente-etapa');
                           }}
                           className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted hover:border-primary/50 transition-all"
                         >
@@ -2080,9 +2109,60 @@ export default function Conversas() {
                           {agente.tipo === 'principal' && (
                             <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">Principal</span>
                           )}
+                          <ChevronRight className="h-5 w-5 text-muted-foreground" />
                         </button>
                       ))
                   )}
+                </div>
+              )}
+
+              {transferType === 'agente-etapa' && (
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  <p className="text-sm text-muted-foreground">
+                    Selecione a etapa do CRM para onde o lead será movido:
+                  </p>
+                  
+                  {funisTransferencia.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p>Nenhum funil configurado</p>
+                    </div>
+                  ) : (
+                    funisTransferencia.map((funil) => (
+                      <div key={funil.id} className="space-y-2">
+                        <h4 className="font-medium text-sm text-foreground flex items-center gap-2">
+                          <div 
+                            className="w-3 h-3 rounded-full" 
+                            style={{ backgroundColor: funil.cor || '#10b981' }}
+                          />
+                          {funil.nome}
+                        </h4>
+                        <div className="grid grid-cols-2 gap-2">
+                          {funil.estagios
+                            ?.sort((a: any, b: any) => (a.ordem || 0) - (b.ordem || 0))
+                            .map((etapa: any) => (
+                              <button
+                                key={etapa.id}
+                                onClick={() => transferirAtendimento(null, true, agenteParaTransferir!, etapa.id)}
+                                className="flex items-center gap-2 p-2 rounded-lg border border-border hover:bg-muted hover:border-primary/50 transition-all text-left"
+                              >
+                                <div 
+                                  className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
+                                  style={{ backgroundColor: etapa.cor || '#3b82f6' }}
+                                />
+                                <span className="text-sm truncate">{etapa.nome}</span>
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  
+                  <button
+                    onClick={() => transferirAtendimento(null, true, agenteParaTransferir!)}
+                    className="w-full p-3 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg hover:bg-muted hover:border-primary/50 transition-all"
+                  >
+                    Transferir sem mover etapa
+                  </button>
                 </div>
               )}
             </div>
