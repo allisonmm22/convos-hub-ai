@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Calendar, Plus, Clock, Check, Loader2, ChevronLeft, ChevronRight, X, Pencil, Trash2, Video, MessageSquare } from 'lucide-react';
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Agendamento {
   id: string;
@@ -23,10 +25,12 @@ interface Agendamento {
 }
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const WEEKDAYS_SHORT = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
 export default function Agendamentos() {
   const { usuario } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -365,35 +369,35 @@ export default function Agendamentos() {
 
   return (
     <MainLayout>
-      <div className="space-y-6 animate-fade-in">
+      <div className="space-y-4 md:space-y-6 animate-fade-in px-4 md:px-0">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Agendamentos</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground">Agendamentos</h1>
+            <p className="text-sm md:text-base text-muted-foreground mt-1 hidden sm:block">
               Organize suas tarefas e compromissos.
             </p>
           </div>
           <button
             onClick={() => openNewAgendamentoModal()}
-            className="h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors"
+            className="h-10 px-3 md:px-4 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors"
           >
             <Plus className="h-5 w-5" />
-            Novo Agendamento
+            <span className="hidden sm:inline">Novo Agendamento</span>
           </button>
         </div>
 
-        <div className="flex gap-6">
+        <div className="flex flex-col lg:flex-row gap-4 md:gap-6">
           {/* Calendário */}
           <div className="flex-1">
             {/* Navegação do Mês */}
-            <div className="flex items-center justify-between p-4 rounded-t-xl bg-card border border-border border-b-0">
+            <div className="flex items-center justify-between p-3 md:p-4 rounded-t-xl bg-card border border-border border-b-0">
               <button
                 onClick={() => navigateMonth('prev')}
                 className="p-2 rounded-lg hover:bg-muted transition-colors"
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
-              <h2 className="text-lg font-semibold text-foreground capitalize">{getMonthName()}</h2>
+              <h2 className="text-base md:text-lg font-semibold text-foreground capitalize">{getMonthName()}</h2>
               <button
                 onClick={() => navigateMonth('next')}
                 className="p-2 rounded-lg hover:bg-muted transition-colors"
@@ -406,10 +410,10 @@ export default function Agendamentos() {
             <div className="bg-card border border-border rounded-b-xl overflow-hidden">
               {/* Cabeçalho dos dias da semana */}
               <div className="grid grid-cols-7 border-b border-border">
-                {WEEKDAYS.map((day) => (
+                {(isMobile ? WEEKDAYS_SHORT : WEEKDAYS).map((day, i) => (
                   <div
-                    key={day}
-                    className="py-3 text-center text-sm font-medium text-muted-foreground"
+                    key={i}
+                    className="py-2 md:py-3 text-center text-xs md:text-sm font-medium text-muted-foreground"
                   >
                     {day}
                   </div>
@@ -436,16 +440,16 @@ export default function Agendamentos() {
                         key={index}
                         onClick={() => handleDayClick(date)}
                         className={cn(
-                          'min-h-[100px] p-2 border-b border-r border-border cursor-pointer transition-colors hover:bg-muted/50',
+                          'min-h-[60px] md:min-h-[100px] p-1 md:p-2 border-b border-r border-border cursor-pointer transition-colors hover:bg-muted/50',
                           !isCurrentMonthDate && 'bg-muted/30',
                           isSelectedDate && 'bg-primary/10 ring-2 ring-primary ring-inset',
                           isTodayDate && !isSelectedDate && 'bg-primary/5'
                         )}
                       >
-                        <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center justify-between mb-0.5 md:mb-1">
                           <span
                             className={cn(
-                              'text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full',
+                              'text-xs md:text-sm font-medium w-6 h-6 md:w-7 md:h-7 flex items-center justify-center rounded-full',
                               !isCurrentMonthDate && 'text-muted-foreground/50',
                               isTodayDate && 'bg-primary text-primary-foreground',
                               isCurrentMonthDate && !isTodayDate && 'text-foreground'
@@ -454,33 +458,43 @@ export default function Agendamentos() {
                             {date.getDate()}
                           </span>
                           {dayAgendamentos.length > 0 && (
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-[10px] md:text-xs text-muted-foreground">
                               {dayAgendamentos.length}
                             </span>
                           )}
                         </div>
 
-                        {/* Mini cards dos agendamentos */}
-                        <div className="space-y-1">
-                          {dayAgendamentos.slice(0, 2).map((a) => (
-                            <div
-                              key={a.id}
-                              className={cn(
-                                'text-xs px-1.5 py-0.5 rounded truncate',
-                                a.concluido
-                                  ? 'bg-muted text-muted-foreground line-through'
-                                  : 'bg-primary/10 text-primary'
-                              )}
-                            >
-                              {a.titulo}
-                            </div>
-                          ))}
-                          {dayAgendamentos.length > 2 && (
-                            <span className="text-xs text-muted-foreground pl-1">
-                              +{dayAgendamentos.length - 2} mais
-                            </span>
-                          )}
-                        </div>
+                        {/* Mini cards - esconder texto em mobile */}
+                        {!isMobile && (
+                          <div className="space-y-1">
+                            {dayAgendamentos.slice(0, 2).map((a) => (
+                              <div
+                                key={a.id}
+                                className={cn(
+                                  'text-xs px-1.5 py-0.5 rounded truncate',
+                                  a.concluido
+                                    ? 'bg-muted text-muted-foreground line-through'
+                                    : 'bg-primary/10 text-primary'
+                                )}
+                              >
+                                {a.titulo}
+                              </div>
+                            ))}
+                            {dayAgendamentos.length > 2 && (
+                              <span className="text-xs text-muted-foreground pl-1">
+                                +{dayAgendamentos.length - 2} mais
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {/* Indicadores em mobile */}
+                        {isMobile && dayAgendamentos.length > 0 && (
+                          <div className="flex gap-0.5 justify-center mt-1">
+                            {dayAgendamentos.slice(0, 3).map((_, i) => (
+                              <div key={i} className="w-1 h-1 rounded-full bg-primary" />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -489,33 +503,34 @@ export default function Agendamentos() {
             </div>
           </div>
 
-          {/* Sidebar de Detalhes do Dia */}
-          <div className="w-80 flex-shrink-0">
-            <div className="bg-card border border-border rounded-xl p-4 sticky top-4">
-              {selectedDate ? (
-                <>
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="font-semibold text-foreground">
-                        {selectedDate.toLocaleDateString('pt-BR', {
-                          weekday: 'long',
-                          day: 'numeric',
-                        })}
-                      </h3>
-                      <p className="text-sm text-muted-foreground capitalize">
-                        {selectedDate.toLocaleDateString('pt-BR', {
-                          month: 'long',
-                          year: 'numeric',
-                        })}
-                      </p>
+          {/* Sidebar de Detalhes do Dia - Desktop */}
+          {!isMobile && (
+            <div className="w-80 flex-shrink-0">
+              <div className="bg-card border border-border rounded-xl p-4 sticky top-4">
+                {selectedDate ? (
+                  <>
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="font-semibold text-foreground">
+                          {selectedDate.toLocaleDateString('pt-BR', {
+                            weekday: 'long',
+                            day: 'numeric',
+                          })}
+                        </h3>
+                        <p className="text-sm text-muted-foreground capitalize">
+                          {selectedDate.toLocaleDateString('pt-BR', {
+                            month: 'long',
+                            year: 'numeric',
+                          })}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedDate(null)}
+                        className="p-1 rounded hover:bg-muted transition-colors"
+                      >
+                        <X className="h-4 w-4 text-muted-foreground" />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => setSelectedDate(null)}
-                      className="p-1 rounded hover:bg-muted transition-colors"
-                    >
-                      <X className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                  </div>
 
                   {selectedDateAgendamentos.length === 0 ? (
                     <div className="text-center py-8">
@@ -645,6 +660,7 @@ export default function Agendamentos() {
               )}
             </div>
           </div>
+          )}
         </div>
 
         {/* Modal de Criar */}

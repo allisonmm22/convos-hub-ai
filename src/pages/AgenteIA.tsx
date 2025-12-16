@@ -12,6 +12,8 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,6 +41,7 @@ type SubPage = 'agentes' | 'followup' | 'sessoes' | 'configuracao';
 export default function AgenteIA() {
   const { usuario } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [agentes, setAgentes] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
@@ -160,93 +163,138 @@ export default function AgenteIA() {
 
   return (
     <MainLayout>
-      <div className="flex h-full animate-fade-in">
-        {/* Sub-Sidebar */}
-        <div className="w-56 border-r border-border bg-card/50 flex flex-col">
-          <div className="p-4 border-b border-border">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/60 shadow-lg shadow-primary/25">
-                <Bot className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <div>
-                <h2 className="font-semibold text-foreground">Agentes IA</h2>
-                <p className="text-xs text-muted-foreground">Automação inteligente</p>
-              </div>
-            </div>
-          </div>
-
-          <nav className="flex-1 p-2 space-y-1">
+      <div className="flex flex-col md:flex-row h-full animate-fade-in">
+        {/* Mobile Tabs */}
+        {isMobile && (
+          <div className="flex overflow-x-auto border-b border-border bg-card/50 px-2 py-2 gap-1">
             {subNavItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => setSubPage(item.id)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all",
                   subPage === item.id
-                    ? 'bg-primary/10 text-primary shadow-sm'
-                    : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                }`}
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted'
+                )}
               >
-                <div className="flex items-center gap-3">
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
-                </div>
+                <item.icon className="h-4 w-4" />
+                {item.label}
                 {item.count !== undefined && (
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                  <span className={cn(
+                    "text-xs px-1.5 rounded-full",
                     subPage === item.id 
-                      ? 'bg-primary/20 text-primary' 
-                      : 'bg-muted text-muted-foreground'
-                  }`}>
+                      ? 'bg-primary-foreground/20 text-primary-foreground' 
+                      : 'bg-muted'
+                  )}>
                     {item.count}
                   </span>
                 )}
               </button>
             ))}
-          </nav>
-        </div>
+          </div>
+        )}
+
+        {/* Desktop Sub-Sidebar */}
+        {!isMobile && (
+          <div className="w-56 border-r border-border bg-card/50 flex flex-col">
+            <div className="p-4 border-b border-border">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/60 shadow-lg shadow-primary/25">
+                  <Bot className="h-5 w-5 text-primary-foreground" />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-foreground">Agentes IA</h2>
+                  <p className="text-xs text-muted-foreground">Automação inteligente</p>
+                </div>
+              </div>
+            </div>
+
+            <nav className="flex-1 p-2 space-y-1">
+              {subNavItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setSubPage(item.id)}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                    subPage === item.id
+                      ? 'bg-primary/10 text-primary shadow-sm'
+                      : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </div>
+                  {item.count !== undefined && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      subPage === item.id 
+                        ? 'bg-primary/20 text-primary' 
+                        : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {item.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </nav>
+          </div>
+        )}
 
         {/* Conteúdo Principal */}
         <div className="flex-1 overflow-auto bg-muted/30">
           {subPage === 'agentes' && (
-            <div className="p-6 space-y-6">
-              {/* Stats Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="bg-gradient-to-br from-card to-card/80 border-border/50 hover:shadow-lg transition-shadow">
-                  <CardContent className="p-4">
+            <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+              {/* Stats Cards - Horizontal scroll em mobile */}
+              <div className={cn(
+                "gap-3 md:gap-4",
+                isMobile ? "flex overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory" : "grid grid-cols-1 md:grid-cols-3"
+              )}>
+                <Card className={cn(
+                  "bg-gradient-to-br from-card to-card/80 border-border/50 hover:shadow-lg transition-shadow",
+                  isMobile && "flex-shrink-0 w-[140px] snap-center"
+                )}>
+                  <CardContent className="p-3 md:p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Total de Agentes</p>
-                        <p className="text-2xl font-bold text-foreground">{agentes.length}</p>
+                        <p className="text-xs md:text-sm text-muted-foreground">Total</p>
+                        <p className="text-xl md:text-2xl font-bold text-foreground">{agentes.length}</p>
                       </div>
-                      <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                        <Bot className="h-6 w-6 text-primary" />
+                      <div className="h-10 w-10 md:h-12 md:w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                        <Bot className="h-5 w-5 md:h-6 md:w-6 text-primary" />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
                 
-                <Card className="bg-gradient-to-br from-card to-card/80 border-border/50 hover:shadow-lg transition-shadow">
-                  <CardContent className="p-4">
+                <Card className={cn(
+                  "bg-gradient-to-br from-card to-card/80 border-border/50 hover:shadow-lg transition-shadow",
+                  isMobile && "flex-shrink-0 w-[140px] snap-center"
+                )}>
+                  <CardContent className="p-3 md:p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Agentes Ativos</p>
-                        <p className="text-2xl font-bold text-emerald-500">{agentesAtivos}</p>
+                        <p className="text-xs md:text-sm text-muted-foreground">Ativos</p>
+                        <p className="text-xl md:text-2xl font-bold text-emerald-500">{agentesAtivos}</p>
                       </div>
-                      <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                        <Zap className="h-6 w-6 text-emerald-500" />
+                      <div className="h-10 w-10 md:h-12 md:w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                        <Zap className="h-5 w-5 md:h-6 md:w-6 text-emerald-500" />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
                 
-                <Card className="bg-gradient-to-br from-card to-card/80 border-border/50 hover:shadow-lg transition-shadow">
-                  <CardContent className="p-4">
+                <Card className={cn(
+                  "bg-gradient-to-br from-card to-card/80 border-border/50 hover:shadow-lg transition-shadow",
+                  isMobile && "flex-shrink-0 w-[140px] snap-center"
+                )}>
+                  <CardContent className="p-3 md:p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Inativos</p>
-                        <p className="text-2xl font-bold text-muted-foreground">{agentes.length - agentesAtivos}</p>
+                        <p className="text-xs md:text-sm text-muted-foreground">Inativos</p>
+                        <p className="text-xl md:text-2xl font-bold text-muted-foreground">{agentes.length - agentesAtivos}</p>
                       </div>
-                      <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center">
-                        <PowerOff className="h-6 w-6 text-muted-foreground" />
+                      <div className="h-10 w-10 md:h-12 md:w-12 rounded-xl bg-muted flex items-center justify-center">
+                        <PowerOff className="h-5 w-5 md:h-6 md:w-6 text-muted-foreground" />
                       </div>
                     </div>
                   </CardContent>
@@ -254,23 +302,24 @@ export default function AgenteIA() {
               </div>
 
               {/* Header com busca */}
-              <div className="flex items-center justify-between gap-4">
-                <div className="relative flex-1 max-w-md">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+                <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <input
                     type="text"
                     value={busca}
                     onChange={(e) => setBusca(e.target.value)}
-                    placeholder="Buscar por nome ou gatilho..."
+                    placeholder="Buscar..."
                     className="w-full h-10 pl-10 pr-4 rounded-xl bg-card border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
                   />
                 </div>
                 <button
                   onClick={() => setShowNovoAgenteModal(true)}
-                  className="flex items-center gap-2 h-10 px-5 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground font-medium hover:shadow-lg hover:shadow-primary/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  className="flex items-center justify-center gap-2 h-10 px-4 md:px-5 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground font-medium hover:shadow-lg hover:shadow-primary/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
                 >
                   <Plus className="h-4 w-4" />
-                  Novo Agente
+                  <span className="hidden sm:inline">Novo Agente</span>
+                  <span className="sm:hidden">Novo</span>
                 </button>
               </div>
 
@@ -310,7 +359,7 @@ export default function AgenteIA() {
                     {agentesPrincipais.length === 0 ? (
                       <EmptyAgentState type="principal" onCreate={() => setShowNovoAgenteModal(true)} />
                     ) : (
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                         {agentesPrincipais.map((agente) => (
                           <AgentCard
                             key={agente.id}
@@ -344,7 +393,7 @@ export default function AgenteIA() {
                     {agentesSecundarios.length === 0 ? (
                       <EmptyAgentState type="secundario" onCreate={() => setShowNovoAgenteModal(true)} />
                     ) : (
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                         {agentesSecundarios.map((agente) => (
                           <AgentCard
                             key={agente.id}
