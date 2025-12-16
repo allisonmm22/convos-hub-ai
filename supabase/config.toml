@@ -101,3 +101,6 @@ verify_jwt = false
 
 [functions.meta-configure-webhook]
 verify_jwt = false
+
+[functions.meta-download-media]
+verify_jwt = false
