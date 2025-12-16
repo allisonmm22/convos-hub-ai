@@ -3,7 +3,9 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { 
   Bot, Save, Clock, Loader2, Sparkles, ArrowLeft, Pencil, Check, X,
   FileText, MessageCircle, HelpCircle, Zap, Layers, Calendar,
-  ChevronDown, ChevronUp, Plus, GripVertical, Trash2
+  ChevronDown, ChevronUp, Plus, GripVertical, Trash2, Crown,
+  Settings2, CheckCircle2, Circle, AlertCircle, Power, Brain,
+  Timer, SplitSquareHorizontal
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,6 +13,16 @@ import { toast } from 'sonner';
 import { AcaoInteligenteModal } from '@/components/AcaoInteligenteModal';
 import { DescricaoEditor } from '@/components/DescricaoEditor';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Card, CardContent } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
 
 interface AgentConfig {
   id: string;
@@ -33,6 +45,8 @@ interface AgentConfig {
   tamanho_max_fracao: number;
   delay_entre_fracoes: number;
   simular_digitacao: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 type Tab = 'regras' | 'etapas' | 'perguntas' | 'horario' | 'configuracao';
@@ -40,23 +54,76 @@ type Tab = 'regras' | 'etapas' | 'perguntas' | 'horario' | 'configuracao';
 const MAX_CARACTERES = 15000;
 
 const diasSemana = [
-  { value: 0, label: 'Dom' },
-  { value: 1, label: 'Seg' },
-  { value: 2, label: 'Ter' },
-  { value: 3, label: 'Qua' },
-  { value: 4, label: 'Qui' },
-  { value: 5, label: 'Sex' },
-  { value: 6, label: 'Sáb' },
+  { value: 0, label: 'Dom', fullLabel: 'Domingo' },
+  { value: 1, label: 'Seg', fullLabel: 'Segunda' },
+  { value: 2, label: 'Ter', fullLabel: 'Terça' },
+  { value: 3, label: 'Qua', fullLabel: 'Quarta' },
+  { value: 4, label: 'Qui', fullLabel: 'Quinta' },
+  { value: 5, label: 'Sex', fullLabel: 'Sexta' },
+  { value: 6, label: 'Sáb', fullLabel: 'Sábado' },
 ];
 
 const modelos = [
-  { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Rápido e Econômico)' },
-  { value: 'gpt-4o', label: 'GPT-4o (Equilibrado)' },
-  { value: 'gpt-4.1-2025-04-14', label: 'GPT-4.1 (Flagship)' },
-  { value: 'gpt-4.1-mini-2025-04-14', label: 'GPT-4.1 Mini' },
-  { value: 'gpt-5-2025-08-07', label: 'GPT-5 (Mais Poderoso)' },
-  { value: 'gpt-5-mini-2025-08-07', label: 'GPT-5 Mini' },
-  { value: 'gpt-5-nano-2025-08-07', label: 'GPT-5 Nano (Ultra Rápido)' },
+  { value: 'gpt-4o-mini', label: 'GPT-4o Mini', desc: 'Rápido e Econômico' },
+  { value: 'gpt-4o', label: 'GPT-4o', desc: 'Equilibrado' },
+  { value: 'gpt-4.1-2025-04-14', label: 'GPT-4.1', desc: 'Flagship' },
+  { value: 'gpt-4.1-mini-2025-04-14', label: 'GPT-4.1 Mini', desc: 'Leve' },
+  { value: 'gpt-5-2025-08-07', label: 'GPT-5', desc: 'Mais Poderoso' },
+  { value: 'gpt-5-mini-2025-08-07', label: 'GPT-5 Mini', desc: 'Otimizado' },
+  { value: 'gpt-5-nano-2025-08-07', label: 'GPT-5 Nano', desc: 'Ultra Rápido' },
+];
+
+const tabConfig = [
+  { 
+    id: 'regras' as Tab, 
+    label: 'Regras Gerais', 
+    shortLabel: 'Regras',
+    icon: FileText, 
+    color: 'text-blue-500',
+    bgColor: 'bg-blue-500/10',
+    borderColor: 'border-blue-500/20',
+    group: 'config'
+  },
+  { 
+    id: 'etapas' as Tab, 
+    label: 'Etapas de Atendimento', 
+    shortLabel: 'Etapas',
+    icon: MessageCircle, 
+    color: 'text-emerald-500',
+    bgColor: 'bg-emerald-500/10',
+    borderColor: 'border-emerald-500/20',
+    group: 'config'
+  },
+  { 
+    id: 'perguntas' as Tab, 
+    label: 'Perguntas Frequentes', 
+    shortLabel: 'FAQ',
+    icon: HelpCircle, 
+    color: 'text-violet-500',
+    bgColor: 'bg-violet-500/10',
+    borderColor: 'border-violet-500/20',
+    group: 'config'
+  },
+  { 
+    id: 'horario' as Tab, 
+    label: 'Horário de Funcionamento', 
+    shortLabel: 'Horários',
+    icon: Clock, 
+    color: 'text-amber-500',
+    bgColor: 'bg-amber-500/10',
+    borderColor: 'border-amber-500/20',
+    group: 'operation'
+  },
+  { 
+    id: 'configuracao' as Tab, 
+    label: 'Modelo de IA', 
+    shortLabel: 'Modelo',
+    icon: Brain, 
+    color: 'text-sky-500',
+    bgColor: 'bg-sky-500/10',
+    borderColor: 'border-sky-500/20',
+    group: 'operation'
+  },
 ];
 
 export default function AgenteIAEditar() {
@@ -72,6 +139,8 @@ export default function AgenteIAEditar() {
   const [tempName, setTempName] = useState('');
   const [etapasCaracteres, setEtapasCaracteres] = useState(0);
   const [perguntasCaracteres, setPerguntasCaracteres] = useState(0);
+  const [etapasCount, setEtapasCount] = useState(0);
+  const [perguntasCount, setPerguntasCount] = useState(0);
 
   const carregarCaracteresEtapas = async (agentId: string) => {
     const { data: etapas } = await supabase
@@ -84,6 +153,7 @@ export default function AgenteIAEditar() {
         return acc + (e.nome?.length || 0) + (e.descricao?.length || 0);
       }, 0);
       setEtapasCaracteres(total);
+      setEtapasCount(etapas.length);
     }
   };
 
@@ -98,6 +168,7 @@ export default function AgenteIAEditar() {
         return acc + (p.pergunta?.length || 0) + (p.resposta?.length || 0);
       }, 0);
       setPerguntasCaracteres(total);
+      setPerguntasCount(perguntas.length);
     }
   };
 
@@ -132,7 +203,6 @@ export default function AgenteIAEditar() {
         });
         setTempName(data.nome || '');
         
-        // Carregar caracteres das etapas e perguntas imediatamente
         carregarCaracteresEtapas(data.id);
         carregarCaracteresPerguntas(data.id);
       } else {
@@ -205,24 +275,69 @@ export default function AgenteIAEditar() {
     setConfig({ ...config, dias_ativos: novosDias });
   };
 
-  // Contador unificado: Regras Gerais + Etapas de Atendimento
   const caracteresUsados = (config?.prompt_sistema?.length || 0) + etapasCaracteres + perguntasCaracteres;
   const porcentagemUsada = (caracteresUsados / MAX_CARACTERES) * 100;
 
-  const tabs = [
-    { id: 'regras' as Tab, label: 'Regras Gerais', icon: FileText },
-    { id: 'etapas' as Tab, label: 'Etapas de Atendimento', icon: MessageCircle },
-    { id: 'perguntas' as Tab, label: 'Perguntas Frequentes', icon: HelpCircle },
-    { id: 'horario' as Tab, label: 'Horário de Funcionamento', icon: Clock },
-    { id: 'configuracao' as Tab, label: 'Modelo de IA', icon: Bot },
-  ];
+  // Calcular progresso de configuração
+  const calcularProgresso = () => {
+    if (!config) return 0;
+    let pontos = 0;
+    let total = 5;
+    
+    if (config.prompt_sistema && config.prompt_sistema.length > 50) pontos++;
+    if (etapasCount > 0) pontos++;
+    if (perguntasCount > 0) pontos++;
+    if (config.dias_ativos.length > 0 || config.atender_24h) pontos++;
+    if (config.modelo) pontos++;
+    
+    return Math.round((pontos / total) * 100);
+  };
 
+  const getTabStatus = (tabId: Tab): 'complete' | 'partial' | 'empty' => {
+    if (!config) return 'empty';
+    
+    switch (tabId) {
+      case 'regras':
+        if (config.prompt_sistema && config.prompt_sistema.length > 100) return 'complete';
+        if (config.prompt_sistema && config.prompt_sistema.length > 0) return 'partial';
+        return 'empty';
+      case 'etapas':
+        if (etapasCount >= 2) return 'complete';
+        if (etapasCount > 0) return 'partial';
+        return 'empty';
+      case 'perguntas':
+        if (perguntasCount >= 3) return 'complete';
+        if (perguntasCount > 0) return 'partial';
+        return 'empty';
+      case 'horario':
+        if (config.atender_24h || (config.dias_ativos.length > 0 && config.horario_inicio && config.horario_fim)) return 'complete';
+        return 'empty';
+      case 'configuracao':
+        return config.modelo ? 'complete' : 'empty';
+      default:
+        return 'empty';
+    }
+  };
+
+  const getTabCount = (tabId: Tab): number | null => {
+    switch (tabId) {
+      case 'etapas':
+        return etapasCount;
+      case 'perguntas':
+        return perguntasCount;
+      default:
+        return null;
+    }
+  };
 
   if (loading) {
     return (
       <MainLayout>
         <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="text-muted-foreground">Carregando agente...</p>
+          </div>
         </div>
       </MainLayout>
     );
@@ -239,84 +354,142 @@ export default function AgenteIAEditar() {
     );
   }
 
+  const progresso = calcularProgresso();
+
   return (
     <MainLayout>
       <div className="flex flex-col h-full animate-fade-in">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border bg-card/50">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate('/agente-ia')}
-              className="flex items-center justify-center h-9 w-9 rounded-lg hover:bg-muted transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5 text-muted-foreground" />
-            </button>
-            
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Bot className="h-5 w-5 text-muted-foreground" />
-            </div>
-
-            <div className="flex items-center gap-2">
-              {editingName ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={tempName}
-                    onChange={(e) => setTempName(e.target.value)}
-                    className="h-8 px-2 rounded border border-border bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleNameSave();
-                      if (e.key === 'Escape') setEditingName(false);
-                    }}
-                  />
-                  <button onClick={handleNameSave} className="p-1 rounded hover:bg-muted">
-                    <Check className="h-4 w-4 text-primary" />
-                  </button>
-                  <button onClick={() => setEditingName(false)} className="p-1 rounded hover:bg-muted">
-                    <X className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <span className="font-semibold text-foreground">{config.nome}</span>
-                  <button
-                    onClick={() => {
-                      setTempName(config.nome);
-                      setEditingName(true);
-                    }}
-                    className="p-1 rounded hover:bg-muted"
-                  >
-                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-                </>
-              )}
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                config.tipo === 'principal' 
-                  ? 'bg-primary/20 text-primary' 
-                  : 'bg-muted text-muted-foreground'
-              }`}>
-                {config.tipo === 'principal' ? 'Principal' : 'Secundário'}
-              </span>
-            </div>
+        {/* Premium Header */}
+        <div className="border-b border-border bg-gradient-to-r from-card via-card to-card/80">
+          {/* Breadcrumb */}
+          <div className="px-6 pt-4">
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbLink href="/agente-ia" className="text-muted-foreground hover:text-foreground">
+                    Agentes IA
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>{config.nome}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className={`text-sm ${config.ativo ? 'text-primary' : 'text-muted-foreground'}`}>
-                {config.ativo ? '● Ativo' : '○ Inativo'}
-              </span>
+          {/* Main Header Content */}
+          <div className="flex items-center justify-between p-6 pt-4">
+            <div className="flex items-center gap-5">
               <button
-                onClick={() => setConfig({ ...config, ativo: !config.ativo })}
-                className={`relative h-6 w-11 rounded-full transition-colors ${
-                  config.ativo ? 'bg-primary' : 'bg-muted'
-                }`}
+                onClick={() => navigate('/agente-ia')}
+                className="flex items-center justify-center h-10 w-10 rounded-xl hover:bg-muted transition-colors"
               >
-                <div
-                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                    config.ativo ? 'translate-x-5' : ''
+                <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+              </button>
+              
+              {/* Gradient Avatar */}
+              <div className={`relative flex h-14 w-14 items-center justify-center rounded-2xl ${
+                config.tipo === 'principal' 
+                  ? 'bg-gradient-to-br from-amber-500 to-orange-600' 
+                  : 'bg-gradient-to-br from-primary to-emerald-600'
+              } shadow-lg`}>
+                <Bot className="h-7 w-7 text-white" />
+                {config.tipo === 'principal' && (
+                  <div className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-amber-400 flex items-center justify-center shadow-md">
+                    <Crown className="h-3 w-3 text-amber-900" />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center gap-3">
+                  {editingName ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={tempName}
+                        onChange={(e) => setTempName(e.target.value)}
+                        className="h-9 px-3 rounded-lg border border-border bg-input text-foreground text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleNameSave();
+                          if (e.key === 'Escape') setEditingName(false);
+                        }}
+                      />
+                      <button onClick={handleNameSave} className="p-2 rounded-lg hover:bg-muted">
+                        <Check className="h-4 w-4 text-primary" />
+                      </button>
+                      <button onClick={() => setEditingName(false)} className="p-2 rounded-lg hover:bg-muted">
+                        <X className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <h1 className="text-xl font-bold text-foreground">{config.nome}</h1>
+                      <button
+                        onClick={() => {
+                          setTempName(config.nome);
+                          setEditingName(true);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                      >
+                        <Pencil className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mt-1">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                    config.tipo === 'principal' 
+                      ? 'bg-amber-500/15 text-amber-500' 
+                      : 'bg-primary/15 text-primary'
+                  }`}>
+                    {config.tipo === 'principal' && <Crown className="h-3 w-3" />}
+                    {config.tipo === 'principal' ? 'Principal' : 'Secundário'}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {progresso}% configurado
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              {/* Status Toggle */}
+              <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-muted/50">
+                <div className={`flex items-center gap-2 ${config.ativo ? 'text-primary' : 'text-muted-foreground'}`}>
+                  <Power className="h-4 w-4" />
+                  <span className="text-sm font-medium">
+                    {config.ativo ? 'Ativo' : 'Inativo'}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setConfig({ ...config, ativo: !config.ativo })}
+                  className={`relative h-6 w-11 rounded-full transition-colors ${
+                    config.ativo ? 'bg-primary' : 'bg-border'
                   }`}
-                />
+                >
+                  <div
+                    className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                      config.ativo ? 'translate-x-5' : ''
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Save Button */}
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 h-10 px-5 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-all disabled:opacity-50 shadow-lg shadow-primary/25"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Salvar
               </button>
             </div>
           </div>
@@ -324,105 +497,216 @@ export default function AgenteIAEditar() {
 
         {/* Content with Sidebar */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar Esquerda - Navegação */}
-          <div className="w-56 border-r border-border bg-card/30 flex flex-col">
-            {/* Contador de caracteres */}
-            <div className="p-4 border-b border-border">
-              <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                Total de caracteres
-              </div>
-              <div className="text-lg font-semibold text-foreground">
-                {caracteresUsados.toLocaleString()} / {MAX_CARACTERES.toLocaleString()}
-              </div>
-              <div className="h-1.5 bg-muted rounded-full mt-2 overflow-hidden">
-                <div 
-                  className={`h-full rounded-full transition-all ${
-                    porcentagemUsada > 80 ? 'bg-destructive' : 'bg-primary'
-                  }`}
-                  style={{ width: `${Math.min(porcentagemUsada, 100)}%` }}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {Math.round(porcentagemUsada)}% do limite
-              </p>
+          {/* Redesigned Sidebar */}
+          <div className="w-72 border-r border-border bg-gradient-to-b from-card/50 to-background flex flex-col">
+            {/* Progress Card */}
+            <div className="p-4">
+              <Card className="border-primary/20 bg-primary/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Progresso</p>
+                      <p className="text-lg font-bold text-foreground">{progresso}%</p>
+                    </div>
+                  </div>
+                  <Progress value={progresso} className="h-2" />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {progresso < 100 ? 'Continue configurando para melhor desempenho' : 'Configuração completa!'}
+                  </p>
+                </CardContent>
+              </Card>
             </div>
 
-            {/* Navegação das Tabs */}
-            <nav className="flex-1 p-2 space-y-1">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                    activeTab === tab.id 
-                      ? 'bg-primary/10 text-primary font-medium' 
-                      : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                  }`}
-                >
-                  <tab.icon className="h-4 w-4" />
-                  {tab.label}
-                </button>
-              ))}
+            {/* Character Gauge */}
+            <div className="px-4 pb-4">
+              <Card className={`${porcentagemUsada > 80 ? 'border-destructive/30 bg-destructive/5' : 'border-border'}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Caracteres
+                    </span>
+                    <span className={`text-xs font-medium ${porcentagemUsada > 80 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                      {Math.round(porcentagemUsada)}%
+                    </span>
+                  </div>
+                  <div className="text-2xl font-bold text-foreground mb-2">
+                    {caracteresUsados.toLocaleString()}
+                    <span className="text-sm font-normal text-muted-foreground"> / {MAX_CARACTERES.toLocaleString()}</span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full transition-all ${
+                        porcentagemUsada > 80 ? 'bg-destructive' : 'bg-primary'
+                      }`}
+                      style={{ width: `${Math.min(porcentagemUsada, 100)}%` }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Navigation */}
+            <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
+              {/* Configuration Group */}
+              <div className="mb-4">
+                <p className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Configuração
+                </p>
+                {tabConfig.filter(t => t.group === 'config').map((tab) => {
+                  const status = getTabStatus(tab.id);
+                  const count = getTabCount(tab.id);
+                  const isActive = activeTab === tab.id;
+                  
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition-all group ${
+                        isActive 
+                          ? `${tab.bgColor} ${tab.borderColor} border shadow-sm` 
+                          : 'hover:bg-muted/50'
+                      }`}
+                    >
+                      <div className={`h-9 w-9 rounded-lg flex items-center justify-center transition-colors ${
+                        isActive ? tab.bgColor : 'bg-muted group-hover:bg-muted/80'
+                      }`}>
+                        <tab.icon className={`h-4.5 w-4.5 ${isActive ? tab.color : 'text-muted-foreground'}`} />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="flex items-center gap-2">
+                          <span className={`font-medium ${isActive ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}>
+                            {tab.shortLabel}
+                          </span>
+                          {count !== null && count > 0 && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                              isActive ? `${tab.bgColor} ${tab.color}` : 'bg-muted text-muted-foreground'
+                            }`}>
+                              {count}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex-shrink-0">
+                        {status === 'complete' && (
+                          <CheckCircle2 className="h-4 w-4 text-primary" />
+                        )}
+                        {status === 'partial' && (
+                          <AlertCircle className="h-4 w-4 text-amber-500" />
+                        )}
+                        {status === 'empty' && (
+                          <Circle className="h-4 w-4 text-muted-foreground/50" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Operation Group */}
+              <div>
+                <p className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Operação
+                </p>
+                {tabConfig.filter(t => t.group === 'operation').map((tab) => {
+                  const status = getTabStatus(tab.id);
+                  const isActive = activeTab === tab.id;
+                  
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition-all group ${
+                        isActive 
+                          ? `${tab.bgColor} ${tab.borderColor} border shadow-sm` 
+                          : 'hover:bg-muted/50'
+                      }`}
+                    >
+                      <div className={`h-9 w-9 rounded-lg flex items-center justify-center transition-colors ${
+                        isActive ? tab.bgColor : 'bg-muted group-hover:bg-muted/80'
+                      }`}>
+                        <tab.icon className={`h-4.5 w-4.5 ${isActive ? tab.color : 'text-muted-foreground'}`} />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <span className={`font-medium ${isActive ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}>
+                          {tab.shortLabel}
+                        </span>
+                      </div>
+                      <div className="flex-shrink-0">
+                        {status === 'complete' && (
+                          <CheckCircle2 className="h-4 w-4 text-primary" />
+                        )}
+                        {status === 'empty' && (
+                          <Circle className="h-4 w-4 text-muted-foreground/50" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </nav>
 
-            {/* Gatilho Info */}
-            <div className="p-3 m-3 rounded-lg bg-primary/10 border border-primary/20">
+            {/* Trigger Info */}
+            <div className="p-3 m-3 mt-auto rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20">
               <div className="flex items-center gap-2 text-primary mb-1">
                 <Zap className="h-4 w-4" />
-                <span className="text-sm font-medium">Sem gatilho ativo</span>
+                <span className="text-sm font-semibold">Gatilho</span>
               </div>
-              <p className="text-xs text-muted-foreground">
-                O agente responde na primeira mensagem recebida.
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {config.gatilho || 'Sem gatilho - responde na primeira mensagem recebida'}
               </p>
             </div>
           </div>
 
           {/* Main Content */}
-          <div className="flex-1 overflow-auto p-6">
-            {activeTab === 'regras' && (
-              <RegrasGeraisTab 
-                config={config} 
-                setConfig={setConfig}
-                onSave={handleSave}
-                saving={saving}
-                caracteresUsados={caracteresUsados}
-                porcentagemUsada={porcentagemUsada}
-                maxCaracteres={MAX_CARACTERES}
-              />
-            )}
+          <div className="flex-1 overflow-auto">
+            <div className="p-8 animate-fade-in">
+              {activeTab === 'regras' && (
+                <RegrasGeraisTab 
+                  config={config} 
+                  setConfig={setConfig}
+                  onSave={handleSave}
+                  saving={saving}
+                />
+              )}
 
-            {activeTab === 'etapas' && config && (
-              <EtapasAtendimentoTab 
-                agentId={config.id} 
-                onCaracteresChange={setEtapasCaracteres}
-              />
-            )}
+              {activeTab === 'etapas' && config && (
+                <EtapasAtendimentoTab 
+                  agentId={config.id} 
+                  onCaracteresChange={setEtapasCaracteres}
+                  onCountChange={setEtapasCount}
+                />
+              )}
 
-            {activeTab === 'perguntas' && config && (
-              <PerguntasFrequentesTab 
-                agentId={config.id} 
-                onCaracteresChange={setPerguntasCaracteres}
-              />
-            )}
+              {activeTab === 'perguntas' && config && (
+                <PerguntasFrequentesTab 
+                  agentId={config.id} 
+                  onCaracteresChange={setPerguntasCaracteres}
+                  onCountChange={setPerguntasCount}
+                />
+              )}
 
-            {activeTab === 'horario' && config && (
-              <HorarioFuncionamentoTab 
-                config={config}
-                setConfig={setConfig}
-                onSave={handleSave}
-                saving={saving}
-                toggleDia={toggleDia}
-              />
-            )}
+              {activeTab === 'horario' && config && (
+                <HorarioFuncionamentoTab 
+                  config={config}
+                  setConfig={setConfig}
+                  onSave={handleSave}
+                  saving={saving}
+                  toggleDia={toggleDia}
+                />
+              )}
 
-            {activeTab === 'configuracao' && config && (
-              <ConfiguracaoAPITab 
-                config={config}
-                setConfig={setConfig}
-                onSave={handleSave}
-                saving={saving}
-              />
-            )}
+              {activeTab === 'configuracao' && config && (
+                <ConfiguracaoAPITab 
+                  config={config}
+                  setConfig={setConfig}
+                  onSave={handleSave}
+                  saving={saving}
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -435,45 +719,72 @@ function RegrasGeraisTab({
   config, 
   setConfig, 
   onSave, 
-  saving,
-  caracteresUsados,
-  porcentagemUsada,
-  maxCaracteres
+  saving
 }: { 
   config: AgentConfig;
   setConfig: (c: AgentConfig) => void;
   onSave: () => void;
   saving: boolean;
-  caracteresUsados: number;
-  porcentagemUsada: number;
-  maxCaracteres: number;
 }) {
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div>
-        <label className="block text-sm font-medium text-foreground mb-2">
-          Regras do Agente
-        </label>
-        <textarea
-          value={config.prompt_sistema}
-          onChange={(e) => setConfig({ ...config, prompt_sistema: e.target.value })}
-          rows={16}
-          className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none font-mono text-sm"
-          placeholder="Defina as regras e comportamento do agente..."
-        />
+    <div className="space-y-6 max-w-4xl">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-6">
+        <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
+          <FileText className="h-6 w-6 text-blue-500" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-foreground">Regras Gerais</h2>
+          <p className="text-sm text-muted-foreground">
+            Defina a personalidade e comportamento base do agente
+          </p>
+        </div>
       </div>
+
+      {/* Editor Card */}
+      <Card className="border-border">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-3">
+            <label className="text-sm font-medium text-foreground">
+              Prompt do Sistema
+            </label>
+            <span className="text-xs text-muted-foreground">
+              {config.prompt_sistema?.length || 0} caracteres
+            </span>
+          </div>
+          <textarea
+            value={config.prompt_sistema}
+            onChange={(e) => setConfig({ ...config, prompt_sistema: e.target.value })}
+            rows={18}
+            className="w-full px-4 py-3 rounded-xl bg-muted/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 resize-none font-mono text-sm leading-relaxed transition-all"
+            placeholder="Você é um assistente virtual especializado em...
+
+Regras de comportamento:
+1. Sempre seja cordial e profissional
+2. Responda de forma clara e objetiva
+3. Quando não souber, pergunte ou transfira
+
+Tom de voz:
+- Amigável mas profissional
+- Empático com as necessidades do cliente"
+          />
+          <p className="text-xs text-muted-foreground mt-3">
+            💡 Dica: Seja específico sobre personalidade, tom de voz e limitações do agente
+          </p>
+        </CardContent>
+      </Card>
 
       <button
         onClick={onSave}
         disabled={saving}
-        className="flex items-center gap-2 h-10 px-6 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+        className="flex items-center gap-2 h-11 px-6 rounded-xl bg-blue-500 text-white font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 shadow-lg shadow-blue-500/25"
       >
         {saving ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
           <Save className="h-4 w-4" />
         )}
-        Salvar Regras
+        Salvar Regras Gerais
       </button>
     </div>
   );
@@ -503,10 +814,12 @@ interface ModalDecisaoState {
 
 function EtapasAtendimentoTab({ 
   agentId, 
-  onCaracteresChange 
+  onCaracteresChange,
+  onCountChange
 }: { 
   agentId: string;
   onCaracteresChange: (count: number) => void;
+  onCountChange: (count: number) => void;
 }) {
   const [etapas, setEtapas] = useState<Etapa[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<ConfirmDeleteEtapa | null>(null);
@@ -518,16 +831,15 @@ function EtapasAtendimentoTab({
     cursorPosition: 0,
   });
   
-  // Guardar posição do cursor por etapa
   const cursorPositionsByEtapa = useRef<Record<string, number>>({});
 
-  // Calcular e reportar total de caracteres das etapas
   useEffect(() => {
     const totalCaracteres = etapas.reduce((acc, etapa) => {
       return acc + (etapa.nome?.length || 0) + (etapa.descricao?.length || 0);
     }, 0);
     onCaracteresChange(totalCaracteres);
-  }, [etapas, onCaracteresChange]);
+    onCountChange(etapas.length);
+  }, [etapas, onCaracteresChange, onCountChange]);
 
   useEffect(() => {
     fetchEtapas();
@@ -606,12 +918,10 @@ function EtapasAtendimentoTab({
     ));
   };
 
-  // Handler para inserir ação do modal no texto NA POSIÇÃO DO CURSOR
   const handleDecisaoInsert = (action: string) => {
     const etapa = etapas.find(e => e.id === modalDecisao.etapaId);
     if (!etapa) return;
 
-    // Inserir na posição guardada do cursor
     const pos = modalDecisao.cursorPosition;
     const before = etapa.descricao.substring(0, pos);
     const after = etapa.descricao.substring(pos);
@@ -622,7 +932,6 @@ function EtapasAtendimentoTab({
     updateEtapa(modalDecisao.etapaId, 'descricao', novaDescricao);
   };
 
-  // Abrir modal de decisão com posição do cursor
   const abrirModalDecisao = (etapaId: string, cursorPosition?: number) => {
     const etapa = etapas.find(e => e.id === etapaId);
     const pos = cursorPosition ?? (etapa?.descricao.length ?? 0);
@@ -667,18 +976,16 @@ function EtapasAtendimentoTab({
   }
 
   return (
-    <div className="space-y-6">
-      {/* Modal de Decisão Inteligente */}
+    <div className="space-y-6 max-w-4xl">
       <AcaoInteligenteModal
         isOpen={modalDecisao.isOpen}
         onClose={() => setModalDecisao(prev => ({ ...prev, isOpen: false }))}
         onInsert={handleDecisaoInsert}
       />
 
-      {/* Modal de Confirmação de Exclusão */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card rounded-xl p-6 w-full max-w-md border border-border shadow-2xl animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-card rounded-2xl p-6 w-full max-w-md border border-border shadow-2xl animate-scale-in">
             <h3 className="text-lg font-semibold text-foreground mb-2">
               Confirmar Exclusão
             </h3>
@@ -689,13 +996,13 @@ function EtapasAtendimentoTab({
             <div className="flex justify-end gap-3">
               <button 
                 onClick={() => setConfirmDelete(null)}
-                className="px-4 py-2 rounded-lg border border-border text-foreground hover:bg-muted transition-colors"
+                className="px-4 py-2 rounded-xl border border-border text-foreground hover:bg-muted transition-colors"
               >
                 Cancelar
               </button>
               <button 
                 onClick={confirmDeleteEtapa}
-                className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+                className="px-4 py-2 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
               >
                 Excluir
               </button>
@@ -704,173 +1011,197 @@ function EtapasAtendimentoTab({
         </div>
       )}
 
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Etapas de Atendimento</h2>
-          <p className="text-sm text-muted-foreground">Configure o fluxo de conversação</p>
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+            <MessageCircle className="h-6 w-6 text-emerald-500" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-foreground">Etapas de Atendimento</h2>
+            <p className="text-sm text-muted-foreground">
+              Configure o fluxo de conversação do agente
+            </p>
+          </div>
         </div>
         <button 
           onClick={addEtapa}
-          className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-2 h-11 px-5 rounded-xl bg-emerald-500 text-white font-medium hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/25"
         >
           <Plus className="h-4 w-4" />
-          Adicionar Etapa
+          Nova Etapa
         </button>
       </div>
 
-      <div className="space-y-3">
-        {etapas.map((etapa) => (
-          <div 
-            key={etapa.id}
-            className="rounded-lg bg-card border border-border overflow-hidden"
-          >
-            <div className="flex items-center gap-3 p-4">
-              <button className="cursor-grab">
-                <GripVertical className="h-5 w-5 text-muted-foreground" />
-              </button>
-              
-              <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary text-primary-foreground text-sm font-semibold">
-                {etapa.numero}
-              </div>
+      {/* Timeline */}
+      <div className="relative space-y-4">
+        {/* Vertical Line */}
+        {etapas.length > 1 && (
+          <div className="absolute left-[23px] top-8 bottom-8 w-0.5 bg-gradient-to-b from-emerald-500/50 via-emerald-500/30 to-emerald-500/10" />
+        )}
 
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  {etapa.tipo && (
-                    <span className="text-xs text-muted-foreground">
-                      ETAPA {etapa.numero} - {etapa.tipo}
-                    </span>
-                  )}
-                  {!etapa.tipo && (
-                    <span className="text-xs text-muted-foreground">
-                      ETAPA {etapa.numero}
-                    </span>
+        {etapas.map((etapa, index) => (
+          <Card 
+            key={etapa.id}
+            className={`relative transition-all duration-300 ${
+              etapa.expandido ? 'border-emerald-500/30 shadow-lg shadow-emerald-500/10' : 'hover:border-border/80'
+            }`}
+          >
+            <CardContent className="p-0">
+              <div className="flex items-center gap-4 p-4">
+                {/* Step Number */}
+                <div className={`relative z-10 flex items-center justify-center h-12 w-12 rounded-xl text-sm font-bold transition-all ${
+                  etapa.expandido 
+                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
+                    : 'bg-muted text-muted-foreground'
+                }`}>
+                  {etapa.numero}
+                </div>
+                
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    {etapa.tipo && (
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                        etapa.tipo === 'INICIO' 
+                          ? 'bg-emerald-500/15 text-emerald-500' 
+                          : 'bg-amber-500/15 text-amber-500'
+                      }`}>
+                        {etapa.tipo}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="font-semibold text-foreground truncate">{etapa.nome}</h3>
+                  {!etapa.expandido && etapa.descricao && (
+                    <p className="text-sm text-muted-foreground truncate mt-0.5">
+                      {etapa.descricao.substring(0, 80)}...
+                    </p>
                   )}
                 </div>
-                <h3 className="font-medium text-foreground">{etapa.nome}</h3>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => toggleEtapa(etapa.id)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                      etapa.expandido 
+                        ? 'bg-emerald-500/10 text-emerald-500' 
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    {etapa.expandido ? (
+                      <>
+                        <ChevronUp className="h-4 w-4" />
+                        Fechar
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-4 w-4" />
+                        Editar
+                      </>
+                    )}
+                  </button>
+
+                  <button 
+                    onClick={() => handleDeleteClick(etapa)}
+                    className="p-2 rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
-              <button
-                onClick={() => toggleEtapa(etapa.id)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-sm text-muted-foreground hover:bg-muted transition-colors"
-              >
-                {etapa.expandido ? (
-                  <>
-                    <ChevronUp className="h-4 w-4" />
-                    Reduzir
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown className="h-4 w-4" />
-                    Expandir
-                  </>
-                )}
-              </button>
+              {/* Expanded Content */}
+              {etapa.expandido && (
+                <div className="px-4 pb-4 pt-2 border-t border-border animate-fade-in">
+                  <div className="space-y-4 ml-16">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Nome da Etapa
+                      </label>
+                      <input
+                        type="text"
+                        value={etapa.nome}
+                        onChange={(e) => updateEtapa(etapa.id, 'nome', e.target.value)}
+                        className="w-full h-11 px-4 rounded-xl bg-muted/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
+                      />
+                    </div>
 
-              <button 
-                onClick={() => handleDeleteClick(etapa)}
-                className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-medium text-foreground">
+                          Descrição / Comportamento
+                        </label>
+                        <button 
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            const savedPos = cursorPositionsByEtapa.current[etapa.id] ?? etapa.descricao.length;
+                            abrirModalDecisao(etapa.id, savedPos);
+                          }}
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          @ Ação Inteligente
+                        </button>
+                      </div>
+                      
+                      <DescricaoEditor
+                        value={etapa.descricao}
+                        onChange={(value) => updateEtapa(etapa.id, 'descricao', value)}
+                        placeholder="Descreva o comportamento desta etapa..."
+                        onAcaoClick={(cursorPos) => abrirModalDecisao(etapa.id, cursorPos)}
+                      />
+                      <p className="text-xs text-muted-foreground mt-2">
+                        💡 Digite <span className="text-emerald-500 font-medium">@</span> para inserir ações inteligentes
+                      </p>
+                    </div>
 
-            {etapa.expandido && (
-              <div className="p-4 pt-0 border-t border-border mt-2">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Nome da Etapa
-                    </label>
-                    <input
-                      type="text"
-                      value={etapa.nome}
-                      onChange={(e) => updateEtapa(etapa.id, 'nome', e.target.value)}
-                      className="w-full h-10 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-
-                  <div className="relative">
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Descrição da Etapa
-                    </label>
-                    <div className="flex items-center gap-1 mb-3 p-1.5 rounded-lg bg-muted/30 border border-border/50">
-                      <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-                        <MessageCircle className="h-3 w-3" />
-                        Mensagem
-                      </button>
-                      <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-                        📎 Mídia
-                      </button>
-                      <div className="flex-1" />
+                    <div className="flex justify-end pt-2">
                       <button 
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary/15 text-primary hover:bg-primary/25 transition-colors"
-                        onMouseDown={(e) => {
-                          e.preventDefault(); // Prevenir perda de foco do editor!
-                          const savedPos = cursorPositionsByEtapa.current[etapa.id] ?? etapa.descricao.length;
-                          abrirModalDecisao(etapa.id, savedPos);
-                        }}
+                        onClick={() => saveEtapa(etapa.id)}
+                        disabled={saving}
+                        className="flex items-center gap-2 h-10 px-5 rounded-xl bg-emerald-500 text-white text-sm font-medium hover:bg-emerald-600 transition-colors disabled:opacity-50"
                       >
-                        <Sparkles className="h-3 w-3" />
-                        @ Ação
+                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        Salvar Etapa
                       </button>
                     </div>
-                    
-                    {/* Editor com textarea + preview de chips */}
-                    <DescricaoEditor
-                      value={etapa.descricao}
-                      onChange={(value) => updateEtapa(etapa.id, 'descricao', value)}
-                      placeholder="Descreva o comportamento desta etapa..."
-                      onAcaoClick={(cursorPos) => abrirModalDecisao(etapa.id, cursorPos)}
-                    />
-                    <p className="text-xs text-muted-foreground mt-2">
-                      💡 Clique em <span className="text-primary font-medium">@ Ação</span> ou digite <span className="text-primary font-medium">@</span> para inserir ações inteligentes
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <input type="checkbox" className="rounded border-border" />
-                      Atribuir automaticamente usuário ao lead
-                    </label>
-                    <button 
-                      onClick={() => saveEtapa(etapa.id)}
-                      className="flex items-center gap-2 h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-                    >
-                      <Save className="h-4 w-4" />
-                      Salvar
-                    </button>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </CardContent>
+          </Card>
         ))}
       </div>
 
       {etapas.length === 0 && (
-        <div className="flex flex-col items-center justify-center p-12 rounded-xl bg-card border border-border">
-          <Layers className="h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h3 className="font-medium text-foreground mb-1">Nenhuma etapa configurada</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            Adicione etapas para definir o fluxo de atendimento
-          </p>
-          <button 
-            onClick={addEtapa}
-            className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Adicionar Primeira Etapa
-          </button>
-        </div>
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="h-16 w-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center mb-4">
+              <Layers className="h-8 w-8 text-emerald-500/50" />
+            </div>
+            <h3 className="font-semibold text-foreground mb-1">Nenhuma etapa configurada</h3>
+            <p className="text-sm text-muted-foreground mb-6 text-center max-w-sm">
+              Adicione etapas para definir o fluxo de atendimento do agente
+            </p>
+            <button 
+              onClick={addEtapa}
+              className="flex items-center gap-2 h-11 px-5 rounded-xl bg-emerald-500 text-white font-medium hover:bg-emerald-600 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Criar Primeira Etapa
+            </button>
+          </CardContent>
+        </Card>
       )}
 
       {etapas.length > 0 && (
         <button 
           onClick={addEtapa}
-          className="w-full flex items-center justify-center gap-2 h-12 rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+          className="w-full flex items-center justify-center gap-2 h-14 rounded-xl border-2 border-dashed border-border text-muted-foreground hover:border-emerald-500/50 hover:text-emerald-500 hover:bg-emerald-500/5 transition-all"
         >
           <Plus className="h-5 w-5" />
-          Adicionar Etapa
+          Adicionar Nova Etapa
         </button>
       )}
     </div>
@@ -894,23 +1225,25 @@ interface ConfirmDeletePergunta {
 
 function PerguntasFrequentesTab({ 
   agentId,
-  onCaracteresChange 
+  onCaracteresChange,
+  onCountChange
 }: { 
   agentId: string;
   onCaracteresChange: (count: number) => void;
+  onCountChange: (count: number) => void;
 }) {
   const [perguntas, setPerguntas] = useState<Pergunta[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<ConfirmDeletePergunta | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Calcular e reportar total de caracteres das perguntas
   useEffect(() => {
     const totalCaracteres = perguntas.reduce((acc, p) => {
       return acc + (p.pergunta?.length || 0) + (p.resposta?.length || 0);
     }, 0);
     onCaracteresChange(totalCaracteres);
-  }, [perguntas, onCaracteresChange]);
+    onCountChange(perguntas.length);
+  }, [perguntas, onCaracteresChange, onCountChange]);
 
   useEffect(() => {
     fetchPerguntas();
@@ -1026,11 +1359,10 @@ function PerguntasFrequentesTab({
   }
 
   return (
-    <div className="space-y-6">
-      {/* Modal de Confirmação de Exclusão */}
+    <div className="space-y-6 max-w-4xl">
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card rounded-xl p-6 w-full max-w-md border border-border shadow-2xl animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-card rounded-2xl p-6 w-full max-w-md border border-border shadow-2xl animate-scale-in">
             <h3 className="text-lg font-semibold text-foreground mb-2">
               Confirmar Exclusão
             </h3>
@@ -1041,13 +1373,13 @@ function PerguntasFrequentesTab({
             <div className="flex justify-end gap-3">
               <button 
                 onClick={() => setConfirmDelete(null)}
-                className="px-4 py-2 rounded-lg border border-border text-foreground hover:bg-muted transition-colors"
+                className="px-4 py-2 rounded-xl border border-border text-foreground hover:bg-muted transition-colors"
               >
                 Cancelar
               </button>
               <button 
                 onClick={confirmDeletePergunta}
-                className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+                className="px-4 py-2 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
               >
                 Excluir
               </button>
@@ -1056,135 +1388,162 @@ function PerguntasFrequentesTab({
         </div>
       )}
 
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Perguntas Frequentes</h2>
-          <p className="text-sm text-muted-foreground">Configure respostas automáticas para perguntas comuns</p>
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-xl bg-violet-500/10 flex items-center justify-center">
+            <HelpCircle className="h-6 w-6 text-violet-500" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-foreground">Perguntas Frequentes</h2>
+            <p className="text-sm text-muted-foreground">
+              Configure respostas automáticas para perguntas comuns
+            </p>
+          </div>
         </div>
         <button 
           onClick={addPergunta}
-          className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-2 h-11 px-5 rounded-xl bg-violet-500 text-white font-medium hover:bg-violet-600 transition-colors shadow-lg shadow-violet-500/25"
         >
           <Plus className="h-4 w-4" />
-          Adicionar Pergunta
+          Nova Pergunta
         </button>
       </div>
 
       {perguntas.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-12 rounded-xl bg-card border border-border">
-          <HelpCircle className="h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h3 className="font-medium text-foreground mb-1">Nenhuma pergunta configurada</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            Adicione perguntas frequentes para respostas mais rápidas
-          </p>
-          <button 
-            onClick={addPergunta}
-            className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Adicionar Primeira Pergunta
-          </button>
-        </div>
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="h-16 w-16 rounded-2xl bg-violet-500/10 flex items-center justify-center mb-4">
+              <HelpCircle className="h-8 w-8 text-violet-500/50" />
+            </div>
+            <h3 className="font-semibold text-foreground mb-1">Nenhuma pergunta configurada</h3>
+            <p className="text-sm text-muted-foreground mb-6 text-center max-w-sm">
+              Adicione perguntas frequentes para respostas mais rápidas e consistentes
+            </p>
+            <button 
+              onClick={addPergunta}
+              className="flex items-center gap-2 h-11 px-5 rounded-xl bg-violet-500 text-white font-medium hover:bg-violet-600 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Criar Primeira Pergunta
+            </button>
+          </CardContent>
+        </Card>
       ) : (
         <>
-          <div className="space-y-3">
+          <div className="grid gap-4">
             {perguntas.map((item, index) => (
-              <div 
+              <Card 
                 key={item.id}
-                className="rounded-lg bg-card border border-border overflow-hidden"
+                className={`transition-all duration-300 ${
+                  item.expandido ? 'border-violet-500/30 shadow-lg shadow-violet-500/10' : 'hover:border-border/80'
+                }`}
               >
-                <div className="flex items-center gap-3 p-4">
-                  <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/20 text-primary text-sm font-semibold">
-                    {index + 1}
-                  </div>
+                <CardContent className="p-0">
+                  <div className="flex items-center gap-4 p-4">
+                    <div className={`flex items-center justify-center h-10 w-10 rounded-xl text-sm font-bold ${
+                      item.expandido 
+                        ? 'bg-violet-500 text-white' 
+                        : 'bg-violet-500/10 text-violet-500'
+                    }`}>
+                      {index + 1}
+                    </div>
 
-                  <div className="flex-1">
-                    <h3 className="font-medium text-foreground">
-                      {item.pergunta || 'Nova Pergunta'}
-                    </h3>
-                    {item.resposta && (
-                      <p className="text-sm text-muted-foreground line-clamp-1">
-                        {item.resposta}
-                      </p>
-                    )}
-                  </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-foreground truncate">
+                        {item.pergunta || 'Nova Pergunta'}
+                      </h3>
+                      {!item.expandido && item.resposta && (
+                        <p className="text-sm text-muted-foreground truncate mt-0.5">
+                          {item.resposta.substring(0, 60)}...
+                        </p>
+                      )}
+                    </div>
 
-                  <button
-                    onClick={() => togglePergunta(item.id)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-sm text-muted-foreground hover:bg-muted transition-colors"
-                  >
-                    {item.expandido ? (
-                      <>
-                        <ChevronUp className="h-4 w-4" />
-                        Reduzir
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="h-4 w-4" />
-                        Expandir
-                      </>
-                    )}
-                  </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => togglePergunta(item.id)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                          item.expandido 
+                            ? 'bg-violet-500/10 text-violet-500' 
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        }`}
+                      >
+                        {item.expandido ? (
+                          <>
+                            <ChevronUp className="h-4 w-4" />
+                            Fechar
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="h-4 w-4" />
+                            Editar
+                          </>
+                        )}
+                      </button>
 
-                  <button 
-                    onClick={() => handleDeleteClick(item)}
-                    className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-
-                {item.expandido && (
-                  <div className="p-4 pt-0 border-t border-border mt-2">
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Pergunta
-                        </label>
-                        <input
-                          type="text"
-                          value={item.pergunta}
-                          onChange={(e) => updatePergunta(item.id, 'pergunta', e.target.value)}
-                          placeholder="Ex: Qual o horário de funcionamento?"
-                          className="w-full h-10 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Resposta
-                        </label>
-                        <textarea
-                          rows={4}
-                          value={item.resposta}
-                          onChange={(e) => updatePergunta(item.id, 'resposta', e.target.value)}
-                          placeholder="Digite a resposta para esta pergunta..."
-                          className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm"
-                        />
-                      </div>
-
-                      <div className="flex justify-end">
-                        <button 
-                          onClick={() => savePergunta(item.id)}
-                          className="flex items-center gap-2 h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-                        >
-                          <Save className="h-4 w-4" />
-                          Salvar
-                        </button>
-                      </div>
+                      <button 
+                        onClick={() => handleDeleteClick(item)}
+                        className="p-2 rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
-                )}
-              </div>
+
+                  {item.expandido && (
+                    <div className="px-4 pb-4 pt-2 border-t border-border animate-fade-in">
+                      <div className="space-y-4 ml-14">
+                        <div>
+                          <label className="block text-sm font-medium text-foreground mb-2">
+                            Pergunta
+                          </label>
+                          <input
+                            type="text"
+                            value={item.pergunta}
+                            onChange={(e) => updatePergunta(item.id, 'pergunta', e.target.value)}
+                            placeholder="Ex: Qual o horário de funcionamento?"
+                            className="w-full h-11 px-4 rounded-xl bg-muted/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-foreground mb-2">
+                            Resposta
+                          </label>
+                          <textarea
+                            rows={4}
+                            value={item.resposta}
+                            onChange={(e) => updatePergunta(item.id, 'resposta', e.target.value)}
+                            placeholder="Digite a resposta para esta pergunta..."
+                            className="w-full px-4 py-3 rounded-xl bg-muted/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500/50 resize-none text-sm transition-all"
+                          />
+                        </div>
+
+                        <div className="flex justify-end">
+                          <button 
+                            onClick={() => savePergunta(item.id)}
+                            disabled={saving}
+                            className="flex items-center gap-2 h-10 px-5 rounded-xl bg-violet-500 text-white text-sm font-medium hover:bg-violet-600 transition-colors disabled:opacity-50"
+                          >
+                            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                            Salvar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             ))}
           </div>
 
           <button 
             onClick={addPergunta}
-            className="w-full flex items-center justify-center gap-2 h-12 rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+            className="w-full flex items-center justify-center gap-2 h-14 rounded-xl border-2 border-dashed border-border text-muted-foreground hover:border-violet-500/50 hover:text-violet-500 hover:bg-violet-500/5 transition-all"
           >
             <Plus className="h-5 w-5" />
-            Adicionar Pergunta
+            Adicionar Nova Pergunta
           </button>
         </>
       )}
@@ -1207,132 +1566,138 @@ function HorarioFuncionamentoTab({
   toggleDia: (dia: number) => void;
 }) {
   return (
-    <div className="space-y-6 max-w-2xl">
-      {/* Toggle 24h */}
-      <div className="rounded-xl bg-card border border-border p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <Clock className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">Atendimento 24 horas</h2>
-              <p className="text-sm text-muted-foreground">
-                Quando ativado, o agente responde a qualquer hora e dia
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setConfig({ ...config, atender_24h: !config.atender_24h })}
-            className={`relative h-7 w-14 rounded-full transition-colors ${
-              config.atender_24h ? 'bg-primary' : 'bg-muted'
-            }`}
-          >
-            <div
-              className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
-                config.atender_24h ? 'translate-x-7' : ''
-              }`}
-            />
-          </button>
+    <div className="space-y-6 max-w-3xl">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-6">
+        <div className="h-12 w-12 rounded-xl bg-amber-500/10 flex items-center justify-center">
+          <Clock className="h-6 w-6 text-amber-500" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-foreground">Horário de Funcionamento</h2>
+          <p className="text-sm text-muted-foreground">
+            Configure quando o agente estará disponível para atender
+          </p>
         </div>
       </div>
 
-      {/* Configuração de Horário (desabilitada se 24h) */}
-      <div className={`rounded-xl bg-card border border-border p-6 transition-opacity ${config.atender_24h ? 'opacity-50 pointer-events-none' : ''}`}>
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <Calendar className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Dias de Atendimento</h2>
-            <p className="text-sm text-muted-foreground">
-              Selecione os dias em que o agente estará ativo
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2 mb-6">
-          {diasSemana.map((dia) => (
+      {/* Toggle 24h */}
+      <Card className={`transition-all ${config.atender_24h ? 'border-amber-500/30 bg-amber-500/5' : ''}`}>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${
+                config.atender_24h ? 'bg-amber-500' : 'bg-muted'
+              }`}>
+                <Timer className={`h-6 w-6 ${config.atender_24h ? 'text-white' : 'text-muted-foreground'}`} />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Atendimento 24 horas</h3>
+                <p className="text-sm text-muted-foreground">
+                  Quando ativado, o agente responde a qualquer hora
+                </p>
+              </div>
+            </div>
             <button
-              key={dia.value}
-              onClick={() => toggleDia(dia.value)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                config.dias_ativos.includes(dia.value)
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              onClick={() => setConfig({ ...config, atender_24h: !config.atender_24h })}
+              className={`relative h-7 w-14 rounded-full transition-colors ${
+                config.atender_24h ? 'bg-amber-500' : 'bg-border'
               }`}
             >
-              {dia.label}
+              <div
+                className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
+                  config.atender_24h ? 'translate-x-7' : ''
+                }`}
+              />
             </button>
-          ))}
-        </div>
+          </div>
+        </CardContent>
+      </Card>
 
-        <div className="grid grid-cols-2 gap-4">
+      {/* Configuração de Horário */}
+      <Card className={`transition-opacity ${config.atender_24h ? 'opacity-50 pointer-events-none' : ''}`}>
+        <CardContent className="p-6 space-y-6">
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Horário de Início
-            </label>
-            <input
-              type="time"
-              value={config.horario_inicio}
-              onChange={(e) => setConfig({ ...config, horario_inicio: e.target.value })}
-              className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+            <h3 className="font-semibold text-foreground mb-4">Dias de Atendimento</h3>
+            <div className="flex flex-wrap gap-2">
+              {diasSemana.map((dia) => (
+                <button
+                  key={dia.value}
+                  onClick={() => toggleDia(dia.value)}
+                  className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    config.dias_ativos.includes(dia.value)
+                      ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  }`}
+                >
+                  {dia.fullLabel}
+                </button>
+              ))}
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Horário de Fim
-            </label>
-            <input
-              type="time"
-              value={config.horario_fim}
-              onChange={(e) => setConfig({ ...config, horario_fim: e.target.value })}
-              className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Início do Expediente
+              </label>
+              <input
+                type="time"
+                value={config.horario_inicio}
+                onChange={(e) => setConfig({ ...config, horario_inicio: e.target.value })}
+                className="w-full h-12 px-4 rounded-xl bg-muted/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Fim do Expediente
+              </label>
+              <input
+                type="time"
+                value={config.horario_fim}
+                onChange={(e) => setConfig({ ...config, horario_fim: e.target.value })}
+                className="w-full h-12 px-4 rounded-xl bg-muted/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+              />
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Mensagem Fora do Horário */}
-      <div className={`rounded-xl bg-card border border-border p-6 transition-opacity ${config.atender_24h ? 'opacity-50 pointer-events-none' : ''}`}>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <MessageCircle className="h-5 w-5 text-primary" />
+      <Card className={`transition-opacity ${config.atender_24h ? 'opacity-50 pointer-events-none' : ''}`}>
+        <CardContent className="p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <MessageCircle className="h-5 w-5 text-amber-500" />
+            <h3 className="font-semibold text-foreground">Mensagem Fora do Horário</h3>
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Mensagem Fora do Horário</h2>
-            <p className="text-sm text-muted-foreground">
-              Mensagem automática enviada quando o agente está fora do horário
-            </p>
+          <textarea
+            value={config.mensagem_fora_horario}
+            onChange={(e) => setConfig({ ...config, mensagem_fora_horario: e.target.value })}
+            rows={4}
+            className="w-full px-4 py-3 rounded-xl bg-muted/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/50 resize-none transition-all"
+            placeholder="Ex: Obrigado pelo contato! Nosso horário de atendimento é de segunda a sexta, das 8h às 18h."
+          />
+        </CardContent>
+      </Card>
+
+      {/* Status Preview */}
+      <Card className={`${config.atender_24h ? 'border-amber-500/30 bg-amber-500/5' : ''}`}>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className={`h-3 w-3 rounded-full ${config.atender_24h ? 'bg-amber-500 animate-pulse' : 'bg-muted-foreground'}`} />
+            <span className="text-sm font-medium text-foreground">
+              {config.atender_24h 
+                ? 'Atendimento 24/7 - O agente responde a qualquer momento'
+                : `Atendimento: ${config.dias_ativos.map(d => diasSemana.find(ds => ds.value === d)?.label).join(', ')} das ${config.horario_inicio} às ${config.horario_fim}`
+              }
+            </span>
           </div>
-        </div>
-
-        <textarea
-          value={config.mensagem_fora_horario}
-          onChange={(e) => setConfig({ ...config, mensagem_fora_horario: e.target.value })}
-          rows={4}
-          className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-          placeholder="Ex: Obrigado pelo contato! Nosso horário de atendimento é de segunda a sexta, das 8h às 18h."
-        />
-      </div>
-
-      {/* Status atual */}
-      <div className={`rounded-xl border p-4 ${config.atender_24h ? 'bg-primary/5 border-primary/20' : 'bg-muted/50 border-border'}`}>
-        <div className="flex items-center gap-3">
-          <div className={`h-3 w-3 rounded-full ${config.atender_24h ? 'bg-primary animate-pulse' : 'bg-muted-foreground'}`} />
-          <span className={`text-sm font-medium ${config.atender_24h ? 'text-primary' : 'text-foreground'}`}>
-            {config.atender_24h 
-              ? 'Atendimento 24/7 - O agente responde a qualquer momento'
-              : `Atendimento: ${config.dias_ativos.map(d => diasSemana.find(ds => ds.value === d)?.label).join(', ')} das ${config.horario_inicio} às ${config.horario_fim}`
-            }
-          </span>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       <button
         onClick={onSave}
         disabled={saving}
-        className="flex items-center gap-2 h-10 px-6 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+        className="flex items-center gap-2 h-11 px-6 rounded-xl bg-amber-500 text-white font-medium hover:bg-amber-600 transition-colors disabled:opacity-50 shadow-lg shadow-amber-500/25"
       >
         {saving ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -1345,7 +1710,7 @@ function HorarioFuncionamentoTab({
   );
 }
 
-// Tab: Modelo de IA (anteriormente Configuração API)
+// Tab: Modelo de IA
 function ConfiguracaoAPITab({ 
   config, 
   setConfig, 
@@ -1358,249 +1723,209 @@ function ConfiguracaoAPITab({
   saving: boolean;
 }) {
   return (
-    <div className="space-y-6 max-w-2xl">
-      {/* Tempo de Espera (Debounce) */}
-      <div className="rounded-xl bg-card border border-border p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
-            <Clock className="h-5 w-5 text-amber-500" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Tempo de Espera para Resposta</h2>
-            <p className="text-sm text-muted-foreground">
-              Aguarda o lead parar de digitar antes de responder
-            </p>
-          </div>
+    <div className="space-y-6 max-w-3xl">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-6">
+        <div className="h-12 w-12 rounded-xl bg-sky-500/10 flex items-center justify-center">
+          <Brain className="h-6 w-6 text-sky-500" />
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-foreground mb-2">
-            Segundos de espera ({config.tempo_espera_segundos}s)
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="30"
-            step="1"
-            value={config.tempo_espera_segundos}
-            onChange={(e) => setConfig({ ...config, tempo_espera_segundos: parseInt(e.target.value) })}
-            className="w-full accent-primary"
-          />
-          <div className="flex justify-between text-xs text-muted-foreground mt-1">
-            <span>1s (rápido)</span>
-            <span>30s (aguarda muito)</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-3 p-3 bg-muted/50 rounded-lg">
-            💡 Se o lead enviar várias mensagens seguidas (ex: "Oi", "tudo bem?", "quero saber..."), 
-            o agente aguarda {config.tempo_espera_segundos} segundos após a última mensagem antes de responder, 
-            evitando múltiplas respostas.
+          <h2 className="text-xl font-bold text-foreground">Modelo de IA</h2>
+          <p className="text-sm text-muted-foreground">
+            Configure o comportamento e capacidade do modelo de IA
           </p>
         </div>
       </div>
 
-      {/* Fracionamento de Mensagens */}
-      <div className="rounded-xl bg-card border border-border p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10">
-            <Layers className="h-5 w-5 text-emerald-500" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Fracionamento de Mensagens</h2>
-            <p className="text-sm text-muted-foreground">
-              Divide mensagens longas em partes menores, simulando comportamento humano
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          {/* Toggle */}
-          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+      {/* Response Debounce */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
+              <Timer className="h-5 w-5 text-amber-500" />
+            </div>
             <div>
-              <span className="font-medium text-foreground">Ativar fracionamento</span>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Quando ativo, respostas longas serão divididas automaticamente
+              <h3 className="font-semibold text-foreground">Tempo de Espera</h3>
+              <p className="text-sm text-muted-foreground">
+                Aguarda o lead parar de digitar antes de responder
               </p>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-foreground">
+                Segundos de espera
+              </span>
+              <span className="text-lg font-bold text-amber-500">{config.tempo_espera_segundos}s</span>
+            </div>
+            <input
+              type="range"
+              min="1"
+              max="30"
+              step="1"
+              value={config.tempo_espera_segundos}
+              onChange={(e) => setConfig({ ...config, tempo_espera_segundos: parseInt(e.target.value) })}
+              className="w-full accent-amber-500"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>1s (rápido)</span>
+              <span>30s (aguarda mais)</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Message Splitting */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                <SplitSquareHorizontal className="h-5 w-5 text-emerald-500" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Fracionamento de Mensagens</h3>
+                <p className="text-sm text-muted-foreground">
+                  Divide mensagens longas, simulando comportamento humano
+                </p>
+              </div>
             </div>
             <button
               onClick={() => setConfig({ ...config, fracionar_mensagens: !config.fracionar_mensagens })}
               className={`relative h-6 w-11 rounded-full transition-colors ${
-                config.fracionar_mensagens ? 'bg-primary' : 'bg-muted-foreground/30'
+                config.fracionar_mensagens ? 'bg-emerald-500' : 'bg-border'
               }`}
             >
-              <span 
-                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-                  config.fracionar_mensagens ? 'translate-x-5' : 'translate-x-0.5'
+              <div
+                className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  config.fracionar_mensagens ? 'translate-x-5' : ''
                 }`}
               />
             </button>
           </div>
 
           {config.fracionar_mensagens && (
-            <>
-              {/* Tamanho máximo */}
+            <div className="space-y-4 pt-4 border-t border-border animate-fade-in">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">
                   Tamanho máximo por mensagem ({config.tamanho_max_fracao} caracteres)
                 </label>
                 <input
                   type="range"
-                  min="50"
+                  min="100"
                   max="1000"
                   step="50"
                   value={config.tamanho_max_fracao}
                   onChange={(e) => setConfig({ ...config, tamanho_max_fracao: parseInt(e.target.value) })}
-                  className="w-full accent-primary"
+                  className="w-full accent-emerald-500"
                 />
-                <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                  <span>50 (mensagens curtas)</span>
-                  <span>1000 (mensagens longas)</span>
-                </div>
               </div>
-
-              {/* Delay entre mensagens */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">
-                  Delay entre mensagens ({config.delay_entre_fracoes}s)
+                  Delay entre frações ({config.delay_entre_fracoes}s)
                 </label>
                 <input
                   type="range"
                   min="1"
-                  max="5"
+                  max="10"
                   step="1"
                   value={config.delay_entre_fracoes}
                   onChange={(e) => setConfig({ ...config, delay_entre_fracoes: parseInt(e.target.value) })}
-                  className="w-full accent-primary"
+                  className="w-full accent-emerald-500"
                 />
-                <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                  <span>1s (rápido)</span>
-                  <span>5s (mais natural)</span>
-                </div>
               </div>
-
-              <p className="text-xs text-muted-foreground p-3 bg-muted/50 rounded-lg">
-                💡 Exemplo: Uma resposta de 1200 caracteres será dividida em 3 mensagens de ~400 caracteres cada,
-                enviadas com {config.delay_entre_fracoes} segundo(s) de intervalo entre elas.
-              </p>
-            </>
-          )}
-
-          {/* Toggle Simular Digitação */}
-          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
-            <div>
-              <span className="font-medium text-foreground">Simular digitação</span>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Exibe indicador "digitando..." antes de enviar cada mensagem
-              </p>
             </div>
-            <button
-              onClick={() => setConfig({ ...config, simular_digitacao: !config.simular_digitacao })}
-              className={`relative h-6 w-11 rounded-full transition-colors ${
-                config.simular_digitacao ? 'bg-primary' : 'bg-muted-foreground/30'
-              }`}
-            >
-              <span 
-                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-                  config.simular_digitacao ? 'translate-x-5' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </div>
-        </div>
-      </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Model Selection */}
-      <div className="rounded-xl bg-card border border-border p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <Bot className="h-5 w-5 text-primary" />
+      <Card>
+        <CardContent className="p-6">
+          <h3 className="font-semibold text-foreground mb-4">Modelo de Linguagem</h3>
+          <div className="grid grid-cols-2 gap-3">
+            {modelos.map((modelo) => (
+              <button
+                key={modelo.value}
+                onClick={() => setConfig({ ...config, modelo: modelo.value })}
+                className={`p-4 rounded-xl text-left transition-all ${
+                  config.modelo === modelo.value
+                    ? 'bg-sky-500/10 border-2 border-sky-500/50 shadow-lg shadow-sky-500/10'
+                    : 'bg-muted/50 border-2 border-transparent hover:border-border'
+                }`}
+              >
+                <div className="font-medium text-foreground">{modelo.label}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{modelo.desc}</div>
+              </button>
+            ))}
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Modelo de IA</h2>
-            <p className="text-sm text-muted-foreground">
-              Escolha o modelo que será usado para gerar as respostas deste agente
-            </p>
-          </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        <div className="space-y-4">
+      {/* Advanced Settings */}
+      <Card>
+        <CardContent className="p-6 space-y-6">
+          <h3 className="font-semibold text-foreground">Configurações Avançadas</h3>
+          
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Modelo
-            </label>
-            <select
-              value={config.modelo}
-              onChange={(e) => setConfig({ ...config, modelo: e.target.value })}
-              className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              {modelos.map((modelo) => (
-                <option key={modelo.value} value={modelo.value}>
-                  {modelo.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Temperatura ({config.temperatura})
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-foreground">
+                Temperatura (Criatividade)
               </label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={config.temperatura}
-                onChange={(e) => setConfig({ ...config, temperatura: parseFloat(e.target.value) })}
-                className="w-full accent-primary"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Menor = mais preciso, Maior = mais criativo
-              </p>
+              <span className="text-sm font-bold text-sky-500">{config.temperatura.toFixed(1)}</span>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Max Tokens
-              </label>
-              <input
-                type="number"
-                value={config.max_tokens}
-                onChange={(e) => setConfig({ ...config, max_tokens: parseInt(e.target.value) || 1000 })}
-                min={100}
-                max={4000}
-                className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Limite de tokens na resposta (100-4000)
-              </p>
+            <input
+              type="range"
+              min="0"
+              max="2"
+              step="0.1"
+              value={config.temperatura}
+              onChange={(e) => setConfig({ ...config, temperatura: parseFloat(e.target.value) })}
+              className="w-full accent-sky-500"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>0 (Preciso)</span>
+              <span>2 (Criativo)</span>
             </div>
           </div>
 
-          <button
-            onClick={onSave}
-            disabled={saving}
-            className="flex items-center gap-2 h-10 px-6 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-          >
-            {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            Salvar Configurações
-          </button>
-        </div>
-      </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-foreground">
+                Max Tokens (Tamanho da resposta)
+              </label>
+              <span className="text-sm font-bold text-sky-500">{config.max_tokens}</span>
+            </div>
+            <input
+              type="range"
+              min="100"
+              max="4000"
+              step="100"
+              value={config.max_tokens}
+              onChange={(e) => setConfig({ ...config, max_tokens: parseInt(e.target.value) })}
+              className="w-full accent-sky-500"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>100 (Curto)</span>
+              <span>4000 (Longo)</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-
-      {/* Info sobre API Key */}
-      <div className="rounded-xl border border-border bg-muted/30 p-4">
-        <p className="text-sm text-muted-foreground">
-          A API Key da OpenAI é configurada na seção{' '}
-          <span className="font-medium text-foreground">Configuração</span>{' '}
-          do menu lateral e é compartilhada entre todos os agentes da conta.
-        </p>
-      </div>
+      <button
+        onClick={onSave}
+        disabled={saving}
+        className="flex items-center gap-2 h-11 px-6 rounded-xl bg-sky-500 text-white font-medium hover:bg-sky-600 transition-colors disabled:opacity-50 shadow-lg shadow-sky-500/25"
+      >
+        {saving ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Save className="h-4 w-4" />
+        )}
+        Salvar Configurações do Modelo
+      </button>
     </div>
   );
 }
