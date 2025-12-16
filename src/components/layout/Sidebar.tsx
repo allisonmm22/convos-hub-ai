@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
+  Megaphone,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -25,6 +26,7 @@ const menuItems = [
   { icon: Kanban, label: 'CRM', path: '/crm' },
   { icon: Calendar, label: 'Agendamentos', path: '/agendamentos' },
   { icon: Users, label: 'Contatos', path: '/contatos' },
+  { icon: Megaphone, label: 'Anúncios Meta', path: '/relatorios/anuncios' },
   { icon: UserCog, label: 'Usuários', path: '/usuarios' },
   { icon: Plug, label: 'Conexão', path: '/conexao' },
   { icon: Puzzle, label: 'Integrações', path: '/integracoes' },

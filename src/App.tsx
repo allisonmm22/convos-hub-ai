@@ -21,6 +21,7 @@ import Conexao from "./pages/Conexao";
 import Integracoes from "./pages/Integracoes";
 import IntegracaoGoogleCalendar from "./pages/IntegracaoGoogleCalendar";
 import Configuracoes from "./pages/Configuracoes";
+import RelatorioAnuncios from "./pages/RelatorioAnuncios";
 import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminContas from "./pages/admin/AdminContas";
@@ -203,6 +204,14 @@ function AppRoutes() {
           !user ? <Navigate to="/auth" replace /> :
           usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
           <Configuracoes />
+        } 
+      />
+      <Route 
+        path="/relatorios/anuncios" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <RelatorioAnuncios />
         } 
       />
       <Route path="*" element={<NotFound />} />
