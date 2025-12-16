@@ -3,7 +3,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { 
   ArrowLeft, Plus, Trash2, Edit2, GripVertical, Loader2, 
   Settings, Tag, Bell, BellOff, ChevronUp, ChevronDown,
-  Layers, ArrowRight, X
+  Layers, ArrowRight, X, Copy
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -327,6 +327,54 @@ export default function CRMConfiguracoes() {
     }
   };
 
+  const duplicateFunil = async (funil: Funil) => {
+    try {
+      // Validar limite do plano
+      const permitido = await validarEExibirErro(usuario!.conta_id, 'funis');
+      if (!permitido) return;
+
+      const maxOrdem = funis.length > 0 ? Math.max(...funis.map(f => f.ordem || 0)) + 1 : 0;
+      
+      // Criar novo funil
+      const { data: novoFunil, error: funilError } = await supabase
+        .from('funis')
+        .insert({
+          conta_id: usuario!.conta_id,
+          nome: `${funil.nome} (cópia)`,
+          descricao: funil.descricao,
+          cor: funil.cor,
+          ordem: maxOrdem,
+        })
+        .select()
+        .single();
+
+      if (funilError) throw funilError;
+
+      // Duplicar todas as etapas
+      if (funil.estagios.length > 0) {
+        const novasEtapas = funil.estagios.map((estagio, index) => ({
+          funil_id: novoFunil.id,
+          nome: estagio.nome,
+          cor: estagio.cor,
+          ordem: index,
+          followup_ativo: estagio.followup_ativo,
+        }));
+
+        const { error: estagiosError } = await supabase
+          .from('estagios')
+          .insert(novasEtapas);
+
+        if (estagiosError) throw estagiosError;
+      }
+
+      toast.success('Funil duplicado com sucesso!');
+      fetchFunis();
+    } catch (error) {
+      console.error('Erro ao duplicar funil:', error);
+      toast.error('Erro ao duplicar funil');
+    }
+  };
+
   // Estagio handlers
   const openEstagioModal = (funilId: string, estagio?: Estagio) => {
     setSelectedFunilId(funilId);
@@ -573,6 +621,17 @@ export default function CRMConfiguracoes() {
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent>Editar funil</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={() => duplicateFunil(funil)}
+                                  className="p-2 rounded-lg hover:bg-muted transition-colors"
+                                >
+                                  <Copy className="h-4 w-4 text-muted-foreground" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>Duplicar funil</TooltipContent>
                             </Tooltip>
                             <Tooltip>
                               <TooltipTrigger asChild>
