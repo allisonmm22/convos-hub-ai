@@ -2002,7 +2002,29 @@ export default function Conversas() {
                         {conversa.ultima_mensagem || 'Sem mensagens'}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {/* Badge de Conexão/Canal */}
+                      {(() => {
+                        const conexaoDaConversa = getConexaoDaConversa(conversa);
+                        if (conexaoDaConversa) {
+                          return (
+                            <span className={cn(
+                              'text-[10px] font-medium px-1.5 py-0.5 rounded-full flex items-center gap-0.5',
+                              conexaoDaConversa.tipo_provedor === 'instagram' && 'bg-pink-500/20 text-pink-600 dark:text-pink-400',
+                              conexaoDaConversa.tipo_provedor === 'meta' && 'bg-green-500/20 text-green-600 dark:text-green-400',
+                              conexaoDaConversa.tipo_provedor === 'evolution' && 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                            )}>
+                              {conexaoDaConversa.tipo_provedor === 'instagram' ? (
+                                <Instagram className="h-2.5 w-2.5" />
+                              ) : (
+                                <Phone className="h-2.5 w-2.5" />
+                              )}
+                              <span className="max-w-[60px] truncate">{conexaoDaConversa.nome || 'WhatsApp'}</span>
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                       {/* Badge de Status */}
                       <span className={cn(
                         'text-[10px] font-medium px-1.5 py-0.5 rounded-full',

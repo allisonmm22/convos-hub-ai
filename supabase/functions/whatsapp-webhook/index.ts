@@ -807,8 +807,10 @@ serve(async (req) => {
       console.log('Buscando conversa existente...');
       
       // Usar fetch direto para a API REST do Supabase com header para ignorar cache
+      // IMPORTANTE: Buscar conversa por conta_id + contato_id + conexao_id para permitir
+      // conversas separadas do mesmo lead em diferentes conexões
       const conversaResponse = await fetch(
-        `${supabaseUrl}/rest/v1/conversas?conta_id=eq.${conexao.conta_id}&contato_id=eq.${contato!.id}&arquivada=eq.false&select=id,agente_ia_ativo,nao_lidas,agente_ia_id,status,conexao_id`,
+        `${supabaseUrl}/rest/v1/conversas?conta_id=eq.${conexao.conta_id}&contato_id=eq.${contato!.id}&conexao_id=eq.${conexao.id}&arquivada=eq.false&select=id,agente_ia_ativo,nao_lidas,agente_ia_id,status,conexao_id`,
         {
           headers: {
             'apikey': supabaseKey,
@@ -826,16 +828,7 @@ serve(async (req) => {
         const conversaData = await conversaResponse.json();
         if (conversaData && !conversaData.code) {
           conversa = conversaData;
-          console.log('Conversa encontrada:', conversa?.id, 'status:', conversa?.status);
-          
-          // Atualizar conexao_id se estiver nulo (conversas antigas)
-          if (conversa && !conversa.conexao_id) {
-            console.log('Atualizando conexao_id para conversa existente:', conversa.id);
-            await supabase
-              .from('conversas')
-              .update({ conexao_id: conexao.id })
-              .eq('id', conversa.id);
-          }
+          console.log('Conversa encontrada:', conversa?.id, 'status:', conversa?.status, 'conexao_id:', conversa?.conexao_id);
         }
       }
 

@@ -375,11 +375,14 @@ async function processInstagramMessaging(
   }
 
   // Buscar ou criar conversa
+  // IMPORTANTE: Buscar conversa por conta_id + contato_id + conexao_id para permitir
+  // conversas separadas do mesmo lead em diferentes conexões Instagram
   let { data: conversa } = await supabase
     .from('conversas')
     .select('id, agente_ia_ativo, nao_lidas, agente_ia_id, status')
     .eq('conta_id', conexao.conta_id)
     .eq('contato_id', contato.id)
+    .eq('conexao_id', conexao.id)
     .eq('arquivada', false)
     .single();
 
