@@ -3,7 +3,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { 
   Plus, DollarSign, User, MoreVertical, GripVertical, Loader2, Settings, 
   Calendar, Percent, Bell, BellOff, Edit2, TrendingUp, Briefcase, Target,
-  ArrowRight
+  ArrowRight, Search, X
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -86,6 +86,7 @@ export default function CRM() {
   const [loading, setLoading] = useState(true);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOverEstagio, setDragOverEstagio] = useState<string | null>(null);
+  const [termoBusca, setTermoBusca] = useState('');
   
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -103,11 +104,22 @@ export default function CRM() {
 
   const selectedFunil = funis.find(f => f.id === selectedFunilId) || null;
 
-  // Métricas calculadas
+  // Negociações filtradas por busca
+  const negociacoesFiltradas = useMemo(() => {
+    if (!termoBusca.trim()) return negociacoes;
+    
+    const termo = termoBusca.toLowerCase().trim();
+    return negociacoes.filter(n => 
+      n.contatos?.nome?.toLowerCase().includes(termo) ||
+      n.contatos?.telefone?.includes(termo)
+    );
+  }, [negociacoes, termoBusca]);
+
+  // Métricas calculadas (usando negociações filtradas)
   const metricas = useMemo(() => {
     const negociacoesDoFunil = selectedFunil 
-      ? negociacoes.filter(n => selectedFunil.estagios.some(e => e.id === n.estagio_id))
-      : negociacoes;
+      ? negociacoesFiltradas.filter(n => selectedFunil.estagios.some(e => e.id === n.estagio_id))
+      : negociacoesFiltradas;
     
     const totalPipeline = negociacoesDoFunil.reduce((acc, n) => acc + Number(n.valor), 0);
     const totalNegociacoes = negociacoesDoFunil.length;
@@ -116,7 +128,7 @@ export default function CRM() {
       : 0;
     
     return { totalPipeline, totalNegociacoes, mediaProbabilidade };
-  }, [negociacoes, selectedFunil]);
+  }, [negociacoesFiltradas, selectedFunil]);
 
   useEffect(() => {
     if (usuario?.conta_id) {
@@ -306,7 +318,7 @@ export default function CRM() {
   };
 
   const getNegociacoesPorEstagio = (estagioId: string) => {
-    return negociacoes.filter((n) => n.estagio_id === estagioId);
+    return negociacoesFiltradas.filter((n) => n.estagio_id === estagioId);
   };
 
   const getTotalPorEstagio = (estagioId: string) => {
@@ -430,6 +442,32 @@ export default function CRM() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Campo de Busca */}
+          <div className="relative">
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={termoBusca}
+                onChange={(e) => setTermoBusca(e.target.value)}
+                placeholder="Buscar por nome ou telefone..."
+                className="pl-10 pr-10 h-11 rounded-xl bg-card border-border"
+              />
+              {termoBusca && (
+                <button
+                  onClick={() => setTermoBusca('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-muted transition-colors"
+                >
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
+              )}
+            </div>
+            {termoBusca && (
+              <p className="text-xs text-muted-foreground mt-2">
+                {metricas.totalNegociacoes} negociação(ões) encontrada(s)
+              </p>
+            )}
           </div>
         </div>
 
