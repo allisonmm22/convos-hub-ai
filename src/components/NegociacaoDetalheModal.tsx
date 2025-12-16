@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
   DialogContent,
@@ -102,6 +103,7 @@ export function NegociacaoDetalheModal({
   estagios,
   funis,
 }: NegociacaoDetalheModalProps) {
+  const navigate = useNavigate();
   const [editando, setEditando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -492,18 +494,25 @@ export function NegociacaoDetalheModal({
                 <User className="h-4 w-4" />
                 Contato
               </h4>
-              <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
+              <button
+                onClick={() => {
+                  onClose();
+                  navigate(`/conversas?contato=${negociacao.contato_id}`);
+                }}
+                className="flex items-center gap-4 p-3 rounded-lg bg-muted/50 w-full text-left hover:bg-muted transition-colors cursor-pointer group"
+              >
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20">
                   <User className="h-5 w-5 text-primary" />
                 </div>
-                <div>
-                  <p className="font-medium text-foreground">{negociacao.contatos?.nome}</p>
+                <div className="flex-1">
+                  <p className="font-medium text-foreground group-hover:text-primary transition-colors">{negociacao.contatos?.nome}</p>
                   <p className="text-sm text-muted-foreground flex items-center gap-1">
                     <Phone className="h-3 w-3" />
                     {negociacao.contatos?.telefone}
                   </p>
                 </div>
-              </div>
+                <MessageSquare className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+              </button>
             </div>
 
             {/* Histórico da Conversa */}
