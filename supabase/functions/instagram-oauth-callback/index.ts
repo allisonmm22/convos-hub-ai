@@ -8,8 +8,8 @@ serve(async (req) => {
   const error = url.searchParams.get('error');
   const errorDescription = url.searchParams.get('error_description');
 
-  // HTML de erro
-  const errorHtml = (message: string) => `
+  // HTML de erro com redirecionamento
+  const errorHtml = (message: string, redirectUrl?: string) => `
     <!DOCTYPE html>
     <html>
     <head>
@@ -28,10 +28,10 @@ serve(async (req) => {
         <div class="icon">❌</div>
         <h1>Erro na conexão</h1>
         <p>${message}</p>
+        <p style="margin-top: 10px; font-size: 14px;">Redirecionando...</p>
         <script>
           setTimeout(() => {
-            window.opener?.postMessage({ type: 'instagram-oauth-error', error: '${message}' }, '*');
-            window.close();
+            window.location.href = '${redirectUrl || '/conexao'}?instagram_oauth=error&message=${encodeURIComponent(message)}';
           }, 2000);
         </script>
       </div>
@@ -39,8 +39,8 @@ serve(async (req) => {
     </html>
   `;
 
-  // HTML de sucesso
-  const successHtml = (username: string) => `
+  // HTML de sucesso com redirecionamento
+  const successHtml = (username: string, redirectUrl?: string) => `
     <!DOCTYPE html>
     <html>
     <head>
@@ -60,11 +60,10 @@ serve(async (req) => {
         <div class="icon">✅</div>
         <h1>Conta conectada com sucesso!</h1>
         <p>Instagram: <span class="username">@${username}</span></p>
-        <p style="margin-top: 10px; font-size: 14px;">Esta janela fechará automaticamente...</p>
+        <p style="margin-top: 10px; font-size: 14px;">Redirecionando...</p>
         <script>
           setTimeout(() => {
-            window.opener?.postMessage({ type: 'instagram-oauth-success' }, '*');
-            window.close();
+            window.location.href = '${redirectUrl || '/conexao'}?instagram_oauth=success';
           }, 1500);
         </script>
       </div>
@@ -72,10 +71,21 @@ serve(async (req) => {
     </html>
   `;
 
+  // Tentar decodificar state para pegar redirect_url mesmo em caso de erro
+  let redirectUrl: string | undefined;
+  if (state) {
+    try {
+      const stateData = JSON.parse(atob(state));
+      redirectUrl = stateData.redirect_url;
+    } catch {
+      // Ignorar erro de decodificação
+    }
+  }
+
   // Verificar erro do OAuth
   if (error) {
     console.error('[instagram-oauth-callback] Erro do OAuth:', error, errorDescription);
-    return new Response(errorHtml(errorDescription || error), {
+    return new Response(errorHtml(errorDescription || error, redirectUrl), {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
   }
@@ -83,7 +93,7 @@ serve(async (req) => {
   // Verificar parâmetros obrigatórios
   if (!code || !state) {
     console.error('[instagram-oauth-callback] Parâmetros faltando:', { code: !!code, state: !!state });
-    return new Response(errorHtml('Parâmetros de autorização inválidos'), {
+    return new Response(errorHtml('Parâmetros de autorização inválidos', redirectUrl), {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
   }
@@ -94,13 +104,14 @@ serve(async (req) => {
     try {
       stateData = JSON.parse(atob(state));
     } catch {
-      return new Response(errorHtml('State inválido'), {
+      return new Response(errorHtml('State inválido', redirectUrl), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
 
-    const { conta_id } = stateData;
-    console.log('[instagram-oauth-callback] Processando para conta:', conta_id);
+    const { conta_id, redirect_url } = stateData;
+    redirectUrl = redirect_url; // Atualizar com valor do state
+    console.log('[instagram-oauth-callback] Processando para conta:', conta_id, 'redirect:', redirect_url);
 
     // Obter credenciais
     const META_APP_ID = Deno.env.get('META_APP_ID');
@@ -110,7 +121,7 @@ serve(async (req) => {
 
     if (!META_APP_ID || !META_APP_SECRET || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       console.error('[instagram-oauth-callback] Credenciais não configuradas');
-      return new Response(errorHtml('Configuração do servidor incompleta'), {
+      return new Response(errorHtml('Configuração do servidor incompleta', redirectUrl), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
@@ -135,7 +146,7 @@ serve(async (req) => {
 
     if (tokenData.error) {
       console.error('[instagram-oauth-callback] Erro ao obter token:', tokenData.error);
-      return new Response(errorHtml(tokenData.error.message || 'Erro ao obter token de acesso'), {
+      return new Response(errorHtml(tokenData.error.message || 'Erro ao obter token de acesso', redirectUrl), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
@@ -161,7 +172,7 @@ serve(async (req) => {
     console.log('[instagram-oauth-callback] Páginas:', JSON.stringify(pagesData));
 
     if (!pagesData.data || pagesData.data.length === 0) {
-      return new Response(errorHtml('Nenhuma página do Facebook encontrada. Certifique-se de ter uma página conectada ao Instagram Business.'), {
+      return new Response(errorHtml('Nenhuma página do Facebook encontrada. Certifique-se de ter uma página conectada ao Instagram Business.', redirectUrl), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
@@ -188,7 +199,7 @@ serve(async (req) => {
     }
 
     if (!instagramAccount) {
-      return new Response(errorHtml('Nenhuma conta do Instagram Business encontrada. Certifique-se de ter uma conta comercial do Instagram conectada a uma página do Facebook.'), {
+      return new Response(errorHtml('Nenhuma conta do Instagram Business encontrada. Certifique-se de ter uma conta comercial do Instagram conectada a uma página do Facebook.', redirectUrl), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
@@ -229,21 +240,21 @@ serve(async (req) => {
 
     if (insertError) {
       console.error('[instagram-oauth-callback] Erro ao inserir conexão:', insertError);
-      return new Response(errorHtml('Erro ao salvar conexão: ' + insertError.message), {
+      return new Response(errorHtml('Erro ao salvar conexão: ' + insertError.message, redirectUrl), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
 
     console.log('[instagram-oauth-callback] Conexão criada:', conexao.id);
 
-    return new Response(successHtml(instagramUsername), {
+    return new Response(successHtml(instagramUsername, redirectUrl), {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
 
   } catch (error: unknown) {
     console.error('[instagram-oauth-callback] Erro:', error);
     const message = error instanceof Error ? error.message : 'Erro desconhecido';
-    return new Response(errorHtml(message), {
+    return new Response(errorHtml(message, redirectUrl), {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
   }
