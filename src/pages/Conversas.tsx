@@ -1245,21 +1245,21 @@ export default function Conversas() {
                 
                 if (msg.enviada_por_ia) {
                   return (
-                    <div className="flex items-center justify-end gap-1.5 text-xs opacity-80 mb-1 font-medium">
+                    <div className="flex items-center gap-1.5 text-xs opacity-80 mb-1 font-medium">
                       <User className="h-3.5 w-3.5" />
                       <span>Agente IA</span>
                     </div>
                   );
                 } else if (msg.enviada_por_dispositivo) {
                   return (
-                    <div className="flex items-center justify-end gap-1.5 text-xs opacity-80 mb-1.5 font-medium">
+                    <div className="flex items-center gap-1.5 text-xs opacity-80 mb-1.5 font-medium">
                       <Phone className="h-3.5 w-3.5" />
                       <span>Via dispositivo</span>
                     </div>
                   );
                 } else if (assinaturaNome) {
                   return (
-                    <div className="flex items-center justify-end gap-1.5 text-xs opacity-80 mb-1 font-medium">
+                    <div className="flex items-center gap-1.5 text-xs opacity-80 mb-1 font-medium">
                       <User className="h-3.5 w-3.5" />
                       <span>{assinaturaNome}</span>
                     </div>
