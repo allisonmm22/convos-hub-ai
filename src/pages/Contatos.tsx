@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Search, Plus, User, Phone, Mail, MoreVertical, Loader2, Tag, X, ChevronDown, Check } from 'lucide-react';
+import { Search, Plus, User, Phone, Mail, Loader2, Tag, X, ChevronDown, Check, Pencil, Trash2, MessageSquare } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -27,11 +31,14 @@ interface TagItem {
 
 export default function Contatos() {
   const { usuario } = useAuth();
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [contatos, setContatos] = useState<Contato[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [editingContato, setEditingContato] = useState<Contato | null>(null);
+  const [deletingContato, setDeletingContato] = useState<Contato | null>(null);
   const [formData, setFormData] = useState({
     nome: '',
     telefone: '',
@@ -105,6 +112,76 @@ export default function Contatos() {
         toast.error('Erro ao adicionar contato');
       }
     }
+  };
+
+  const handleEditContato = async () => {
+    if (!editingContato || !formData.nome || !formData.telefone) {
+      toast.error('Preencha nome e telefone');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('contatos')
+        .update({
+          nome: formData.nome,
+          telefone: formData.telefone,
+          email: formData.email || null,
+        })
+        .eq('id', editingContato.id);
+
+      if (error) throw error;
+
+      toast.success('Contato atualizado!');
+      setEditingContato(null);
+      setFormData({ nome: '', telefone: '', email: '' });
+      fetchContatos();
+    } catch (error) {
+      toast.error('Erro ao atualizar contato');
+    }
+  };
+
+  const handleDeleteContato = async () => {
+    if (!deletingContato) return;
+
+    try {
+      const { error } = await supabase
+        .from('contatos')
+        .delete()
+        .eq('id', deletingContato.id);
+
+      if (error) throw error;
+
+      toast.success('Contato excluído!');
+      setDeletingContato(null);
+      fetchContatos();
+    } catch (error) {
+      toast.error('Erro ao excluir contato');
+    }
+  };
+
+  const handleGoToConversation = async (contato: Contato) => {
+    // Verificar se existe conversa para este contato
+    const { data: conversa } = await supabase
+      .from('conversas')
+      .select('id')
+      .eq('contato_id', contato.id)
+      .maybeSingle();
+
+    if (conversa) {
+      navigate(`/conversas?contato=${contato.id}`);
+    } else {
+      toast.info('Este contato ainda não possui conversas');
+    }
+  };
+
+  const openEditModal = (contato: Contato) => {
+    setFormData({
+      nome: contato.nome,
+      telefone: contato.telefone,
+      email: contato.email || '',
+    });
+    setEditingContato(contato);
   };
 
   const toggleTagFilter = (tagNome: string) => {
@@ -281,9 +358,30 @@ export default function Contatos() {
                       </div>
                     </div>
                   </div>
-                  <button className="p-1 rounded hover:bg-muted transition-colors">
-                    <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleGoToConversation(contato)}>
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        Ir para conversa
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openEditModal(contato)}>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => setDeletingContato(contato)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Excluir
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
                 {contato.email && (
@@ -311,7 +409,7 @@ export default function Contatos() {
           </div>
         )}
 
-        {/* Modal / Drawer */}
+        {/* Modal Novo Contato */}
         {isMobile ? (
           <Drawer open={showModal} onOpenChange={setShowModal}>
             <DrawerContent className="px-4 pb-8">
@@ -323,6 +421,7 @@ export default function Contatos() {
                 setFormData={setFormData}
                 onSubmit={handleAddContato}
                 onCancel={() => setShowModal(false)}
+                submitLabel="Adicionar"
               />
             </DrawerContent>
           </Drawer>
@@ -336,11 +435,69 @@ export default function Contatos() {
                   setFormData={setFormData}
                   onSubmit={handleAddContato}
                   onCancel={() => setShowModal(false)}
+                  submitLabel="Adicionar"
                 />
               </div>
             </div>
           )
         )}
+
+        {/* Modal Editar Contato */}
+        {isMobile ? (
+          <Drawer open={!!editingContato} onOpenChange={(open) => !open && setEditingContato(null)}>
+            <DrawerContent className="px-4 pb-8">
+              <DrawerHeader className="px-0">
+                <DrawerTitle>Editar Contato</DrawerTitle>
+              </DrawerHeader>
+              <ContactForm 
+                formData={formData}
+                setFormData={setFormData}
+                onSubmit={handleEditContato}
+                onCancel={() => {
+                  setEditingContato(null);
+                  setFormData({ nome: '', telefone: '', email: '' });
+                }}
+                submitLabel="Salvar"
+              />
+            </DrawerContent>
+          </Drawer>
+        ) : (
+          editingContato && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+              <div className="w-full max-w-md bg-card rounded-2xl border border-border p-6 animate-scale-in">
+                <h2 className="text-xl font-semibold text-foreground mb-6">Editar Contato</h2>
+                <ContactForm 
+                  formData={formData}
+                  setFormData={setFormData}
+                  onSubmit={handleEditContato}
+                  onCancel={() => {
+                    setEditingContato(null);
+                    setFormData({ nome: '', telefone: '', email: '' });
+                  }}
+                  submitLabel="Salvar"
+                />
+              </div>
+            </div>
+          )
+        )}
+
+        {/* Dialog Confirmar Exclusão */}
+        <AlertDialog open={!!deletingContato} onOpenChange={() => setDeletingContato(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir contato?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja excluir {deletingContato?.nome}? Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteContato} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </MainLayout>
   );
@@ -351,12 +508,14 @@ function ContactForm({
   formData, 
   setFormData, 
   onSubmit, 
-  onCancel 
+  onCancel,
+  submitLabel = 'Adicionar'
 }: { 
   formData: { nome: string; telefone: string; email: string };
   setFormData: React.Dispatch<React.SetStateAction<{ nome: string; telefone: string; email: string }>>;
   onSubmit: () => void;
   onCancel: () => void;
+  submitLabel?: string;
 }) {
   return (
     <div className="space-y-4">
@@ -404,7 +563,7 @@ function ContactForm({
           onClick={onSubmit}
           className="flex-1 h-12 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
         >
-          Adicionar
+          {submitLabel}
         </button>
       </div>
     </div>
