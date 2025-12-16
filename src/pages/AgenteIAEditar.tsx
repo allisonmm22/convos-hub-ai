@@ -1441,7 +1441,7 @@ function ConfiguracaoAPITab({
                 </label>
                 <input
                   type="range"
-                  min="200"
+                  min="50"
                   max="1000"
                   step="50"
                   value={config.tamanho_max_fracao}
@@ -1449,7 +1449,7 @@ function ConfiguracaoAPITab({
                   className="w-full accent-primary"
                 />
                 <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                  <span>200 (mensagens curtas)</span>
+                  <span>50 (mensagens curtas)</span>
                   <span>1000 (mensagens longas)</span>
                 </div>
               </div>
