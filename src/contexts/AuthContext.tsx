@@ -13,6 +13,7 @@ interface Usuario {
   role?: 'admin' | 'atendente' | 'super_admin';
   isSuperAdmin?: boolean;
   assinatura_ativa?: boolean;
+  contaAtiva?: boolean;
 }
 
 interface AuthContextType {
@@ -105,11 +106,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       
       if (data) {
+        // Buscar status da conta
+        let contaAtiva = true;
+        if (data.conta_id) {
+          const { data: contaData } = await supabase
+            .from('contas')
+            .select('ativo')
+            .eq('id', data.conta_id)
+            .single();
+          contaAtiva = contaData?.ativo ?? true;
+        }
+
         setUsuario({
           ...data,
           role: roleData?.role as 'admin' | 'atendente' | undefined,
           isSuperAdmin: false,
           assinatura_ativa: data.assinatura_ativa ?? true,
+          contaAtiva,
         });
       } else {
         setUsuario(null);

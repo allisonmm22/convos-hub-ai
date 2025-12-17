@@ -128,3 +128,6 @@ verify_jwt = false
 
 [functions.stripe-customer-portal]
 verify_jwt = false
+
+[functions.desativar-conta]
+verify_jwt = false
