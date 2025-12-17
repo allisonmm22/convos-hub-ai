@@ -43,6 +43,7 @@ import {
   Download,
   ChevronLeft,
   Instagram,
+  Megaphone,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -86,6 +87,17 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
+interface OrigemAnuncio {
+  ad_id?: string;
+  ad_title?: string;
+  ad_body?: string;
+  ad_source?: string;
+  ad_url?: string;
+  ad_image?: string;
+  ctwa_clid?: string;
+  captured_at?: string;
+}
+
 interface Contato {
   id: string;
   nome: string;
@@ -94,6 +106,7 @@ interface Contato {
   is_grupo?: boolean | null;
   grupo_jid?: string | null;
   tags?: string[] | null;
+  metadata?: unknown;
 }
 
 interface TagItem {
@@ -2079,6 +2092,13 @@ export default function Conversas() {
                       ) : !conversa.contatos.is_grupo && conversa.atendente_id ? (
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 flex items-center gap-0.5">
                           <User className="h-2.5 w-2.5" /> Humano
+                        </span>
+                      ) : null}
+                      {/* Badge de Anúncio */}
+                      {(conversa.contatos.metadata as OrigemAnuncio | undefined)?.ad_id || 
+                       (conversa.contatos.metadata as { origem_anuncio?: OrigemAnuncio } | undefined)?.origem_anuncio ? (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center gap-0.5">
+                          <Megaphone className="h-2.5 w-2.5" /> Anúncio
                         </span>
                       ) : null}
                     </div>
