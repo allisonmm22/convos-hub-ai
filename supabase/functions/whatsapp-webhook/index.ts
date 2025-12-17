@@ -585,6 +585,49 @@ serve(async (req) => {
       console.log('Conteúdo da mensagem:', messageContent);
       console.log('Tipo:', messageType);
 
+      // === EXTRAIR DADOS DE ANÚNCIO DO CONTEXTINFO (Evolution API) ===
+      let dadosAnuncio: {
+        ad_id?: string;
+        ad_title?: string;
+        ad_body?: string;
+        ad_source?: string;
+        ad_url?: string;
+        ad_image?: string;
+        ctwa_clid?: string;
+        captured_at?: string;
+      } | null = null;
+
+      // Buscar contextInfo em diferentes locais possíveis do payload
+      const contextInfo = 
+        msgContent?.extendedTextMessage?.contextInfo ||
+        msgContent?.imageMessage?.contextInfo ||
+        msgContent?.videoMessage?.contextInfo ||
+        msgContent?.audioMessage?.contextInfo ||
+        msgContent?.documentMessage?.contextInfo ||
+        msgContent?.contextInfo ||
+        message?.contextInfo;
+
+      if (contextInfo?.externalAdReplyInfo) {
+        const adInfo = contextInfo.externalAdReplyInfo;
+        console.log('=== DADOS DE ANÚNCIO DETECTADOS ===');
+        console.log('ExternalAdReplyInfo:', JSON.stringify(adInfo));
+        
+        // Verificar se realmente tem dados relevantes de anúncio
+        if (adInfo.showAdAttribution || adInfo.ctwaClid || adInfo.sourceId || adInfo.title) {
+          dadosAnuncio = {
+            ad_id: adInfo.sourceId || adInfo.ctwaClid || undefined,
+            ad_title: adInfo.title || undefined,
+            ad_body: adInfo.body || undefined,
+            ad_source: adInfo.sourceType === 'ig' ? 'instagram' : 'facebook',
+            ad_url: adInfo.sourceUrl || undefined,
+            ad_image: adInfo.thumbnailUrl || adInfo.originalImageUrl || adInfo.previewType || undefined,
+            ctwa_clid: adInfo.ctwaClid || undefined,
+            captured_at: new Date().toISOString()
+          };
+          console.log('📢 Lead veio de anúncio Meta (Evolution):', JSON.stringify(dadosAnuncio));
+        }
+      }
+
       if (!messageContent) {
         console.log('Sem conteúdo de mensagem, ignorando');
         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
@@ -774,7 +817,7 @@ serve(async (req) => {
       // Buscar ou criar contato (ou grupo)
       let { data: contato } = await supabase
         .from('contatos')
-        .select('id, avatar_url, is_grupo')
+        .select('id, avatar_url, is_grupo, metadata')
         .eq('conta_id', conexao.conta_id)
         .eq('telefone', telefone)
         .single();
@@ -795,6 +838,9 @@ serve(async (req) => {
           avatarUrl = await fetchProfilePicture(instance, telefone, conexaoCompleta.token);
         }
         
+        // Preparar metadata com dados de anúncio se existirem
+        const metadataContato = dadosAnuncio ? { origem_anuncio: dadosAnuncio } : {};
+        
         const { data: novoContato, error: contatoError } = await supabase
           .from('contatos')
           .insert({
@@ -805,6 +851,7 @@ serve(async (req) => {
             is_grupo: isGrupo,
             grupo_jid: grupoJid,
             canal: canal, // Salvar canal de origem
+            metadata: metadataContato,
           })
           .select()
           .single();
@@ -814,7 +861,7 @@ serve(async (req) => {
           throw contatoError;
         }
         contato = novoContato;
-        console.log('Contato criado:', contato?.id, 'É grupo:', isGrupo, 'Avatar:', avatarUrl ? 'sim' : 'não');
+        console.log('Contato criado:', contato?.id, 'É grupo:', isGrupo, 'Avatar:', avatarUrl ? 'sim' : 'não', 'Origem anúncio:', dadosAnuncio ? 'sim' : 'não');
       } else if (conexaoCompleta?.token && isGrupo && grupoJid) {
         // Grupo existente - sempre tentar atualizar nome e foto
         console.log('Grupo existente, buscando info atualizada...');
@@ -844,6 +891,23 @@ serve(async (req) => {
             .update({ avatar_url: avatarUrl })
             .eq('id', contato.id);
           console.log('Foto de perfil atualizada para contato existente');
+        }
+      }
+
+      // Atualizar contato existente com dados de anúncio se ainda não tiver
+      if (contato && dadosAnuncio) {
+        const metadataAtual = (contato as any).metadata || {};
+        if (!metadataAtual.origem_anuncio) {
+          console.log('📢 Adicionando origem de anúncio ao contato existente...');
+          await supabase
+            .from('contatos')
+            .update({
+              metadata: { ...metadataAtual, origem_anuncio: dadosAnuncio }
+            })
+            .eq('id', contato.id);
+          console.log('Origem de anúncio adicionada ao contato:', contato.id);
+        } else {
+          console.log('Contato já possui origem de anúncio registrada');
         }
       }
 
