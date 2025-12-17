@@ -3,7 +3,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { 
   ArrowLeft, Plus, Trash2, Edit2, GripVertical, Loader2, 
   Settings, Tag, Bell, BellOff, ChevronUp, ChevronDown,
-  Layers, ArrowRight, X, Copy
+  Layers, ArrowRight, X, Copy, Trophy, XCircle, Zap
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,6 +38,7 @@ interface Estagio {
   ordem: number;
   funil_id: string;
   followup_ativo: boolean;
+  tipo: 'normal' | 'ganho' | 'perdido';
 }
 
 interface Funil {
@@ -84,7 +85,7 @@ export default function CRMConfiguracoes() {
   
   // Form states
   const [funilForm, setFunilForm] = useState({ nome: '', descricao: '', cor: '#3b82f6' });
-  const [estagioForm, setEstagioForm] = useState({ nome: '', cor: '#3b82f6', followup_ativo: true });
+  const [estagioForm, setEstagioForm] = useState({ nome: '', cor: '#3b82f6', followup_ativo: true, tipo: 'normal' as 'normal' | 'ganho' | 'perdido' });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -231,7 +232,10 @@ export default function CRMConfiguracoes() {
 
       const funisWithSortedEstagios = (data || []).map(funil => ({
         ...funil,
-        estagios: (funil.estagios || []).sort((a: Estagio, b: Estagio) => a.ordem - b.ordem)
+        estagios: (funil.estagios || []).sort((a, b) => (a.ordem || 0) - (b.ordem || 0)).map(e => ({
+          ...e,
+          tipo: (e.tipo || 'normal') as 'normal' | 'ganho' | 'perdido'
+        }))
       }));
 
       setFunis(funisWithSortedEstagios);
@@ -358,6 +362,7 @@ export default function CRMConfiguracoes() {
           cor: estagio.cor,
           ordem: index,
           followup_ativo: estagio.followup_ativo,
+          tipo: estagio.tipo || 'normal',
         }));
 
         const { error: estagiosError } = await supabase
@@ -380,10 +385,10 @@ export default function CRMConfiguracoes() {
     setSelectedFunilId(funilId);
     if (estagio) {
       setEditingEstagio(estagio);
-      setEstagioForm({ nome: estagio.nome, cor: estagio.cor, followup_ativo: estagio.followup_ativo ?? true });
+      setEstagioForm({ nome: estagio.nome, cor: estagio.cor, followup_ativo: estagio.followup_ativo ?? true, tipo: estagio.tipo || 'normal' });
     } else {
       setEditingEstagio(null);
-      setEstagioForm({ nome: '', cor: '#3b82f6', followup_ativo: true });
+      setEstagioForm({ nome: '', cor: '#3b82f6', followup_ativo: true, tipo: 'normal' });
     }
     setEstagioModalOpen(true);
   };
@@ -403,6 +408,7 @@ export default function CRMConfiguracoes() {
             nome: estagioForm.nome,
             cor: estagioForm.cor,
             followup_ativo: estagioForm.followup_ativo,
+            tipo: estagioForm.tipo,
           })
           .eq('id', editingEstagio.id);
 
@@ -422,6 +428,7 @@ export default function CRMConfiguracoes() {
             cor: estagioForm.cor,
             ordem: maxOrdem,
             followup_ativo: estagioForm.followup_ativo,
+            tipo: estagioForm.tipo,
           });
 
         if (error) throw error;
@@ -666,6 +673,24 @@ export default function CRMConfiguracoes() {
                                   <span className="text-sm font-medium text-foreground whitespace-nowrap">
                                     {estagio.nome}
                                   </span>
+                                  {/* Tipo indicator */}
+                                  {estagio.tipo === 'ganho' && (
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <Trophy className="h-3.5 w-3.5 text-emerald-500" />
+                                      </TooltipTrigger>
+                                      <TooltipContent>Etapa de Ganho</TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                  {estagio.tipo === 'perdido' && (
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <XCircle className="h-3.5 w-3.5 text-red-500" />
+                                      </TooltipTrigger>
+                                      <TooltipContent>Etapa de Perda</TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                  {/* Follow-up indicator */}
                                   <Tooltip>
                                     <TooltipTrigger>
                                       {estagio.followup_ativo !== false ? (
@@ -785,8 +810,22 @@ export default function CRMConfiguracoes() {
                                         className="h-4 w-4 rounded-full shrink-0" 
                                         style={{ backgroundColor: estagio.cor }}
                                       />
-                                      <div className="min-w-0">
-                                        <p className="font-medium text-foreground truncate">{estagio.nome}</p>
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <p className="font-medium text-foreground truncate">{estagio.nome}</p>
+                                          {estagio.tipo === 'ganho' && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-600">
+                                              <Trophy className="h-3 w-3" />
+                                              Ganho
+                                            </span>
+                                          )}
+                                          {estagio.tipo === 'perdido' && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-600">
+                                              <XCircle className="h-3 w-3" />
+                                              Perdido
+                                            </span>
+                                          )}
+                                        </div>
                                         <p className="text-xs text-muted-foreground">
                                           {estagio.followup_ativo !== false ? 'Follow-up ativo' : 'Follow-up desativado'}
                                         </p>
@@ -1099,6 +1138,58 @@ export default function CRMConfiguracoes() {
                   ))}
                 </div>
               </div>
+              
+              {/* Tipo de Etapa */}
+              <div className="space-y-3">
+                <Label>Tipo de etapa</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEstagioForm({ ...estagioForm, tipo: 'normal' })}
+                    className={cn(
+                      "flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all",
+                      estagioForm.tipo === 'normal' 
+                        ? "border-primary bg-primary/10" 
+                        : "border-border hover:border-muted-foreground/50"
+                    )}
+                  >
+                    <Zap className={cn("h-5 w-5", estagioForm.tipo === 'normal' ? "text-primary" : "text-muted-foreground")} />
+                    <span className={cn("text-sm font-medium", estagioForm.tipo === 'normal' ? "text-primary" : "text-muted-foreground")}>Normal</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEstagioForm({ ...estagioForm, tipo: 'ganho', cor: '#10b981' })}
+                    className={cn(
+                      "flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all",
+                      estagioForm.tipo === 'ganho' 
+                        ? "border-emerald-500 bg-emerald-500/10" 
+                        : "border-border hover:border-muted-foreground/50"
+                    )}
+                  >
+                    <Trophy className={cn("h-5 w-5", estagioForm.tipo === 'ganho' ? "text-emerald-500" : "text-muted-foreground")} />
+                    <span className={cn("text-sm font-medium", estagioForm.tipo === 'ganho' ? "text-emerald-500" : "text-muted-foreground")}>Ganho</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEstagioForm({ ...estagioForm, tipo: 'perdido', cor: '#ef4444' })}
+                    className={cn(
+                      "flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all",
+                      estagioForm.tipo === 'perdido' 
+                        ? "border-red-500 bg-red-500/10" 
+                        : "border-border hover:border-muted-foreground/50"
+                    )}
+                  >
+                    <XCircle className={cn("h-5 w-5", estagioForm.tipo === 'perdido' ? "text-red-500" : "text-muted-foreground")} />
+                    <span className={cn("text-sm font-medium", estagioForm.tipo === 'perdido' ? "text-red-500" : "text-muted-foreground")}>Perdido</span>
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {estagioForm.tipo === 'ganho' && "Negociações nesta etapa serão marcadas como ganhas automaticamente."}
+                  {estagioForm.tipo === 'perdido' && "Negociações nesta etapa serão marcadas como perdidas automaticamente."}
+                  {estagioForm.tipo === 'normal' && "Etapa regular no fluxo de vendas."}
+                </p>
+              </div>
+
               <div className="flex items-center justify-between p-4 rounded-xl bg-muted/50 border border-border">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
