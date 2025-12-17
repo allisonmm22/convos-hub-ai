@@ -175,11 +175,17 @@ export default function MinhaAssinatura() {
       return;
     }
 
+    if (!usuario?.conta_id) {
+      toast.error('Conta não encontrada');
+      return;
+    }
+
     setLoadingCheckout(true);
     try {
       const response = await supabase.functions.invoke('stripe-checkout', {
         body: { 
           plano_id: assinatura.plano.id,
+          conta_id: usuario.conta_id,
           success_url: `${window.location.origin}/minha-assinatura?success=true`,
           cancel_url: `${window.location.origin}/minha-assinatura?canceled=true`,
         },
