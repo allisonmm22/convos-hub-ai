@@ -345,4 +345,53 @@
   .animate-slide-in-right {
     animation: slideInRight 0.3s ease-out;
   }
+
+  /* CRM Kanban Scrollbars */
+  .crm-kanban-scroll {
+    scroll-behavior: smooth;
+  }
+
+  .crm-kanban-scroll::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .crm-kanban-scroll::-webkit-scrollbar-track {
+    @apply bg-muted/30 rounded-full;
+  }
+
+  .crm-kanban-scroll::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full;
+    transition: background 0.2s;
+  }
+
+  .crm-kanban-scroll::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+  }
+
+  /* CRM Stage Column Scrollbar */
+  .crm-stage-scroll {
+    scroll-behavior: smooth;
+  }
+
+  .crm-stage-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .crm-stage-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .crm-stage-scroll::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 10px;
+    transition: background 0.3s;
+  }
+
+  .crm-stage-scroll:hover::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/30;
+  }
+
+  .crm-stage-scroll::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50;
+  }
 }

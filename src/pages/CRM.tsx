@@ -719,7 +719,7 @@ export default function CRM() {
           <div 
             className={cn(
               "pb-4 pt-2 relative",
-              !isMobile && "flex gap-5 overflow-x-auto",
+              !isMobile && "flex gap-5 overflow-x-auto crm-kanban-scroll",
               !isMobile && "px-0",
               isMobile && swipeState.swiping && "select-none"
             )}
@@ -866,7 +866,10 @@ export default function CRM() {
                   )}
 
                   {/* Cards */}
-                  <div className="space-y-3 min-h-[200px]">
+                  <div className={cn(
+                    "space-y-3 min-h-[200px]",
+                    !isMobile && "max-h-[calc(100vh-380px)] overflow-y-auto crm-stage-scroll pr-1"
+                  )}>
                     {negociacoesEstagio.map((negociacao, cardIndex) => {
                       const probColors = getProbabilityColor(negociacao.probabilidade);
                       
