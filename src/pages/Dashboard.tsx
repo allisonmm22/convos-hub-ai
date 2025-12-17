@@ -11,6 +11,7 @@ import {
   ArrowDownRight,
   Sparkles,
   Zap,
+  RefreshCw,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,6 +21,8 @@ import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
 import { EscolhaConexaoModal } from '@/components/onboarding/EscolhaConexaoModal';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { differenceInDays, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface DashboardStats {
   totalNegociacoes: number;
@@ -32,6 +35,8 @@ interface DashboardStats {
   conexaoStatus: 'conectado' | 'desconectado' | 'aguardando';
   openaiConfigurado: boolean;
   agenteConfigurado: boolean;
+  diasParaReset: number | null;
+  dataReset: string | null;
 }
 
 export default function Dashboard() {
@@ -50,6 +55,8 @@ export default function Dashboard() {
     conexaoStatus: 'desconectado',
     openaiConfigurado: false,
     agenteConfigurado: false,
+    diasParaReset: null,
+    dataReset: null,
   });
   const [loading, setLoading] = useState(true);
 
@@ -68,46 +75,66 @@ export default function Dashboard() {
 
   const fetchStats = async () => {
     try {
-      // Primeiro dia do mês atual
-      const primeiroDiaMes = new Date();
-      primeiroDiaMes.setDate(1);
-      primeiroDiaMes.setHours(0, 0, 0, 0);
-
-      const [negociacoes, contatos, mensagens, mensagensMes, conexao, contaComPlano, agentes] = await Promise.all([
+      const [negociacoes, contatos, mensagens, conexao, contaComPlano, agentes] = await Promise.all([
         supabase.from('negociacoes').select('valor').eq('conta_id', usuario!.conta_id),
         supabase.from('contatos').select('id', { count: 'exact' }).eq('conta_id', usuario!.conta_id),
         supabase.from('mensagens').select('id', { count: 'exact' }),
-        // Contar mensagens IA deste mês
-        supabase
-          .from('mensagens')
-          .select('id', { count: 'exact' })
-          .gte('created_at', primeiroDiaMes.toISOString())
-          .eq('enviada_por_ia', true),
         supabase.from('conexoes_whatsapp').select('status').eq('conta_id', usuario!.conta_id).maybeSingle(),
         supabase
           .from('contas')
-          .select('openai_api_key, plano:planos(nome, limite_mensagens_mes)')
+          .select('openai_api_key, stripe_current_period_start, stripe_current_period_end, plano:planos(nome, limite_mensagens_mes)')
           .eq('id', usuario!.conta_id)
           .single(),
         supabase.from('agent_ia').select('id, prompt_sistema').eq('conta_id', usuario!.conta_id),
       ]);
+
+      // Determinar início do ciclo (Stripe ou primeiro dia do mês)
+      let inicioCiclo: Date;
+      let fimCiclo: Date | null = null;
+      
+      if (contaComPlano.data?.stripe_current_period_start) {
+        inicioCiclo = new Date(contaComPlano.data.stripe_current_period_start);
+        fimCiclo = contaComPlano.data.stripe_current_period_end 
+          ? new Date(contaComPlano.data.stripe_current_period_end) 
+          : null;
+      } else {
+        // Fallback: primeiro dia do mês atual
+        inicioCiclo = new Date();
+        inicioCiclo.setDate(1);
+        inicioCiclo.setHours(0, 0, 0, 0);
+        // Fim do mês
+        fimCiclo = new Date(inicioCiclo.getFullYear(), inicioCiclo.getMonth() + 1, 0);
+      }
+
+      // Contar mensagens IA do ciclo atual
+      const { count: mensagensMesCount } = await supabase
+        .from('mensagens')
+        .select('id', { count: 'exact' })
+        .gte('created_at', inicioCiclo.toISOString())
+        .eq('enviada_por_ia', true);
 
       const temAgente = agentes.data && agentes.data.length > 0 && 
         agentes.data.some(a => a.prompt_sistema && a.prompt_sistema.length > 50);
 
       const planoData = contaComPlano.data?.plano as { nome: string; limite_mensagens_mes: number } | null;
 
+      // Calcular dias para reset
+      const diasParaReset = fimCiclo ? differenceInDays(fimCiclo, new Date()) : null;
+      const dataReset = fimCiclo ? format(fimCiclo, "dd 'de' MMMM", { locale: ptBR }) : null;
+
       setStats({
         totalNegociacoes: negociacoes.data?.length || 0,
         valorTotal: negociacoes.data?.reduce((acc, n) => acc + Number(n.valor || 0), 0) || 0,
         totalContatos: contatos.count || 0,
         totalMensagens: mensagens.count || 0,
-        mensagensEsteMes: mensagensMes.count || 0,
+        mensagensEsteMes: mensagensMesCount || 0,
         limiteMensagens: planoData?.limite_mensagens_mes || 10000,
         nomePlano: planoData?.nome || 'Sem plano',
         conexaoStatus: (conexao.data?.status as any) || 'desconectado',
         openaiConfigurado: !!contaComPlano.data?.openai_api_key,
         agenteConfigurado: temAgente,
+        diasParaReset,
+        dataReset,
       });
     } catch (error) {
       console.error('Erro ao buscar stats:', error);
@@ -280,7 +307,7 @@ export default function Dashboard() {
             
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Mensagens este mês</span>
+                <span className="text-muted-foreground">Mensagens IA este ciclo</span>
                 <span className="font-medium text-foreground">
                   {formatNumber(stats.mensagensEsteMes)} / {formatNumber(stats.limiteMensagens)}
                 </span>
@@ -291,6 +318,18 @@ export default function Dashboard() {
                   style={{ width: `${Math.min(percentualUso, 100)}%` }}
                 />
               </div>
+              
+              {/* Dias para reset */}
+              {stats.diasParaReset !== null && stats.diasParaReset >= 0 && (
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+                  <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">
+                    Reinicia em <span className="font-medium text-foreground">{stats.diasParaReset} dias</span>
+                    {stats.dataReset && <span className="text-xs ml-1">({stats.dataReset})</span>}
+                  </span>
+                </div>
+              )}
+              
               {percentualUso >= 80 && (
                 <p className="text-xs text-warning mt-2">
                   ⚠️ Você está próximo do limite. Considere fazer upgrade do seu plano.

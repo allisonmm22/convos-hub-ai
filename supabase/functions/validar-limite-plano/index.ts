@@ -46,10 +46,10 @@ Deno.serve(async (req) => {
 
     console.log(`Validating limit for conta ${conta_id}, resource: ${resource_type}`)
 
-    // Get conta with plan
+    // Get conta with plan and Stripe period
     const { data: conta, error: contaError } = await supabase
       .from('contas')
-      .select('plano_id')
+      .select('plano_id, stripe_current_period_start, stripe_current_period_end')
       .eq('id', conta_id)
       .single()
 
@@ -185,10 +185,17 @@ Deno.serve(async (req) => {
         )
 
       case 'mensagens':
-        // Contar mensagens deste mês para esta conta
-        const primeiroDiaMes = new Date()
-        primeiroDiaMes.setDate(1)
-        primeiroDiaMes.setHours(0, 0, 0, 0)
+        // Contar mensagens do ciclo atual do plano (ou mês calendário como fallback)
+        let inicioCiclo: Date
+        if (conta.stripe_current_period_start) {
+          inicioCiclo = new Date(conta.stripe_current_period_start)
+        } else {
+          // Fallback: primeiro dia do mês atual
+          inicioCiclo = new Date()
+          inicioCiclo.setDate(1)
+          inicioCiclo.setHours(0, 0, 0, 0)
+        }
+        console.log(`Counting messages from: ${inicioCiclo.toISOString()}`)
         
         // Contar mensagens através das conversas da conta
         const { data: conversasIds } = await supabase
@@ -204,7 +211,7 @@ Deno.serve(async (req) => {
             .from('mensagens')
             .select('*', { count: 'exact', head: true })
             .in('conversa_id', conversaIdList)
-            .gte('created_at', primeiroDiaMes.toISOString())
+            .gte('created_at', inicioCiclo.toISOString())
             .eq('enviada_por_ia', true)
           msgCount = count || 0
         }

@@ -14,7 +14,8 @@ import {
   Plug,
   Crown,
   Loader2,
-  ArrowUpRight
+  ArrowUpRight,
+  RefreshCw
 } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { supabase } from '@/integrations/supabase/client';
@@ -114,16 +115,34 @@ export default function MinhaAssinatura() {
     try {
       const contaId = usuario!.conta_id;
       
+      // Buscar dados da conta para pegar o período do Stripe
+      const { data: contaData } = await supabase
+        .from('contas')
+        .select('stripe_current_period_start, stripe_current_period_end')
+        .eq('id', contaId)
+        .single();
+      
+      // Determinar início do ciclo
+      let inicioCiclo: Date;
+      if (contaData?.stripe_current_period_start) {
+        inicioCiclo = new Date(contaData.stripe_current_period_start);
+      } else {
+        // Fallback: primeiro dia do mês atual
+        inicioCiclo = new Date();
+        inicioCiclo.setDate(1);
+        inicioCiclo.setHours(0, 0, 0, 0);
+      }
+
       // Buscar contagens em paralelo
       const [usuariosRes, agentesRes, funisRes, conexoesRes, mensagensRes] = await Promise.all([
         supabase.from('usuarios').select('id', { count: 'exact', head: true }).eq('conta_id', contaId),
         supabase.from('agent_ia').select('id', { count: 'exact', head: true }).eq('conta_id', contaId),
         supabase.from('funis').select('id', { count: 'exact', head: true }).eq('conta_id', contaId),
         supabase.from('conexoes_whatsapp').select('id, tipo_provedor').eq('conta_id', contaId),
-        // Mensagens IA do mês atual
+        // Mensagens IA do ciclo atual
         supabase.from('mensagens')
           .select('id', { count: 'exact', head: true })
-          .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
+          .gte('created_at', inicioCiclo.toISOString())
           .eq('enviada_por_ia', true)
       ]);
 
@@ -381,12 +400,20 @@ export default function MinhaAssinatura() {
         <div className="rounded-xl border border-border bg-card p-6">
           <h3 className="text-lg font-semibold text-foreground mb-4">Uso do Plano</h3>
           <div className="space-y-4">
-            <UsageBar 
-              current={usage.mensagens_mes} 
-              max={assinatura.plano.limite_mensagens_mes} 
-              label="Mensagens este mês" 
-              icon={MessageSquare}
-            />
+            <div className="space-y-2">
+              <UsageBar 
+                current={usage.mensagens_mes} 
+                max={assinatura.plano.limite_mensagens_mes} 
+                label="Mensagens IA este ciclo" 
+                icon={MessageSquare}
+              />
+              {diasRestantes !== null && diasRestantes >= 0 && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground ml-6">
+                  <RefreshCw className="h-3 w-3" />
+                  <span>Reinicia em {diasRestantes} dias</span>
+                </div>
+              )}
+            </div>
             <UsageBar 
               current={usage.usuarios} 
               max={assinatura.plano.limite_usuarios} 
