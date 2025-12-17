@@ -427,6 +427,7 @@ export type Database = {
       contas: {
         Row: {
           ativo: boolean | null
+          cpf: string | null
           created_at: string
           id: string
           nome: string
@@ -441,9 +442,11 @@ export type Database = {
           stripe_subscription_id: string | null
           stripe_subscription_status: string | null
           updated_at: string
+          whatsapp: string | null
         }
         Insert: {
           ativo?: boolean | null
+          cpf?: string | null
           created_at?: string
           id?: string
           nome: string
@@ -458,9 +461,11 @@ export type Database = {
           stripe_subscription_id?: string | null
           stripe_subscription_status?: string | null
           updated_at?: string
+          whatsapp?: string | null
         }
         Update: {
           ativo?: boolean | null
+          cpf?: string | null
           created_at?: string
           id?: string
           nome?: string
@@ -475,6 +480,7 @@ export type Database = {
           stripe_subscription_id?: string | null
           stripe_subscription_status?: string | null
           updated_at?: string
+          whatsapp?: string | null
         }
         Relationships: [
           {
