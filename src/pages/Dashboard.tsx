@@ -20,7 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useOnboarding } from '@/contexts/OnboardingContext';
-import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
+
 import { EscolhaConexaoModal } from '@/components/onboarding/EscolhaConexaoModal';
 import { Button } from '@/components/ui/button';
 import { differenceInDays, format, formatDistanceToNow } from 'date-fns';
@@ -341,14 +341,6 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Onboarding Progress Card */}
-        {!loading && needsSetup && (
-          <OnboardingProgress 
-            conexaoStatus={stats.conexaoStatus === 'conectado'}
-            openaiStatus={stats.openaiConfigurado}
-            agenteStatus={stats.agenteConfigurado}
-          />
-        )}
 
         {/* Status da Conexão */}
         <div className="flex items-center gap-3 md:gap-4 p-3 md:p-4 rounded-xl bg-card border border-border">
