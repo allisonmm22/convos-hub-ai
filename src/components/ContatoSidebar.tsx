@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { 
   X, Phone, Edit2, Save, Briefcase, Mail, Tag, Plus, 
   History, ChevronDown, ChevronUp, Check, MessageSquare,
-  TrendingUp, Trophy, XCircle, Clock, ArrowRight, Eye, Megaphone
+  TrendingUp, Trophy, XCircle, Clock, ArrowRight, Eye, Megaphone,
+  ExternalLink, Facebook, Instagram
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -733,35 +734,70 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
 
           {/* Card de Origem do Anúncio */}
           {contato.metadata?.origem_anuncio && (
-            <div className="bg-purple-500/10 border border-purple-500/20 rounded-2xl p-4 mt-4">
-              <div className="flex items-center gap-2 text-purple-400 text-sm font-semibold mb-3">
-                <Megaphone className="h-4 w-4" />
-                Origem: Anúncio Meta
+            <div className="bg-gradient-to-br from-purple-500/15 via-purple-500/10 to-pink-500/5 border border-purple-500/30 rounded-2xl p-4 mt-4 overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 bg-purple-500/20 rounded-lg">
+                  {contato.metadata.origem_anuncio.ad_source === 'instagram' ? (
+                    <Instagram className="h-4 w-4 text-purple-400" />
+                  ) : (
+                    <Facebook className="h-4 w-4 text-purple-400" />
+                  )}
+                </div>
+                <span className="text-sm font-semibold text-purple-300">
+                  Lead de Anúncio
+                </span>
+                <span className="ml-auto px-2 py-0.5 text-[10px] font-medium bg-purple-500/20 text-purple-300 rounded-full capitalize">
+                  {contato.metadata.origem_anuncio.ad_source || 'Meta'}
+                </span>
               </div>
-              <div className="space-y-2 text-xs">
-                {contato.metadata.origem_anuncio.ad_title && (
-                  <div className="flex items-start gap-2">
-                    <span className="text-muted-foreground shrink-0">Anúncio:</span>
-                    <span className="text-foreground font-medium">{contato.metadata.origem_anuncio.ad_title}</span>
-                  </div>
-                )}
-                {contato.metadata.origem_anuncio.ad_body && (
-                  <div className="flex items-start gap-2">
-                    <span className="text-muted-foreground shrink-0">Descrição:</span>
-                    <span className="text-foreground">{contato.metadata.origem_anuncio.ad_body}</span>
-                  </div>
-                )}
-                {contato.metadata.origem_anuncio.ad_id && (
-                  <div className="flex items-start gap-2">
-                    <span className="text-muted-foreground shrink-0">ID:</span>
-                    <span className="text-foreground font-mono text-[10px] bg-muted/50 px-1.5 py-0.5 rounded">{contato.metadata.origem_anuncio.ad_id}</span>
-                  </div>
-                )}
+
+              {/* Imagem do Anúncio */}
+              {contato.metadata.origem_anuncio.ad_image && (
+                <div className="mb-3 rounded-xl overflow-hidden border border-purple-500/20">
+                  <img 
+                    src={contato.metadata.origem_anuncio.ad_image} 
+                    alt="Imagem do anúncio"
+                    className="w-full h-32 object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Título do Anúncio */}
+              {contato.metadata.origem_anuncio.ad_title && (
+                <h4 className="text-sm font-semibold text-foreground mb-1 line-clamp-2">
+                  {contato.metadata.origem_anuncio.ad_title}
+                </h4>
+              )}
+
+              {/* Descrição do Anúncio */}
+              {contato.metadata.origem_anuncio.ad_body && (
+                <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
+                  {contato.metadata.origem_anuncio.ad_body}
+                </p>
+              )}
+
+              {/* Info e Link */}
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-purple-500/20">
                 {contato.metadata.origem_anuncio.captured_at && (
-                  <div className="flex items-start gap-2">
-                    <span className="text-muted-foreground shrink-0">Data:</span>
-                    <span className="text-foreground">{format(new Date(contato.metadata.origem_anuncio.captured_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
-                  </div>
+                  <span className="text-[10px] text-muted-foreground">
+                    {format(new Date(contato.metadata.origem_anuncio.captured_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                  </span>
+                )}
+                
+                {contato.metadata.origem_anuncio.ad_url && (
+                  <a
+                    href={contato.metadata.origem_anuncio.ad_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition-colors"
+                  >
+                    Ver anúncio
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
                 )}
               </div>
             </div>
