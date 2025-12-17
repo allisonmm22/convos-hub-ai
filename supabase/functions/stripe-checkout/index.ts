@@ -13,24 +13,33 @@ serve(async (req) => {
   }
 
   try {
-    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
-    if (!stripeKey) {
-      console.error('STRIPE_SECRET_KEY not configured');
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // Buscar Stripe key da tabela de configurações (onde o admin salva a chave live)
+    const { data: configData, error: configError } = await supabaseClient
+      .from('configuracoes_plataforma')
+      .select('valor')
+      .eq('chave', 'stripe_secret_key')
+      .maybeSingle();
+
+    if (configError || !configData?.valor) {
+      console.error('Stripe secret key não configurada:', configError);
       return new Response(
-        JSON.stringify({ error: 'Stripe não configurado' }),
+        JSON.stringify({ error: 'Stripe não configurado. Configure a chave na página de Pagamentos.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const stripeKey = configData.valor;
+    console.log('Using Stripe key from database, starts with:', stripeKey.substring(0, 10));
 
     const stripe = new Stripe(stripeKey, {
       apiVersion: '2023-10-16',
       httpClient: Stripe.createFetchHttpClient(),
     });
-
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
 
     const { plano_id, conta_id, success_url, cancel_url } = await req.json();
 
