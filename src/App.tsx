@@ -27,6 +27,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminContas from "./pages/admin/AdminContas";
 import AdminContaDetalhe from "./pages/admin/AdminContaDetalhe";
 import AdminPlanos from "./pages/admin/AdminPlanos";
+import AdminPagamentos from "./pages/admin/AdminPagamentos";
 import Upgrade from "./pages/Upgrade";
 
 const queryClient = new QueryClient();
@@ -91,6 +92,14 @@ function AppRoutes() {
           !user ? <Navigate to="/auth" replace /> :
           !usuario?.isSuperAdmin ? <Navigate to="/dashboard" replace /> :
           <AdminPlanos />
+        } 
+      />
+      <Route 
+        path="/admin/pagamentos" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          !usuario?.isSuperAdmin ? <Navigate to="/dashboard" replace /> :
+          <AdminPagamentos />
         } 
       />
       
