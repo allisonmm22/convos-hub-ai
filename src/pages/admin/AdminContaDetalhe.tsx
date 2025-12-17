@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, Users, MessageSquare, TrendingUp, Phone, Power, Save, KeyRound, Coins, AlertTriangle, Calendar, Bot, GitBranch, Smartphone, CreditCard } from 'lucide-react';
+import { ArrowLeft, Building2, Users, MessageSquare, TrendingUp, Phone, Power, Save, KeyRound, Coins, AlertTriangle, Calendar, Bot, GitBranch, Smartphone, CreditCard, Instagram, Check, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,9 @@ interface Plano {
   limite_agentes: number;
   limite_funis: number;
   limite_conexoes_whatsapp: number;
+  limite_conexoes_evolution: number;
+  limite_conexoes_meta: number;
+  permite_instagram: boolean;
   preco_mensal: number;
 }
 
@@ -52,6 +55,9 @@ interface UsoRecursos {
   agentes: number;
   funis: number;
   conexoes: number;
+  conexoes_evolution: number;
+  conexoes_meta: number;
+  conexoes_instagram: number;
 }
 
 interface Usuario {
@@ -122,7 +128,7 @@ export default function AdminContaDetalhe() {
   
   // Estados para planos
   const [planos, setPlanos] = useState<Plano[]>([]);
-  const [usoRecursos, setUsoRecursos] = useState<UsoRecursos>({ usuarios: 0, agentes: 0, funis: 0, conexoes: 0 });
+  const [usoRecursos, setUsoRecursos] = useState<UsoRecursos>({ usuarios: 0, agentes: 0, funis: 0, conexoes: 0, conexoes_evolution: 0, conexoes_meta: 0, conexoes_instagram: 0 });
   const [savingPlano, setSavingPlano] = useState(false);
 
   useEffect(() => {
@@ -216,17 +222,26 @@ export default function AdminContaDetalhe() {
         { count: funisCount },
         { count: conexoesCount },
         { count: usuariosCount },
+        { count: evolutionCount },
+        { count: metaCount },
+        { count: instagramCount },
       ] = await Promise.all([
         supabase.from('agent_ia').select('*', { count: 'exact', head: true }).eq('conta_id', id),
         supabase.from('funis').select('*', { count: 'exact', head: true }).eq('conta_id', id),
         supabase.from('conexoes_whatsapp').select('*', { count: 'exact', head: true }).eq('conta_id', id),
         supabase.from('usuarios').select('*', { count: 'exact', head: true }).eq('conta_id', id),
+        supabase.from('conexoes_whatsapp').select('*', { count: 'exact', head: true }).eq('conta_id', id).eq('tipo_provedor', 'evolution'),
+        supabase.from('conexoes_whatsapp').select('*', { count: 'exact', head: true }).eq('conta_id', id).eq('tipo_provedor', 'meta'),
+        supabase.from('conexoes_whatsapp').select('*', { count: 'exact', head: true }).eq('conta_id', id).eq('tipo_provedor', 'instagram'),
       ]);
       setUsoRecursos({
         usuarios: usuariosCount || 0,
         agentes: agentesCount || 0,
         funis: funisCount || 0,
         conexoes: conexoesCount || 0,
+        conexoes_evolution: evolutionCount || 0,
+        conexoes_meta: metaCount || 0,
+        conexoes_instagram: instagramCount || 0,
       });
     } catch (error) {
       console.error('Erro ao buscar uso de recursos:', error);
@@ -630,40 +645,114 @@ export default function AdminContaDetalhe() {
                         limite: planoAtual.limite_funis,
                         color: 'bg-green-500'
                       },
+                    ];
+                    
+                    const conexoes = [
                       { 
-                        label: 'Conexões WhatsApp', 
+                        label: 'Evolution API', 
                         icon: Smartphone, 
-                        uso: usoRecursos.conexoes, 
-                        limite: planoAtual.limite_conexoes_whatsapp,
-                        color: 'bg-orange-500'
+                        uso: usoRecursos.conexoes_evolution, 
+                        limite: (planoAtual as any).limite_conexoes_evolution ?? planoAtual.limite_conexoes_whatsapp,
+                        color: 'text-emerald-500'
+                      },
+                      { 
+                        label: 'Meta API', 
+                        icon: Building2, 
+                        uso: usoRecursos.conexoes_meta, 
+                        limite: (planoAtual as any).limite_conexoes_meta ?? 0,
+                        color: 'text-blue-500'
                       },
                     ];
                     
-                    return recursos.map((recurso) => {
-                      const percentual = recurso.limite >= 999 
-                        ? 0 
-                        : Math.min((recurso.uso / recurso.limite) * 100, 100);
-                      const isAtLimit = recurso.uso >= recurso.limite && recurso.limite < 999;
-                      
-                      return (
-                        <div key={recurso.label} className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <div className="flex items-center gap-2">
-                              <recurso.icon className="h-4 w-4 text-muted-foreground" />
-                              <span>{recurso.label}</span>
+                    return (
+                      <>
+                        {recursos.map((recurso) => {
+                          const percentual = recurso.limite >= 999 
+                            ? 0 
+                            : Math.min((recurso.uso / recurso.limite) * 100, 100);
+                          const isAtLimit = recurso.uso >= recurso.limite && recurso.limite < 999;
+                          
+                          return (
+                            <div key={recurso.label} className="space-y-2">
+                              <div className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-2">
+                                  <recurso.icon className="h-4 w-4 text-muted-foreground" />
+                                  <span>{recurso.label}</span>
+                                </div>
+                                <span className={isAtLimit ? 'text-destructive font-medium' : ''}>
+                                  {recurso.uso}/{recurso.limite >= 999 ? '∞' : recurso.limite}
+                                  {isAtLimit && ' ⚠️'}
+                                </span>
+                              </div>
+                              <Progress 
+                                value={recurso.limite >= 999 ? 0 : percentual} 
+                                className={`h-2 ${isAtLimit ? '[&>div]:bg-destructive' : ''}`}
+                              />
                             </div>
-                            <span className={isAtLimit ? 'text-destructive font-medium' : ''}>
-                              {recurso.uso}/{recurso.limite >= 999 ? '∞' : recurso.limite}
-                              {isAtLimit && ' ⚠️'}
-                            </span>
+                          );
+                        })}
+                        
+                        {/* Seção de Conexões */}
+                        <div className="border-t pt-4 mt-4">
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Conexões</p>
+                          
+                          {conexoes.map((conexao) => {
+                            const percentual = conexao.limite >= 999 
+                              ? 0 
+                              : conexao.limite > 0 ? Math.min((conexao.uso / conexao.limite) * 100, 100) : 0;
+                            const isAtLimit = conexao.uso >= conexao.limite && conexao.limite > 0 && conexao.limite < 999;
+                            const isDisabled = conexao.limite === 0;
+                            
+                            return (
+                              <div key={conexao.label} className="space-y-2 mb-3">
+                                <div className="flex items-center justify-between text-sm">
+                                  <div className="flex items-center gap-2">
+                                    <conexao.icon className={`h-4 w-4 ${conexao.color}`} />
+                                    <span className={isDisabled ? 'text-muted-foreground' : ''}>{conexao.label}</span>
+                                  </div>
+                                  <span className={isAtLimit ? 'text-destructive font-medium' : isDisabled ? 'text-muted-foreground' : ''}>
+                                    {isDisabled ? 'Não permitido' : `${conexao.uso}/${conexao.limite >= 999 ? '∞' : conexao.limite}`}
+                                    {isAtLimit && ' ⚠️'}
+                                  </span>
+                                </div>
+                                {!isDisabled && (
+                                  <Progress 
+                                    value={percentual} 
+                                    className={`h-2 ${isAtLimit ? '[&>div]:bg-destructive' : ''}`}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                          
+                          {/* Instagram */}
+                          <div className="flex items-center justify-between text-sm py-2">
+                            <div className="flex items-center gap-2">
+                              <Instagram className="h-4 w-4 text-pink-500" />
+                              <span>Instagram</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {usoRecursos.conexoes_instagram > 0 && (
+                                <span className="text-xs text-muted-foreground">
+                                  {usoRecursos.conexoes_instagram} ativa(s)
+                                </span>
+                              )}
+                              {(planoAtual as any).permite_instagram ? (
+                                <span className="flex items-center gap-1 text-emerald-500">
+                                  <Check className="h-4 w-4" />
+                                  Permitido
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-muted-foreground">
+                                  <X className="h-4 w-4" />
+                                  Não permitido
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <Progress 
-                            value={recurso.limite >= 999 ? 0 : percentual} 
-                            className={`h-2 ${isAtLimit ? '[&>div]:bg-destructive' : ''}`}
-                          />
                         </div>
-                      );
-                    });
+                      </>
+                    );
                   })()}
                 </CardContent>
               </Card>
