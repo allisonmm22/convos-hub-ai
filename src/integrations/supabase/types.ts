@@ -1280,6 +1280,7 @@ export type Database = {
           limite_conexoes_meta: number
           limite_conexoes_whatsapp: number
           limite_funis: number
+          limite_mensagens_mes: number
           limite_usuarios: number
           nome: string
           permite_instagram: boolean
@@ -1296,6 +1297,7 @@ export type Database = {
           limite_conexoes_meta?: number
           limite_conexoes_whatsapp?: number
           limite_funis?: number
+          limite_mensagens_mes?: number
           limite_usuarios?: number
           nome: string
           permite_instagram?: boolean
@@ -1312,6 +1314,7 @@ export type Database = {
           limite_conexoes_meta?: number
           limite_conexoes_whatsapp?: number
           limite_funis?: number
+          limite_mensagens_mes?: number
           limite_usuarios?: number
           nome?: string
           permite_instagram?: boolean

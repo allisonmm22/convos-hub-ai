@@ -4,7 +4,7 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Users, Bot, GitBranch, Smartphone, Pencil, Building2, Instagram, Check, X } from 'lucide-react';
+import { Plus, Users, Bot, GitBranch, Smartphone, Pencil, Building2, Instagram, Check, X, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import NovoPlanoModal from '@/components/admin/NovoPlanoModal';
 
@@ -18,6 +18,7 @@ interface Plano {
   limite_conexoes_whatsapp: number;
   limite_conexoes_evolution: number;
   limite_conexoes_meta: number;
+  limite_mensagens_mes: number;
   permite_instagram: boolean;
   preco_mensal: number;
   ativo: boolean;
@@ -73,7 +74,13 @@ export default function AdminPlanos() {
   };
 
   const formatLimit = (value: number) => {
-    return value >= 999 ? '∞' : value.toString();
+    return value >= 999 ? '∞' : value.toLocaleString('pt-BR');
+  };
+
+  const formatMessages = (value: number) => {
+    if (value >= 999999) return '∞';
+    if (value >= 1000) return `${(value / 1000).toLocaleString('pt-BR')}k`;
+    return value.toLocaleString('pt-BR');
   };
 
   return (
@@ -127,6 +134,10 @@ export default function AdminPlanos() {
                     <div className="flex items-center gap-2 text-sm">
                       <GitBranch className="h-4 w-4 text-muted-foreground" />
                       <span>{formatLimit(plano.limite_funis)} funis CRM</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                      <span>{formatMessages(plano.limite_mensagens_mes)} msgs/mês</span>
                     </div>
                   </div>
 
