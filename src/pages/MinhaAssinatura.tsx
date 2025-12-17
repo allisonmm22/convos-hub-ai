@@ -16,6 +16,7 @@ import {
   Loader2,
   ArrowUpRight
 } from 'lucide-react';
+import { MainLayout } from '@/components/layout/MainLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -213,9 +214,11 @@ export default function MinhaAssinatura() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
     );
   }
 
@@ -226,6 +229,7 @@ export default function MinhaAssinatura() {
     : null;
 
   return (
+    <MainLayout>
     <div className="p-4 md:p-6 space-y-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3">
@@ -433,5 +437,6 @@ export default function MinhaAssinatura() {
         </div>
       )}
     </div>
+    </MainLayout>
   );
 }
