@@ -24,6 +24,7 @@ interface Plano {
   limite_conexoes_whatsapp: number;
   limite_conexoes_evolution: number;
   limite_conexoes_meta: number;
+  limite_mensagens_mes: number;
   permite_instagram: boolean;
   preco_mensal: number;
   ativo: boolean;
@@ -44,6 +45,7 @@ export default function NovoPlanoModal({ open, onClose, onSuccess, plano }: Novo
   const [limiteFunis, setLimiteFunis] = useState(1);
   const [limiteConexoesEvolution, setLimiteConexoesEvolution] = useState(1);
   const [limiteConexoesMeta, setLimiteConexoesMeta] = useState(0);
+  const [limiteMensagensMes, setLimiteMensagensMes] = useState(10000);
   const [permiteInstagram, setPermiteInstagram] = useState(false);
   const [precoMensal, setPrecoMensal] = useState(0);
   const [ativo, setAtivo] = useState(true);
@@ -58,6 +60,7 @@ export default function NovoPlanoModal({ open, onClose, onSuccess, plano }: Novo
       setLimiteFunis(plano.limite_funis);
       setLimiteConexoesEvolution(plano.limite_conexoes_evolution ?? plano.limite_conexoes_whatsapp);
       setLimiteConexoesMeta(plano.limite_conexoes_meta ?? 0);
+      setLimiteMensagensMes(plano.limite_mensagens_mes ?? 10000);
       setPermiteInstagram(plano.permite_instagram ?? false);
       setPrecoMensal(plano.preco_mensal);
       setAtivo(plano.ativo);
@@ -74,6 +77,7 @@ export default function NovoPlanoModal({ open, onClose, onSuccess, plano }: Novo
     setLimiteFunis(1);
     setLimiteConexoesEvolution(1);
     setLimiteConexoesMeta(0);
+    setLimiteMensagensMes(10000);
     setPermiteInstagram(false);
     setPrecoMensal(0);
     setAtivo(true);
@@ -101,6 +105,7 @@ export default function NovoPlanoModal({ open, onClose, onSuccess, plano }: Novo
         limite_conexoes_whatsapp: totalConexoes, // Mantém compatibilidade
         limite_conexoes_evolution: limiteConexoesEvolution,
         limite_conexoes_meta: limiteConexoesMeta,
+        limite_mensagens_mes: limiteMensagensMes,
         permite_instagram: permiteInstagram,
         preco_mensal: precoMensal,
         ativo
@@ -206,6 +211,18 @@ export default function NovoPlanoModal({ open, onClose, onSuccess, plano }: Novo
               value={limiteFunis}
               onChange={(e) => setLimiteFunis(parseInt(e.target.value) || 1)}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="mensagens">Limite Mensagens/Mês</Label>
+            <Input
+              id="mensagens"
+              type="number"
+              min="100"
+              value={limiteMensagensMes}
+              onChange={(e) => setLimiteMensagensMes(parseInt(e.target.value) || 10000)}
+            />
+            <p className="text-xs text-muted-foreground">Use 999999 para ilimitado</p>
           </div>
 
           {/* Seção de Conexões */}

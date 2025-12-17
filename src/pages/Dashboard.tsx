@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Sparkles,
+  Zap,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,12 +19,16 @@ import { useOnboarding } from '@/contexts/OnboardingContext';
 import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
 import { EscolhaConexaoModal } from '@/components/onboarding/EscolhaConexaoModal';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 
 interface DashboardStats {
   totalNegociacoes: number;
   valorTotal: number;
   totalContatos: number;
   totalMensagens: number;
+  mensagensEsteMes: number;
+  limiteMensagens: number;
+  nomePlano: string;
   conexaoStatus: 'conectado' | 'desconectado' | 'aguardando';
   openaiConfigurado: boolean;
   agenteConfigurado: boolean;
@@ -39,6 +44,9 @@ export default function Dashboard() {
     valorTotal: 0,
     totalContatos: 0,
     totalMensagens: 0,
+    mensagensEsteMes: 0,
+    limiteMensagens: 10000,
+    nomePlano: 'Starter',
     conexaoStatus: 'desconectado',
     openaiConfigurado: false,
     agenteConfigurado: false,
@@ -60,25 +68,44 @@ export default function Dashboard() {
 
   const fetchStats = async () => {
     try {
-      const [negociacoes, contatos, mensagens, conexao, conta, agentes] = await Promise.all([
+      // Primeiro dia do mês atual
+      const primeiroDiaMes = new Date();
+      primeiroDiaMes.setDate(1);
+      primeiroDiaMes.setHours(0, 0, 0, 0);
+
+      const [negociacoes, contatos, mensagens, mensagensMes, conexao, contaComPlano, agentes] = await Promise.all([
         supabase.from('negociacoes').select('valor').eq('conta_id', usuario!.conta_id),
         supabase.from('contatos').select('id', { count: 'exact' }).eq('conta_id', usuario!.conta_id),
         supabase.from('mensagens').select('id', { count: 'exact' }),
+        // Contar mensagens deste mês
+        supabase
+          .from('mensagens')
+          .select('id', { count: 'exact' })
+          .gte('created_at', primeiroDiaMes.toISOString()),
         supabase.from('conexoes_whatsapp').select('status').eq('conta_id', usuario!.conta_id).maybeSingle(),
-        supabase.from('contas').select('openai_api_key').eq('id', usuario!.conta_id).single(),
+        supabase
+          .from('contas')
+          .select('openai_api_key, plano:planos(nome, limite_mensagens_mes)')
+          .eq('id', usuario!.conta_id)
+          .single(),
         supabase.from('agent_ia').select('id, prompt_sistema').eq('conta_id', usuario!.conta_id),
       ]);
 
       const temAgente = agentes.data && agentes.data.length > 0 && 
         agentes.data.some(a => a.prompt_sistema && a.prompt_sistema.length > 50);
 
+      const planoData = contaComPlano.data?.plano as { nome: string; limite_mensagens_mes: number } | null;
+
       setStats({
         totalNegociacoes: negociacoes.data?.length || 0,
         valorTotal: negociacoes.data?.reduce((acc, n) => acc + Number(n.valor || 0), 0) || 0,
         totalContatos: contatos.count || 0,
         totalMensagens: mensagens.count || 0,
+        mensagensEsteMes: mensagensMes.count || 0,
+        limiteMensagens: planoData?.limite_mensagens_mes || 10000,
+        nomePlano: planoData?.nome || 'Sem plano',
         conexaoStatus: (conexao.data?.status as any) || 'desconectado',
-        openaiConfigurado: !!conta.data?.openai_api_key,
+        openaiConfigurado: !!contaComPlano.data?.openai_api_key,
         agenteConfigurado: temAgente,
       });
     } catch (error) {
@@ -144,6 +171,28 @@ export default function Dashboard() {
     !stats.openaiConfigurado && 
     !stats.agenteConfigurado;
 
+  // Cálculo do uso de mensagens
+  const percentualUso = stats.limiteMensagens >= 999999 
+    ? 0 
+    : Math.min((stats.mensagensEsteMes / stats.limiteMensagens) * 100, 100);
+  
+  const getUsageColor = () => {
+    if (percentualUso >= 90) return 'text-destructive';
+    if (percentualUso >= 70) return 'text-warning';
+    return 'text-success';
+  };
+
+  const getProgressColor = () => {
+    if (percentualUso >= 90) return 'bg-destructive';
+    if (percentualUso >= 70) return 'bg-warning';
+    return 'bg-success';
+  };
+
+  const formatNumber = (num: number) => {
+    if (num >= 999999) return '∞';
+    return num.toLocaleString('pt-BR');
+  };
+
   return (
     <MainLayout>
       <div className="space-y-6 md:space-y-8 animate-fade-in px-4 md:px-0">
@@ -208,6 +257,47 @@ export default function Dashboard() {
             </a>
           )}
         </div>
+
+        {/* Card de Uso do Plano */}
+        {!loading && (
+          <div className="p-4 md:p-6 rounded-xl bg-card border border-border">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-xl bg-primary/10">
+                  <Zap className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-foreground text-sm md:text-base">Uso do Plano</h3>
+                  <p className="text-xs md:text-sm text-muted-foreground">{stats.nomePlano}</p>
+                </div>
+              </div>
+              <div className={`text-right ${getUsageColor()}`}>
+                <p className="text-xl md:text-2xl font-bold">{percentualUso.toFixed(1)}%</p>
+                <p className="text-xs text-muted-foreground">utilizado</p>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Mensagens este mês</span>
+                <span className="font-medium text-foreground">
+                  {formatNumber(stats.mensagensEsteMes)} / {formatNumber(stats.limiteMensagens)}
+                </span>
+              </div>
+              <div className="h-3 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-500 ${getProgressColor()}`}
+                  style={{ width: `${Math.min(percentualUso, 100)}%` }}
+                />
+              </div>
+              {percentualUso >= 80 && (
+                <p className="text-xs text-warning mt-2">
+                  ⚠️ Você está próximo do limite. Considere fazer upgrade do seu plano.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
