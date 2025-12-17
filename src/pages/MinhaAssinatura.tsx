@@ -61,6 +61,7 @@ export default function MinhaAssinatura() {
   const { usuario } = useAuth();
   const [loading, setLoading] = useState(true);
   const [loadingPortal, setLoadingPortal] = useState(false);
+  const [loadingCheckout, setLoadingCheckout] = useState(false);
   const [assinatura, setAssinatura] = useState<ContaAssinatura | null>(null);
   const [usage, setUsage] = useState<UsageData | null>(null);
 
@@ -150,8 +151,6 @@ export default function MinhaAssinatura() {
 
     setLoadingPortal(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
       const response = await supabase.functions.invoke('stripe-customer-portal', {
         body: { return_url: window.location.href },
       });
@@ -166,6 +165,36 @@ export default function MinhaAssinatura() {
       toast.error('Erro ao abrir portal de pagamentos');
     } finally {
       setLoadingPortal(false);
+    }
+  };
+
+  const handlePagar = async () => {
+    if (!assinatura?.plano?.id) {
+      toast.error('Selecione um plano primeiro');
+      navigate('/upgrade');
+      return;
+    }
+
+    setLoadingCheckout(true);
+    try {
+      const response = await supabase.functions.invoke('stripe-checkout', {
+        body: { 
+          plano_id: assinatura.plano.id,
+          success_url: `${window.location.origin}/minha-assinatura?success=true`,
+          cancel_url: `${window.location.origin}/minha-assinatura?canceled=true`,
+        },
+      });
+
+      if (response.error) throw response.error;
+      
+      if (response.data?.url) {
+        window.location.href = response.data.url;
+      }
+    } catch (error) {
+      console.error('Erro ao iniciar pagamento:', error);
+      toast.error('Erro ao iniciar pagamento');
+    } finally {
+      setLoadingCheckout(false);
     }
   };
 
@@ -300,6 +329,22 @@ export default function MinhaAssinatura() {
         )}
 
         <div className="p-6 flex flex-wrap gap-3">
+          {/* Botão Pagar - aparece quando tem plano mas assinatura não está ativa */}
+          {assinatura?.plano && assinatura.stripe_subscription_status !== 'active' && (
+            <button
+              onClick={handlePagar}
+              disabled={loadingCheckout}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
+            >
+              {loadingCheckout ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CreditCard className="h-4 w-4" />
+              )}
+              <span>Pagar Agora</span>
+            </button>
+          )}
+          
           {assinatura?.stripe_customer_id && (
             <button
               onClick={handleOpenPortal}
