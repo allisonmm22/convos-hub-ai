@@ -20,7 +20,7 @@ interface AuthContextType {
   session: Session | null;
   usuario: Usuario | null;
   loading: boolean;
-  signUp: (email: string, password: string, nome: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, nome: string, whatsapp?: string, cpf?: string, planoId?: string) => Promise<{ error: Error | null; contaId?: string }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   refreshUsuario: () => Promise<void>;
@@ -121,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, nome: string) => {
+  const signUp = async (email: string, password: string, nome: string, whatsapp?: string, cpf?: string, planoId?: string) => {
     try {
       const redirectUrl = `${window.location.origin}/`;
       
@@ -135,15 +135,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
 
+      let contaId: string | undefined;
+
       if (data.user) {
-        // Criar conta
+        // Criar conta com whatsapp, cpf e plano
         const { data: contaData, error: contaError } = await supabase
           .from('contas')
-          .insert({ nome: `Conta de ${nome}` })
+          .insert({ 
+            nome: `Conta de ${nome}`,
+            whatsapp: whatsapp || null,
+            cpf: cpf || null,
+            plano_id: planoId || null,
+          })
           .select()
           .single();
 
         if (contaError) throw contaError;
+        contaId = contaData.id;
 
         // Criar usuário
         const { error: usuarioError } = await supabase
@@ -157,6 +165,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
 
         if (usuarioError) throw usuarioError;
+
+        // Criar role de admin
+        await supabase.from('user_roles').insert({
+          user_id: data.user.id,
+          role: 'admin'
+        });
 
         // Criar configuração padrão do Agente IA
         await supabase.from('agent_ia').insert({ conta_id: contaData.id });
@@ -179,7 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      return { error: null };
+      return { error: null, contaId };
     } catch (error) {
       return { error: error as Error };
     }
