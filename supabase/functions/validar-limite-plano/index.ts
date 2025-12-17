@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-type ResourceType = 'usuarios' | 'agentes' | 'funis' | 'conexoes'
+type ResourceType = 'usuarios' | 'agentes' | 'funis' | 'conexoes' | 'conexoes_evolution' | 'conexoes_meta' | 'instagram'
 
 interface ValidationRequest {
   conta_id: string
@@ -17,6 +17,9 @@ interface PlanLimits {
   limite_agentes: number
   limite_funis: number
   limite_conexoes_whatsapp: number
+  limite_conexoes_evolution: number
+  limite_conexoes_meta: number
+  permite_instagram: boolean
 }
 
 Deno.serve(async (req) => {
@@ -69,7 +72,7 @@ Deno.serve(async (req) => {
     // Get plan limits
     const { data: plano, error: planoError } = await supabase
       .from('planos')
-      .select('nome, limite_usuarios, limite_agentes, limite_funis, limite_conexoes_whatsapp')
+      .select('nome, limite_usuarios, limite_agentes, limite_funis, limite_conexoes_whatsapp, limite_conexoes_evolution, limite_conexoes_meta, permite_instagram')
       .eq('id', conta.plano_id)
       .single()
 
@@ -120,6 +123,7 @@ Deno.serve(async (req) => {
         break
 
       case 'conexoes':
+        // Legacy: conta todas as conexões WhatsApp
         const { count: connectionCount } = await supabase
           .from('conexoes_whatsapp')
           .select('*', { count: 'exact', head: true })
@@ -128,6 +132,56 @@ Deno.serve(async (req) => {
         limit = plano.limite_conexoes_whatsapp
         resourceName = 'conexões WhatsApp'
         break
+
+      case 'conexoes_evolution':
+        // Conexões Evolution API específicas
+        const { count: evolutionCount } = await supabase
+          .from('conexoes_whatsapp')
+          .select('*', { count: 'exact', head: true })
+          .eq('conta_id', conta_id)
+          .eq('tipo_provedor', 'evolution')
+        currentCount = evolutionCount || 0
+        limit = plano.limite_conexoes_evolution ?? plano.limite_conexoes_whatsapp
+        resourceName = 'conexões Evolution API'
+        break
+
+      case 'conexoes_meta':
+        // Conexões Meta API específicas
+        const { count: metaCount } = await supabase
+          .from('conexoes_whatsapp')
+          .select('*', { count: 'exact', head: true })
+          .eq('conta_id', conta_id)
+          .eq('tipo_provedor', 'meta')
+        currentCount = metaCount || 0
+        limit = plano.limite_conexoes_meta ?? 0
+        resourceName = 'conexões Meta API'
+        break
+
+      case 'instagram':
+        // Verificar se plano permite Instagram
+        if (!plano.permite_instagram) {
+          return new Response(
+            JSON.stringify({
+              allowed: false,
+              message: `Seu plano "${plano.nome}" não permite conexões Instagram. Faça upgrade para habilitar.`,
+              current: 0,
+              limit: 0,
+              plan_name: plano.nome
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+        // Se permite, retorna permitido (não tem limite de quantidade separado)
+        return new Response(
+          JSON.stringify({
+            allowed: true,
+            message: `Instagram habilitado no plano "${plano.nome}"`,
+            current: 0,
+            limit: 999,
+            plan_name: plano.nome
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
 
       default:
         return new Response(

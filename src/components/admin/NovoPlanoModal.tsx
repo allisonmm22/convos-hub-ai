@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { Smartphone, Building2, Instagram } from 'lucide-react';
 
 interface Plano {
   id: string;
@@ -21,6 +22,9 @@ interface Plano {
   limite_agentes: number;
   limite_funis: number;
   limite_conexoes_whatsapp: number;
+  limite_conexoes_evolution: number;
+  limite_conexoes_meta: number;
+  permite_instagram: boolean;
   preco_mensal: number;
   ativo: boolean;
 }
@@ -38,7 +42,9 @@ export default function NovoPlanoModal({ open, onClose, onSuccess, plano }: Novo
   const [limiteUsuarios, setLimiteUsuarios] = useState(1);
   const [limiteAgentes, setLimiteAgentes] = useState(1);
   const [limiteFunis, setLimiteFunis] = useState(1);
-  const [limiteConexoes, setLimiteConexoes] = useState(1);
+  const [limiteConexoesEvolution, setLimiteConexoesEvolution] = useState(1);
+  const [limiteConexoesMeta, setLimiteConexoesMeta] = useState(0);
+  const [permiteInstagram, setPermiteInstagram] = useState(false);
   const [precoMensal, setPrecoMensal] = useState(0);
   const [ativo, setAtivo] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -50,7 +56,9 @@ export default function NovoPlanoModal({ open, onClose, onSuccess, plano }: Novo
       setLimiteUsuarios(plano.limite_usuarios);
       setLimiteAgentes(plano.limite_agentes);
       setLimiteFunis(plano.limite_funis);
-      setLimiteConexoes(plano.limite_conexoes_whatsapp);
+      setLimiteConexoesEvolution(plano.limite_conexoes_evolution ?? plano.limite_conexoes_whatsapp);
+      setLimiteConexoesMeta(plano.limite_conexoes_meta ?? 0);
+      setPermiteInstagram(plano.permite_instagram ?? false);
       setPrecoMensal(plano.preco_mensal);
       setAtivo(plano.ativo);
     } else {
@@ -64,7 +72,9 @@ export default function NovoPlanoModal({ open, onClose, onSuccess, plano }: Novo
     setLimiteUsuarios(1);
     setLimiteAgentes(1);
     setLimiteFunis(1);
-    setLimiteConexoes(1);
+    setLimiteConexoesEvolution(1);
+    setLimiteConexoesMeta(0);
+    setPermiteInstagram(false);
     setPrecoMensal(0);
     setAtivo(true);
   };
@@ -80,13 +90,18 @@ export default function NovoPlanoModal({ open, onClose, onSuccess, plano }: Novo
     setSaving(true);
 
     try {
+      const totalConexoes = limiteConexoesEvolution + limiteConexoesMeta;
+      
       const planoData = {
         nome: nome.trim(),
         descricao: descricao.trim() || null,
         limite_usuarios: limiteUsuarios,
         limite_agentes: limiteAgentes,
         limite_funis: limiteFunis,
-        limite_conexoes_whatsapp: limiteConexoes,
+        limite_conexoes_whatsapp: totalConexoes, // Mantém compatibilidade
+        limite_conexoes_evolution: limiteConexoesEvolution,
+        limite_conexoes_meta: limiteConexoesMeta,
+        permite_instagram: permiteInstagram,
         preco_mensal: precoMensal,
         ativo
       };
@@ -120,7 +135,7 @@ export default function NovoPlanoModal({ open, onClose, onSuccess, plano }: Novo
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{plano ? 'Editar Plano' : 'Novo Plano'}</DialogTitle>
         </DialogHeader>
@@ -182,25 +197,66 @@ export default function NovoPlanoModal({ open, onClose, onSuccess, plano }: Novo
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="funis">Limite Funis CRM</Label>
+            <Input
+              id="funis"
+              type="number"
+              min="1"
+              value={limiteFunis}
+              onChange={(e) => setLimiteFunis(parseInt(e.target.value) || 1)}
+            />
+          </div>
+
+          {/* Seção de Conexões */}
+          <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+            <h3 className="font-medium text-sm flex items-center gap-2">
+              <Smartphone className="h-4 w-4" />
+              Conexões
+            </h3>
+            
             <div className="space-y-2">
-              <Label htmlFor="funis">Limite Funis CRM</Label>
+              <Label htmlFor="evolution" className="text-sm flex items-center gap-2">
+                <Smartphone className="h-3 w-3 text-emerald-500" />
+                Evolution API (QR Code)
+              </Label>
               <Input
-                id="funis"
+                id="evolution"
                 type="number"
-                min="1"
-                value={limiteFunis}
-                onChange={(e) => setLimiteFunis(parseInt(e.target.value) || 1)}
+                min="0"
+                value={limiteConexoesEvolution}
+                onChange={(e) => setLimiteConexoesEvolution(parseInt(e.target.value) || 0)}
               />
+              <p className="text-xs text-muted-foreground">Conexões via QR Code (não oficial)</p>
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="conexoes">Limite Conexões WhatsApp</Label>
+              <Label htmlFor="meta" className="text-sm flex items-center gap-2">
+                <Building2 className="h-3 w-3 text-blue-500" />
+                Meta API (Oficial)
+              </Label>
               <Input
-                id="conexoes"
+                id="meta"
                 type="number"
-                min="1"
-                value={limiteConexoes}
-                onChange={(e) => setLimiteConexoes(parseInt(e.target.value) || 1)}
+                min="0"
+                value={limiteConexoesMeta}
+                onChange={(e) => setLimiteConexoesMeta(parseInt(e.target.value) || 0)}
+              />
+              <p className="text-xs text-muted-foreground">Conexões oficiais da Meta (requer aprovação)</p>
+            </div>
+
+            <div className="flex items-center justify-between py-2">
+              <div className="flex items-center gap-2">
+                <Instagram className="h-4 w-4 text-pink-500" />
+                <div>
+                  <Label htmlFor="instagram" className="text-sm">Permite Instagram</Label>
+                  <p className="text-xs text-muted-foreground">Conexões com Instagram Direct</p>
+                </div>
+              </div>
+              <Switch
+                id="instagram"
+                checked={permiteInstagram}
+                onCheckedChange={setPermiteInstagram}
               />
             </div>
           </div>

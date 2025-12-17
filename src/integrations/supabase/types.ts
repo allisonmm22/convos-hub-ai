@@ -1273,10 +1273,13 @@ export type Database = {
           descricao: string | null
           id: string
           limite_agentes: number
+          limite_conexoes_evolution: number
+          limite_conexoes_meta: number
           limite_conexoes_whatsapp: number
           limite_funis: number
           limite_usuarios: number
           nome: string
+          permite_instagram: boolean
           preco_mensal: number | null
           updated_at: string | null
         }
@@ -1286,10 +1289,13 @@ export type Database = {
           descricao?: string | null
           id?: string
           limite_agentes?: number
+          limite_conexoes_evolution?: number
+          limite_conexoes_meta?: number
           limite_conexoes_whatsapp?: number
           limite_funis?: number
           limite_usuarios?: number
           nome: string
+          permite_instagram?: boolean
           preco_mensal?: number | null
           updated_at?: string | null
         }
@@ -1299,10 +1305,13 @@ export type Database = {
           descricao?: string | null
           id?: string
           limite_agentes?: number
+          limite_conexoes_evolution?: number
+          limite_conexoes_meta?: number
           limite_conexoes_whatsapp?: number
           limite_funis?: number
           limite_usuarios?: number
           nome?: string
+          permite_instagram?: boolean
           preco_mensal?: number | null
           updated_at?: string | null
         }

@@ -4,7 +4,7 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Users, Bot, GitBranch, Smartphone, Pencil } from 'lucide-react';
+import { Plus, Users, Bot, GitBranch, Smartphone, Pencil, Building2, Instagram, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 import NovoPlanoModal from '@/components/admin/NovoPlanoModal';
 
@@ -16,6 +16,9 @@ interface Plano {
   limite_agentes: number;
   limite_funis: number;
   limite_conexoes_whatsapp: number;
+  limite_conexoes_evolution: number;
+  limite_conexoes_meta: number;
+  permite_instagram: boolean;
   preco_mensal: number;
   ativo: boolean;
 }
@@ -125,9 +128,29 @@ export default function AdminPlanos() {
                       <GitBranch className="h-4 w-4 text-muted-foreground" />
                       <span>{formatLimit(plano.limite_funis)} funis CRM</span>
                     </div>
+                  </div>
+
+                  {/* Conexões granulares */}
+                  <div className="border-t pt-3 space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Conexões</p>
                     <div className="flex items-center gap-2 text-sm">
-                      <Smartphone className="h-4 w-4 text-muted-foreground" />
-                      <span>{formatLimit(plano.limite_conexoes_whatsapp)} conexões WhatsApp</span>
+                      <Smartphone className="h-4 w-4 text-emerald-500" />
+                      <span>{formatLimit(plano.limite_conexoes_evolution ?? plano.limite_conexoes_whatsapp)} Evolution</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Building2 className="h-4 w-4 text-blue-500" />
+                      <span>{formatLimit(plano.limite_conexoes_meta ?? 0)} Meta API</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Instagram className="h-4 w-4 text-pink-500" />
+                      <span className="flex items-center gap-1">
+                        Instagram
+                        {plano.permite_instagram ? (
+                          <Check className="h-3 w-3 text-emerald-500" />
+                        ) : (
+                          <X className="h-3 w-3 text-destructive" />
+                        )}
+                      </span>
                     </div>
                   </div>
 
