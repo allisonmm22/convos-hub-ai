@@ -39,6 +39,7 @@ interface PlanoInfo {
 }
 
 interface ContaAssinatura {
+  created_at: string;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   stripe_subscription_status: string | null;
@@ -78,6 +79,7 @@ export default function MinhaAssinatura() {
       const { data, error } = await supabase
         .from('contas')
         .select(`
+          created_at,
           stripe_customer_id,
           stripe_subscription_id,
           stripe_subscription_status,
@@ -324,50 +326,51 @@ export default function MinhaAssinatura() {
           </div>
         </div>
 
-        {(assinatura?.stripe_current_period_start || assinatura?.stripe_current_period_end) && (
-          <div className="px-6 py-4 bg-muted/30 space-y-3">
-            {/* Data de início do ciclo */}
-            {assinatura.stripe_current_period_start && (
+        <div className="px-6 py-4 bg-muted/30 space-y-3">
+          {/* Data de contratação - sempre visível */}
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Data de contratação:</span>
+            <span className="text-sm font-medium text-foreground">
+              {format(new Date(assinatura.created_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+            </span>
+          </div>
+          
+          {/* Próximo pagamento - só quando tem Stripe configurado */}
+          {assinatura.stripe_current_period_end ? (
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Início do ciclo:</span>
+                <CreditCard className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  {assinatura.stripe_cancel_at_period_end 
+                    ? 'Acesso até:'
+                    : 'Próximo pagamento:'
+                  }
+                </span>
                 <span className="text-sm font-medium text-foreground">
-                  {format(new Date(assinatura.stripe_current_period_start), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                  {format(new Date(assinatura.stripe_current_period_end), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                 </span>
               </div>
-            )}
-            
-            {/* Próximo pagamento */}
-            {assinatura.stripe_current_period_end && (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">
-                    {assinatura.stripe_cancel_at_period_end 
-                      ? 'Acesso até:'
-                      : 'Próximo pagamento:'
-                    }
-                  </span>
-                  <span className="text-sm font-medium text-foreground">
-                    {format(new Date(assinatura.stripe_current_period_end), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                  </span>
-                </div>
-                {diasRestantes !== null && diasRestantes >= 0 && (
-                  <span className={`text-sm ${diasRestantes <= 7 ? 'text-amber-500' : 'text-muted-foreground'}`}>
-                    {diasRestantes} dias restantes
-                  </span>
-                )}
-              </div>
-            )}
-            
-            {assinatura.stripe_cancel_at_period_end && (
-              <p className="text-sm text-amber-500 mt-2 flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4" />
-                Cancelamento agendado. Após essa data, sua conta será movida para o plano gratuito.
-              </p>
-            )}
-          </div>
-        )}
+              {diasRestantes !== null && diasRestantes >= 0 && (
+                <span className={`text-sm ${diasRestantes <= 7 ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                  {diasRestantes} dias restantes
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <CreditCard className="h-4 w-4" />
+              <span className="text-sm">Pagamento não configurado</span>
+            </div>
+          )}
+          
+          {assinatura.stripe_cancel_at_period_end && (
+            <p className="text-sm text-amber-500 mt-2 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              Cancelamento agendado. Após essa data, sua conta será movida para o plano gratuito.
+            </p>
+          )}
+        </div>
 
         <div className="p-6 flex flex-wrap gap-3">
           {/* Botão Pagar - aparece quando tem plano mas assinatura não está ativa */}
