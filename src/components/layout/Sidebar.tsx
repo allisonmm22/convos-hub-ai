@@ -15,6 +15,7 @@ import {
   ChevronRight,
   LogOut,
   Megaphone,
+  CreditCard,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -30,6 +31,7 @@ const menuItems = [
   { icon: UserCog, label: 'Usuários', path: '/usuarios' },
   { icon: Plug, label: 'Conexão', path: '/conexao' },
   { icon: Puzzle, label: 'Integrações', path: '/integracoes' },
+  { icon: CreditCard, label: 'Minha Assinatura', path: '/minha-assinatura' },
   { icon: Settings, label: 'Configurações', path: '/configuracoes' },
 ];
 

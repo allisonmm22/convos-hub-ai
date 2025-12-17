@@ -434,6 +434,12 @@ export type Database = {
           permitir_multiplas_negociacoes: boolean | null
           plano_id: string | null
           reabrir_com_ia: boolean | null
+          stripe_cancel_at_period_end: boolean | null
+          stripe_current_period_end: string | null
+          stripe_current_period_start: string | null
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          stripe_subscription_status: string | null
           updated_at: string
         }
         Insert: {
@@ -445,6 +451,12 @@ export type Database = {
           permitir_multiplas_negociacoes?: boolean | null
           plano_id?: string | null
           reabrir_com_ia?: boolean | null
+          stripe_cancel_at_period_end?: boolean | null
+          stripe_current_period_end?: string | null
+          stripe_current_period_start?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          stripe_subscription_status?: string | null
           updated_at?: string
         }
         Update: {
@@ -456,6 +468,12 @@ export type Database = {
           permitir_multiplas_negociacoes?: boolean | null
           plano_id?: string | null
           reabrir_com_ia?: boolean | null
+          stripe_cancel_at_period_end?: boolean | null
+          stripe_current_period_end?: string | null
+          stripe_current_period_start?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          stripe_subscription_status?: string | null
           updated_at?: string
         }
         Relationships: [

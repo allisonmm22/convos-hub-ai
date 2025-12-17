@@ -125,3 +125,6 @@ verify_jwt = false
 
 [functions.stripe-test-connection]
 verify_jwt = false
+
+[functions.stripe-customer-portal]
+verify_jwt = false
