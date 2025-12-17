@@ -1186,6 +1186,48 @@ export type Database = {
           },
         ]
       }
+      negociacao_notas: {
+        Row: {
+          conteudo: string
+          created_at: string | null
+          id: string
+          negociacao_id: string
+          updated_at: string | null
+          usuario_id: string | null
+        }
+        Insert: {
+          conteudo: string
+          created_at?: string | null
+          id?: string
+          negociacao_id: string
+          updated_at?: string | null
+          usuario_id?: string | null
+        }
+        Update: {
+          conteudo?: string
+          created_at?: string | null
+          id?: string
+          negociacao_id?: string
+          updated_at?: string | null
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "negociacao_notas_negociacao_id_fkey"
+            columns: ["negociacao_id"]
+            isOneToOne: false
+            referencedRelation: "negociacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "negociacao_notas_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       negociacoes: {
         Row: {
           conta_id: string

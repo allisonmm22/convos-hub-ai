@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { 
   Loader2, 
@@ -39,7 +40,12 @@ import {
   MessageSquare,
   Sparkles,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Plus,
+  Pencil,
+  X,
+  StickyNote,
+  Calendar
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -84,6 +90,14 @@ interface Mensagem {
   enviada_por_ia: boolean;
 }
 
+interface Nota {
+  id: string;
+  conteudo: string;
+  usuario_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface NegociacaoDetalheModalProps {
   negociacao: Negociacao | null;
   isOpen: boolean;
@@ -104,6 +118,7 @@ export function NegociacaoDetalheModal({
   funis,
 }: NegociacaoDetalheModalProps) {
   const navigate = useNavigate();
+  const { usuario } = useAuth();
   const [editando, setEditando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -113,9 +128,18 @@ export function NegociacaoDetalheModal({
   const [titulo, setTitulo] = useState('');
   const [valor, setValor] = useState('');
   const [probabilidade, setProbabilidade] = useState(50);
-  const [notas, setNotas] = useState('');
   const [estagioId, setEstagioId] = useState('');
-  const [salvandoNotas, setSalvandoNotas] = useState(false);
+  const [salvandoEstagio, setSalvandoEstagio] = useState(false);
+  
+  // Notes state
+  const [notas, setNotas] = useState<Nota[]>([]);
+  const [loadingNotas, setLoadingNotas] = useState(false);
+  const [criandoNota, setCriandoNota] = useState(false);
+  const [novaNota, setNovaNota] = useState('');
+  const [salvandoNota, setSalvandoNota] = useState(false);
+  const [editandoNotaId, setEditandoNotaId] = useState<string | null>(null);
+  const [editandoNotaConteudo, setEditandoNotaConteudo] = useState('');
+  const [deletandoNotaId, setDeletandoNotaId] = useState<string | null>(null);
   
   // Conversa state
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
@@ -126,30 +150,44 @@ export function NegociacaoDetalheModal({
   const [gerandoResumo, setGerandoResumo] = useState(false);
   const [mensagensExpandidas, setMensagensExpandidas] = useState(false);
 
-  // All stages from all funnels
-  const todosEstagios = funis.flatMap(f => f.estagios.map(e => ({ ...e, funil_nome: f.nome })));
-
   useEffect(() => {
     if (negociacao) {
       setTitulo(negociacao.titulo);
       setValor(String(negociacao.valor || 0));
       setProbabilidade(negociacao.probabilidade || 50);
-      setNotas(negociacao.notas || '');
       setEstagioId(negociacao.estagio_id || '');
-      // Load saved summary if exists
       setResumo(negociacao.resumo_ia || null);
       setResumoGeradoEm(negociacao.resumo_gerado_em || null);
       setMensagensExpandidas(false);
+      setCriandoNota(false);
+      setEditandoNotaId(null);
       
-      // Fetch conversation
       fetchConversa(negociacao.contato_id);
+      fetchNotas(negociacao.id);
     }
   }, [negociacao]);
+
+  const fetchNotas = async (negociacaoId: string) => {
+    setLoadingNotas(true);
+    try {
+      const { data, error } = await supabase
+        .from('negociacao_notas')
+        .select('*')
+        .eq('negociacao_id', negociacaoId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setNotas(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar notas:', error);
+    } finally {
+      setLoadingNotas(false);
+    }
+  };
 
   const fetchConversa = async (contatoId: string) => {
     setLoadingMensagens(true);
     try {
-      // Find conversation for this contact
       const { data: conversaData } = await supabase
         .from('conversas')
         .select('id')
@@ -161,7 +199,6 @@ export function NegociacaoDetalheModal({
       if (conversaData) {
         setConversaId(conversaData.id);
         
-        // Fetch messages
         const { data: mensagensData } = await supabase
           .from('mensagens')
           .select('id, conteudo, direcao, created_at, enviada_por_ia')
@@ -181,6 +218,36 @@ export function NegociacaoDetalheModal({
     }
   };
 
+  const handleMudarEstagio = async (novoEstagioId: string) => {
+    if (!negociacao || novoEstagioId === estagioId) return;
+    
+    setSalvandoEstagio(true);
+    const estagioAnterior = estagioId;
+    setEstagioId(novoEstagioId);
+    
+    try {
+      const { error } = await supabase
+        .from('negociacoes')
+        .update({ estagio_id: novoEstagioId })
+        .eq('id', negociacao.id);
+
+      if (error) throw error;
+
+      onUpdate({
+        ...negociacao,
+        estagio_id: novoEstagioId,
+      });
+      
+      toast.success('Estágio atualizado!');
+    } catch (error) {
+      console.error('Erro ao atualizar estágio:', error);
+      setEstagioId(estagioAnterior);
+      toast.error('Erro ao atualizar estágio');
+    } finally {
+      setSalvandoEstagio(false);
+    }
+  };
+
   const handleSalvar = async () => {
     if (!negociacao) return;
     
@@ -192,7 +259,6 @@ export function NegociacaoDetalheModal({
           titulo: titulo.trim(),
           valor: parseFloat(valor) || 0,
           probabilidade,
-          estagio_id: estagioId || null,
         })
         .eq('id', negociacao.id);
 
@@ -203,9 +269,8 @@ export function NegociacaoDetalheModal({
         titulo: titulo.trim(),
         valor: parseFloat(valor) || 0,
         probabilidade,
-        notas: notas.trim() || undefined,
         estagio_id: estagioId,
-      } as Negociacao);
+      });
 
       setEditando(false);
       toast.success('Negociação atualizada!');
@@ -217,29 +282,80 @@ export function NegociacaoDetalheModal({
     }
   };
 
-  const handleSalvarNotas = async () => {
-    if (!negociacao || notas === (negociacao.notas || '')) return;
+  const handleCriarNota = async () => {
+    if (!negociacao || !novaNota.trim()) return;
     
-    setSalvandoNotas(true);
+    setSalvandoNota(true);
     try {
-      const { error } = await supabase
-        .from('negociacoes')
-        .update({ notas: notas.trim() || null })
-        .eq('id', negociacao.id);
+      const { data, error } = await supabase
+        .from('negociacao_notas')
+        .insert({
+          negociacao_id: negociacao.id,
+          conteudo: novaNota.trim(),
+          usuario_id: usuario?.id || null,
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
-      onUpdate({
-        ...negociacao,
-        notas: notas.trim() || undefined,
-      });
-      
-      toast.success('Notas salvas!');
+      setNotas([data, ...notas]);
+      setNovaNota('');
+      setCriandoNota(false);
+      toast.success('Nota criada!');
     } catch (error) {
-      console.error('Erro ao salvar notas:', error);
-      toast.error('Erro ao salvar notas');
+      console.error('Erro ao criar nota:', error);
+      toast.error('Erro ao criar nota');
     } finally {
-      setSalvandoNotas(false);
+      setSalvandoNota(false);
+    }
+  };
+
+  const handleEditarNota = async (notaId: string) => {
+    if (!editandoNotaConteudo.trim()) return;
+    
+    setSalvandoNota(true);
+    try {
+      const { error } = await supabase
+        .from('negociacao_notas')
+        .update({ conteudo: editandoNotaConteudo.trim() })
+        .eq('id', notaId);
+
+      if (error) throw error;
+
+      setNotas(notas.map(n => 
+        n.id === notaId 
+          ? { ...n, conteudo: editandoNotaConteudo.trim(), updated_at: new Date().toISOString() }
+          : n
+      ));
+      setEditandoNotaId(null);
+      setEditandoNotaConteudo('');
+      toast.success('Nota atualizada!');
+    } catch (error) {
+      console.error('Erro ao editar nota:', error);
+      toast.error('Erro ao editar nota');
+    } finally {
+      setSalvandoNota(false);
+    }
+  };
+
+  const handleDeletarNota = async (notaId: string) => {
+    setDeletandoNotaId(notaId);
+    try {
+      const { error } = await supabase
+        .from('negociacao_notas')
+        .delete()
+        .eq('id', notaId);
+
+      if (error) throw error;
+
+      setNotas(notas.filter(n => n.id !== notaId));
+      toast.success('Nota excluída!');
+    } catch (error) {
+      console.error('Erro ao excluir nota:', error);
+      toast.error('Erro ao excluir nota');
+    } finally {
+      setDeletandoNotaId(null);
     }
   };
 
@@ -288,7 +404,6 @@ export function NegociacaoDetalheModal({
       setResumo(data.resumo);
       setResumoGeradoEm(novaData);
       
-      // Update parent state with new summary
       onUpdate({
         ...negociacao,
         resumo_ia: data.resumo,
@@ -320,7 +435,19 @@ export function NegociacaoDetalheModal({
     });
   };
 
+  const formatNotaDate = (date: string) => {
+    return new Date(date).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   if (!negociacao) return null;
+
+  const estagioAtual = estagios.find(e => e.id === estagioId);
 
   return (
     <>
@@ -403,49 +530,47 @@ export function NegociacaoDetalheModal({
                 )}
               </div>
 
+              {/* Estágio - Sempre Editável */}
               <div className="space-y-2">
-                <Label>Estágio</Label>
-                {editando ? (
-                  <Select value={estagioId} onValueChange={setEstagioId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um estágio" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {funis.map((funil) => (
-                        <div key={funil.id}>
-                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-                            {funil.nome}
-                          </div>
-                          {funil.estagios.map((estagio) => (
-                            <SelectItem key={estagio.id} value={estagio.id}>
-                              <div className="flex items-center gap-2">
-                                <div 
-                                  className="h-2.5 w-2.5 rounded-full" 
-                                  style={{ backgroundColor: estagio.cor }}
-                                />
-                                {estagio.nome}
-                              </div>
-                            </SelectItem>
-                          ))}
+                <Label className="flex items-center gap-2">
+                  Estágio
+                  {salvandoEstagio && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                </Label>
+                <Select value={estagioId} onValueChange={handleMudarEstagio} disabled={salvandoEstagio}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um estágio">
+                      {estagioAtual && (
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="h-2.5 w-2.5 rounded-full" 
+                            style={{ backgroundColor: estagioAtual.cor }}
+                          />
+                          {estagioAtual.nome}
                         </div>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    {estagios.find(e => e.id === negociacao.estagio_id) && (
-                      <>
-                        <div 
-                          className="h-3 w-3 rounded-full" 
-                          style={{ backgroundColor: estagios.find(e => e.id === negociacao.estagio_id)?.cor }}
-                        />
-                        <span className="text-foreground">
-                          {estagios.find(e => e.id === negociacao.estagio_id)?.nome}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                )}
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {funis.map((funil) => (
+                      <div key={funil.id}>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                          {funil.nome}
+                        </div>
+                        {funil.estagios.map((estagio) => (
+                          <SelectItem key={estagio.id} value={estagio.id}>
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className="h-2.5 w-2.5 rounded-full" 
+                                style={{ backgroundColor: estagio.cor }}
+                              />
+                              {estagio.nome}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </div>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -467,25 +592,150 @@ export function NegociacaoDetalheModal({
                   </div>
                 )}
               </div>
+            </div>
 
-              <div className="col-span-2 space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Notas</Label>
-                  {salvandoNotas && (
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Salvando...
-                    </span>
-                  )}
-                </div>
-                <Textarea
-                  value={notas}
-                  onChange={(e) => setNotas(e.target.value)}
-                  onBlur={handleSalvarNotas}
-                  placeholder="Anotações sobre a negociação..."
-                  rows={3}
-                />
+            {/* Notas com Histórico */}
+            <div className="border-t border-border pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-semibold text-foreground flex items-center gap-2">
+                  <StickyNote className="h-4 w-4" />
+                  Notas
+                </h4>
+                {!criandoNota && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCriandoNota(true)}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Nova Nota
+                  </Button>
+                )}
               </div>
+
+              {/* Criar Nova Nota */}
+              {criandoNota && (
+                <div className="mb-4 p-3 rounded-lg border border-border bg-muted/30">
+                  <Textarea
+                    value={novaNota}
+                    onChange={(e) => setNovaNota(e.target.value)}
+                    placeholder="Escreva sua nota..."
+                    rows={3}
+                    autoFocus
+                  />
+                  <div className="flex justify-end gap-2 mt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setCriandoNota(false);
+                        setNovaNota('');
+                      }}
+                      disabled={salvandoNota}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleCriarNota}
+                      disabled={salvandoNota || !novaNota.trim()}
+                    >
+                      {salvandoNota ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                      Salvar
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Lista de Notas */}
+              {loadingNotas ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : notas.length > 0 ? (
+                <div className="space-y-3 max-h-[250px] overflow-y-auto">
+                  {notas.map((nota) => (
+                    <div
+                      key={nota.id}
+                      className="p-3 rounded-lg border border-border bg-card"
+                    >
+                      {editandoNotaId === nota.id ? (
+                        <>
+                          <Textarea
+                            value={editandoNotaConteudo}
+                            onChange={(e) => setEditandoNotaConteudo(e.target.value)}
+                            rows={3}
+                            autoFocus
+                          />
+                          <div className="flex justify-end gap-2 mt-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditandoNotaId(null);
+                                setEditandoNotaConteudo('');
+                              }}
+                              disabled={salvandoNota}
+                            >
+                              Cancelar
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleEditarNota(nota.id)}
+                              disabled={salvandoNota || !editandoNotaConteudo.trim()}
+                            >
+                              {salvandoNota ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                              Salvar
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm text-foreground whitespace-pre-wrap break-words">
+                            {nota.conteudo}
+                          </p>
+                          <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Calendar className="h-3 w-3" />
+                              {formatNotaDate(nota.created_at)}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => {
+                                  setEditandoNotaId(nota.id);
+                                  setEditandoNotaConteudo(nota.conteudo);
+                                }}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                onClick={() => handleDeletarNota(nota.id)}
+                                disabled={deletandoNotaId === nota.id}
+                              >
+                                {deletandoNotaId === nota.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Nenhuma nota adicionada
+                </p>
+              )}
             </div>
 
             {/* Contato */}
