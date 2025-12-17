@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import {
   TrendingUp,
@@ -7,11 +8,13 @@ import {
   DollarSign,
   Plug,
   PlugZap,
-  ArrowUpRight,
-  ArrowDownRight,
   Sparkles,
   Zap,
   RefreshCw,
+  Trophy,
+  XCircle,
+  Bot,
+  Clock,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,8 +23,7 @@ import { useOnboarding } from '@/contexts/OnboardingContext';
 import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
 import { EscolhaConexaoModal } from '@/components/onboarding/EscolhaConexaoModal';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { differenceInDays, format } from 'date-fns';
+import { differenceInDays, format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface DashboardStats {
@@ -37,9 +39,49 @@ interface DashboardStats {
   agenteConfigurado: boolean;
   diasParaReset: number | null;
   dataReset: string | null;
+  // Novas métricas
+  negociacoesGanhas: number;
+  negociacoesPerdidas: number;
+  valorGanho: number;
+  valorPerdido: number;
+  taxaConversao: number;
+  conversasAtivas: number;
+  mensagensIAHoje: number;
+}
+
+interface ConversaRecente {
+  id: string;
+  ultima_mensagem: string | null;
+  ultima_mensagem_at: string | null;
+  status: string | null;
+  contato: {
+    id: string;
+    nome: string;
+    avatar_url: string | null;
+    telefone: string;
+  } | null;
+}
+
+interface NegociacaoRecente {
+  id: string;
+  titulo: string;
+  valor: number | null;
+  status: string | null;
+  created_at: string;
+  estagio: {
+    id: string;
+    nome: string;
+    cor: string | null;
+    tipo: string | null;
+  } | null;
+  contato: {
+    id: string;
+    nome: string;
+  } | null;
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { usuario } = useAuth();
   const isMobile = useIsMobile();
   const { isOnboardingActive, currentStep, startOnboarding } = useOnboarding();
@@ -57,28 +99,99 @@ export default function Dashboard() {
     agenteConfigurado: false,
     diasParaReset: null,
     dataReset: null,
+    negociacoesGanhas: 0,
+    negociacoesPerdidas: 0,
+    valorGanho: 0,
+    valorPerdido: 0,
+    taxaConversao: 0,
+    conversasAtivas: 0,
+    mensagensIAHoje: 0,
   });
+  const [conversasRecentes, setConversasRecentes] = useState<ConversaRecente[]>([]);
+  const [negociacoesRecentes, setNegociacoesRecentes] = useState<NegociacaoRecente[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (usuario?.conta_id) {
       fetchStats();
+      fetchConversasRecentes();
+      fetchNegociacoesRecentes();
     }
   }, [usuario]);
 
-  // Abrir modal de escolha quando onboarding inicia
   useEffect(() => {
     if (isOnboardingActive && currentStep === 'escolha_conexao') {
       setShowEscolhaConexao(true);
     }
   }, [isOnboardingActive, currentStep]);
 
+  const fetchConversasRecentes = async () => {
+    const { data } = await supabase
+      .from('conversas')
+      .select(`
+        id, 
+        ultima_mensagem, 
+        ultima_mensagem_at, 
+        status,
+        contato:contatos(id, nome, avatar_url, telefone)
+      `)
+      .eq('conta_id', usuario!.conta_id)
+      .order('ultima_mensagem_at', { ascending: false })
+      .limit(5);
+
+    if (data) {
+      setConversasRecentes(data as unknown as ConversaRecente[]);
+    }
+  };
+
+  const fetchNegociacoesRecentes = async () => {
+    const { data } = await supabase
+      .from('negociacoes')
+      .select(`
+        id, 
+        titulo, 
+        valor, 
+        status,
+        created_at,
+        estagio:estagios(id, nome, cor, tipo),
+        contato:contatos(id, nome)
+      `)
+      .eq('conta_id', usuario!.conta_id)
+      .order('updated_at', { ascending: false })
+      .limit(5);
+
+    if (data) {
+      setNegociacoesRecentes(data as unknown as NegociacaoRecente[]);
+    }
+  };
+
   const fetchStats = async () => {
     try {
-      const [negociacoes, contatos, mensagens, conexao, contaComPlano, agentes] = await Promise.all([
-        supabase.from('negociacoes').select('valor').eq('conta_id', usuario!.conta_id),
+      // Buscar negociações com informação de etapa para calcular ganho/perda
+      const { data: negociacoesComEstagio } = await supabase
+        .from('negociacoes')
+        .select(`
+          id, 
+          valor, 
+          status,
+          estagio:estagios(tipo)
+        `)
+        .eq('conta_id', usuario!.conta_id);
+
+      // Calcular métricas de ganho/perda pelo tipo da etapa
+      const ganhas = negociacoesComEstagio?.filter(n => (n.estagio as any)?.tipo === 'ganho') || [];
+      const perdidas = negociacoesComEstagio?.filter(n => (n.estagio as any)?.tipo === 'perdido') || [];
+      const abertas = negociacoesComEstagio?.filter(n => (n.estagio as any)?.tipo === 'normal' || !(n.estagio as any)?.tipo) || [];
+      
+      const valorGanho = ganhas.reduce((acc, n) => acc + Number(n.valor || 0), 0);
+      const valorPerdido = perdidas.reduce((acc, n) => acc + Number(n.valor || 0), 0);
+      const valorAberto = abertas.reduce((acc, n) => acc + Number(n.valor || 0), 0);
+      
+      const totalFechadas = ganhas.length + perdidas.length;
+      const taxaConversao = totalFechadas > 0 ? (ganhas.length / totalFechadas) * 100 : 0;
+
+      const [contatos, conexao, contaComPlano, agentes, conversasAtivas] = await Promise.all([
         supabase.from('contatos').select('id', { count: 'exact' }).eq('conta_id', usuario!.conta_id),
-        supabase.from('mensagens').select('id', { count: 'exact' }),
         supabase.from('conexoes_whatsapp').select('status').eq('conta_id', usuario!.conta_id).maybeSingle(),
         supabase
           .from('contas')
@@ -86,6 +199,7 @@ export default function Dashboard() {
           .eq('id', usuario!.conta_id)
           .single(),
         supabase.from('agent_ia').select('id, prompt_sistema').eq('conta_id', usuario!.conta_id),
+        supabase.from('conversas').select('id', { count: 'exact' }).eq('conta_id', usuario!.conta_id).in('status', ['em_atendimento', 'aguardando_cliente']),
       ]);
 
       // Determinar início do ciclo (Stripe ou primeiro dia do mês)
@@ -98,11 +212,9 @@ export default function Dashboard() {
           ? new Date(contaComPlano.data.stripe_current_period_end) 
           : null;
       } else {
-        // Fallback: primeiro dia do mês atual
         inicioCiclo = new Date();
         inicioCiclo.setDate(1);
         inicioCiclo.setHours(0, 0, 0, 0);
-        // Fim do mês
         fimCiclo = new Date(inicioCiclo.getFullYear(), inicioCiclo.getMonth() + 1, 0);
       }
 
@@ -113,20 +225,28 @@ export default function Dashboard() {
         .gte('created_at', inicioCiclo.toISOString())
         .eq('enviada_por_ia', true);
 
+      // Contar mensagens IA de hoje
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      const { count: mensagensIAHoje } = await supabase
+        .from('mensagens')
+        .select('id', { count: 'exact' })
+        .gte('created_at', hoje.toISOString())
+        .eq('enviada_por_ia', true);
+
       const temAgente = agentes.data && agentes.data.length > 0 && 
         agentes.data.some(a => a.prompt_sistema && a.prompt_sistema.length > 50);
 
       const planoData = contaComPlano.data?.plano as { nome: string; limite_mensagens_mes: number } | null;
 
-      // Calcular dias para reset
       const diasParaReset = fimCiclo ? differenceInDays(fimCiclo, new Date()) : null;
       const dataReset = fimCiclo ? format(fimCiclo, "dd 'de' MMMM", { locale: ptBR }) : null;
 
       setStats({
-        totalNegociacoes: negociacoes.data?.length || 0,
-        valorTotal: negociacoes.data?.reduce((acc, n) => acc + Number(n.valor || 0), 0) || 0,
+        totalNegociacoes: abertas.length,
+        valorTotal: valorAberto,
         totalContatos: contatos.count || 0,
-        totalMensagens: mensagens.count || 0,
+        totalMensagens: 0,
         mensagensEsteMes: mensagensMesCount || 0,
         limiteMensagens: planoData?.limite_mensagens_mes || 10000,
         nomePlano: planoData?.nome || 'Sem plano',
@@ -135,6 +255,13 @@ export default function Dashboard() {
         agenteConfigurado: temAgente,
         diasParaReset,
         dataReset,
+        negociacoesGanhas: ganhas.length,
+        negociacoesPerdidas: perdidas.length,
+        valorGanho,
+        valorPerdido,
+        taxaConversao,
+        conversasAtivas: conversasAtivas.count || 0,
+        mensagensIAHoje: mensagensIAHoje || 0,
       });
     } catch (error) {
       console.error('Erro ao buscar stats:', error);
@@ -155,51 +282,6 @@ export default function Dashboard() {
     setShowEscolhaConexao(true);
   };
 
-  const cards = [
-    {
-      title: 'Negociações Ativas',
-      value: stats.totalNegociacoes,
-      change: '+12%',
-      trend: 'up',
-      icon: TrendingUp,
-      color: 'text-primary',
-      bgColor: 'bg-primary/10',
-    },
-    {
-      title: 'Valor em Pipeline',
-      value: formatCurrency(stats.valorTotal),
-      change: '+8.5%',
-      trend: 'up',
-      icon: DollarSign,
-      color: 'text-success',
-      bgColor: 'bg-success/10',
-    },
-    {
-      title: 'Total de Contatos',
-      value: stats.totalContatos,
-      change: '+24%',
-      trend: 'up',
-      icon: Users,
-      color: 'text-info',
-      bgColor: 'bg-info/10',
-    },
-    {
-      title: 'Mensagens Hoje',
-      value: stats.totalMensagens,
-      change: '-3%',
-      trend: 'down',
-      icon: MessageSquare,
-      color: 'text-warning',
-      bgColor: 'bg-warning/10',
-    },
-  ];
-
-  // Verificar se falta alguma configuração (mostrar tutorial se qualquer uma não estiver completa)
-  const needsSetup = stats.conexaoStatus !== 'conectado' || 
-    !stats.openaiConfigurado || 
-    !stats.agenteConfigurado;
-
-  // Cálculo do uso de mensagens
   const percentualUso = stats.limiteMensagens >= 999999 
     ? 0 
     : Math.min((stats.mensagensEsteMes / stats.limiteMensagens) * 100, 100);
@@ -219,6 +301,25 @@ export default function Dashboard() {
   const formatNumber = (num: number) => {
     if (num >= 999999) return '∞';
     return num.toLocaleString('pt-BR');
+  };
+
+  const getInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  };
+
+  const formatRelativeTime = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    return formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale: ptBR });
+  };
+
+  const needsSetup = stats.conexaoStatus !== 'conectado' || 
+    !stats.openaiConfigurado || 
+    !stats.agenteConfigurado;
+
+  const getEstagioIcon = (tipo: string | null) => {
+    if (tipo === 'ganho') return <Trophy className="h-4 w-4 text-success" />;
+    if (tipo === 'perdido') return <XCircle className="h-4 w-4 text-destructive" />;
+    return <Clock className="h-4 w-4 text-warning" />;
   };
 
   return (
@@ -241,7 +342,7 @@ export default function Dashboard() {
         </div>
 
         {/* Onboarding Progress Card */}
-        {!loading && (stats.conexaoStatus !== 'conectado' || !stats.openaiConfigurado || !stats.agenteConfigurado) && (
+        {!loading && needsSetup && (
           <OnboardingProgress 
             conexaoStatus={stats.conexaoStatus === 'conectado'}
             openaiStatus={stats.openaiConfigurado}
@@ -319,7 +420,6 @@ export default function Dashboard() {
                 />
               </div>
               
-              {/* Dias para reset */}
               {stats.diasParaReset !== null && stats.diasParaReset >= 0 && (
                 <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
                   <RefreshCw className="h-4 w-4 text-muted-foreground" />
@@ -339,64 +439,186 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
-          {cards.map((card, index) => (
-            <div
-              key={index}
-              className="p-4 md:p-6 rounded-xl bg-card border border-border hover:border-primary/50 transition-all duration-300 card-hover"
-              style={{ animationDelay: `${index * 100}ms` }}
-            >
-              <div className="flex items-start justify-between">
-                <div className={`flex h-10 w-10 md:h-12 md:w-12 items-center justify-center rounded-xl ${card.bgColor}`}>
-                  <card.icon className={`h-5 w-5 md:h-6 md:w-6 ${card.color}`} />
-                </div>
-                {!isMobile && (
-                  <div
-                    className={`flex items-center gap-1 text-sm ${
-                      card.trend === 'up' ? 'text-success' : 'text-destructive'
-                    }`}
-                  >
-                    {card.change}
-                    {card.trend === 'up' ? (
-                      <ArrowUpRight className="h-4 w-4" />
-                    ) : (
-                      <ArrowDownRight className="h-4 w-4" />
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="mt-3 md:mt-4">
-                <p className="text-lg md:text-2xl font-bold text-foreground truncate">{card.value}</p>
-                <p className="text-xs md:text-sm text-muted-foreground mt-1">{card.title}</p>
+        {/* Cards de Vendas - Linha 1 */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+          {/* Pipeline */}
+          <div className="p-4 md:p-5 rounded-xl bg-card border border-border hover:border-primary/50 transition-all">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+                <DollarSign className="h-5 w-5 text-primary" />
               </div>
             </div>
-          ))}
+            <p className="text-lg md:text-xl font-bold text-foreground">{formatCurrency(stats.valorTotal)}</p>
+            <p className="text-xs text-muted-foreground mt-1">{stats.totalNegociacoes} negociações em aberto</p>
+          </div>
+
+          {/* Ganhos */}
+          <div className="p-4 md:p-5 rounded-xl bg-card border border-success/30 hover:border-success/50 transition-all">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success/10">
+                <Trophy className="h-5 w-5 text-success" />
+              </div>
+            </div>
+            <p className="text-lg md:text-xl font-bold text-success">{formatCurrency(stats.valorGanho)}</p>
+            <p className="text-xs text-muted-foreground mt-1">{stats.negociacoesGanhas} negociações ganhas</p>
+          </div>
+
+          {/* Perdidos */}
+          <div className="p-4 md:p-5 rounded-xl bg-card border border-destructive/30 hover:border-destructive/50 transition-all">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-destructive/10">
+                <XCircle className="h-5 w-5 text-destructive" />
+              </div>
+            </div>
+            <p className="text-lg md:text-xl font-bold text-destructive">{formatCurrency(stats.valorPerdido)}</p>
+            <p className="text-xs text-muted-foreground mt-1">{stats.negociacoesPerdidas} negociações perdidas</p>
+          </div>
+
+          {/* Taxa de Conversão */}
+          <div className="p-4 md:p-5 rounded-xl bg-card border border-border hover:border-primary/50 transition-all">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-info/10">
+                <TrendingUp className="h-5 w-5 text-info" />
+              </div>
+            </div>
+            <p className="text-lg md:text-xl font-bold text-foreground">{stats.taxaConversao.toFixed(1)}%</p>
+            <p className="text-xs text-muted-foreground mt-1">Taxa de conversão</p>
+          </div>
         </div>
 
-        {/* Quick Actions */}
+        {/* Cards Operacionais - Linha 2 */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+          {/* Contatos */}
+          <div className="p-4 md:p-5 rounded-xl bg-card border border-border hover:border-primary/50 transition-all">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-info/10">
+                <Users className="h-5 w-5 text-info" />
+              </div>
+            </div>
+            <p className="text-lg md:text-xl font-bold text-foreground">{stats.totalContatos}</p>
+            <p className="text-xs text-muted-foreground mt-1">Total de contatos</p>
+          </div>
+
+          {/* Conversas */}
+          <div className="p-4 md:p-5 rounded-xl bg-card border border-border hover:border-primary/50 transition-all">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-warning/10">
+                <MessageSquare className="h-5 w-5 text-warning" />
+              </div>
+            </div>
+            <p className="text-lg md:text-xl font-bold text-foreground">{stats.conversasAtivas}</p>
+            <p className="text-xs text-muted-foreground mt-1">Conversas ativas</p>
+          </div>
+
+          {/* IA Hoje */}
+          <div className="p-4 md:p-5 rounded-xl bg-card border border-border hover:border-primary/50 transition-all">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+                <Bot className="h-5 w-5 text-primary" />
+              </div>
+            </div>
+            <p className="text-lg md:text-xl font-bold text-foreground">{stats.mensagensIAHoje}</p>
+            <p className="text-xs text-muted-foreground mt-1">Mensagens IA hoje</p>
+          </div>
+
+          {/* Uso Mensal */}
+          <div className="p-4 md:p-5 rounded-xl bg-card border border-border hover:border-primary/50 transition-all">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success/10">
+                <Zap className="h-5 w-5 text-success" />
+              </div>
+            </div>
+            <p className="text-lg md:text-xl font-bold text-foreground">{formatNumber(stats.mensagensEsteMes)}</p>
+            <p className="text-xs text-muted-foreground mt-1">/ {formatNumber(stats.limiteMensagens)} mensagens</p>
+          </div>
+        </div>
+
+        {/* Barra de Performance */}
+        {(stats.negociacoesGanhas > 0 || stats.negociacoesPerdidas > 0) && (
+          <div className="p-4 md:p-6 rounded-xl bg-card border border-border">
+            <h3 className="text-base md:text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-warning" />
+              Resumo de Performance
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground w-20">Ganhos</span>
+                <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-success transition-all duration-500"
+                    style={{ width: `${stats.taxaConversao}%` }}
+                  />
+                </div>
+                <span className="text-sm font-medium text-success w-20 text-right">
+                  {stats.taxaConversao.toFixed(1)}% ({stats.negociacoesGanhas})
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground w-20">Perdas</span>
+                <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-destructive transition-all duration-500"
+                    style={{ width: `${100 - stats.taxaConversao}%` }}
+                  />
+                </div>
+                <span className="text-sm font-medium text-destructive w-20 text-right">
+                  {(100 - stats.taxaConversao).toFixed(1)}% ({stats.negociacoesPerdidas})
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Últimas Conversas e Negociações */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
           {/* Últimas Conversas */}
           <div className="p-4 md:p-6 rounded-xl bg-card border border-border">
-            <h3 className="text-base md:text-lg font-semibold text-foreground mb-3 md:mb-4">Últimas Conversas</h3>
+            <h3 className="text-base md:text-lg font-semibold text-foreground mb-3 md:mb-4 flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-primary" />
+              Últimas Conversas
+            </h3>
             <div className="space-y-3 md:space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 md:gap-4 p-2.5 md:p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
-                >
-                  <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold text-sm md:text-base flex-shrink-0">
-                    C{i}
+              {conversasRecentes.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">Nenhuma conversa ainda</p>
+              ) : (
+                conversasRecentes.map((conversa) => (
+                  <div
+                    key={conversa.id}
+                    onClick={() => navigate(`/conversas?contato=${conversa.contato?.id}`)}
+                    className="flex items-center gap-3 md:gap-4 p-2.5 md:p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+                  >
+                    {conversa.contato?.avatar_url ? (
+                      <img 
+                        src={conversa.contato.avatar_url} 
+                        alt={conversa.contato.nome}
+                        className="h-9 w-9 md:h-10 md:w-10 rounded-full object-cover flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold text-sm md:text-base flex-shrink-0">
+                        {getInitials(conversa.contato?.nome || 'C')}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-foreground truncate text-sm md:text-base">
+                          {conversa.contato?.nome || 'Contato'}
+                        </p>
+                        {conversa.status === 'encerrado' && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                            Encerrado
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs md:text-sm text-muted-foreground truncate">
+                        {conversa.ultima_mensagem || 'Sem mensagens'}
+                      </p>
+                    </div>
+                    <div className="text-xs text-muted-foreground flex-shrink-0">
+                      {formatRelativeTime(conversa.ultima_mensagem_at)}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate text-sm md:text-base">Contato {i}</p>
-                    <p className="text-xs md:text-sm text-muted-foreground truncate">
-                      Última mensagem do contato...
-                    </p>
-                  </div>
-                  <div className="text-xs text-muted-foreground flex-shrink-0">10:3{i}</div>
-                </div>
-              ))}
+                ))
+              )}
               <a
                 href="/conversas"
                 className="block text-center text-sm text-primary hover:underline pt-1"
@@ -408,29 +630,62 @@ export default function Dashboard() {
 
           {/* Negociações Recentes */}
           <div className="p-4 md:p-6 rounded-xl bg-card border border-border">
-            <h3 className="text-base md:text-lg font-semibold text-foreground mb-3 md:mb-4">Negociações Recentes</h3>
+            <h3 className="text-base md:text-lg font-semibold text-foreground mb-3 md:mb-4 flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-success" />
+              Negociações Recentes
+            </h3>
             <div className="space-y-3 md:space-y-4">
-              {[
-                { nome: 'Proposta ABC Corp', valor: 15000, estagio: 'Negociação' },
-                { nome: 'Contrato XYZ Ltda', valor: 8500, estagio: 'Proposta Enviada' },
-                { nome: 'Lead Novo', valor: 3200, estagio: 'Novo Lead' },
-              ].map((deal, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 md:gap-4 p-2.5 md:p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
-                >
-                  <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-full bg-success/20 text-success flex-shrink-0">
-                    <DollarSign className="h-4 w-4 md:h-5 md:w-5" />
+              {negociacoesRecentes.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">Nenhuma negociação ainda</p>
+              ) : (
+                negociacoesRecentes.map((neg) => (
+                  <div
+                    key={neg.id}
+                    onClick={() => navigate('/crm')}
+                    className="flex items-center gap-3 md:gap-4 p-2.5 md:p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+                  >
+                    <div className="flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-full flex-shrink-0"
+                      style={{ 
+                        backgroundColor: neg.estagio?.tipo === 'ganho' 
+                          ? 'hsl(var(--success) / 0.2)' 
+                          : neg.estagio?.tipo === 'perdido'
+                          ? 'hsl(var(--destructive) / 0.2)'
+                          : 'hsl(var(--warning) / 0.2)'
+                      }}
+                    >
+                      {getEstagioIcon(neg.estagio?.tipo || null)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground truncate text-sm md:text-base">
+                        {neg.titulo}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <span 
+                          className="inline-flex items-center text-xs px-1.5 py-0.5 rounded"
+                          style={{ 
+                            backgroundColor: `${neg.estagio?.cor || '#6b7280'}20`,
+                            color: neg.estagio?.cor || '#6b7280'
+                          }}
+                        >
+                          {neg.estagio?.nome || 'Sem etapa'}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {neg.contato?.nome}
+                        </span>
+                      </div>
+                    </div>
+                    <div className={`text-xs md:text-sm font-semibold flex-shrink-0 ${
+                      neg.estagio?.tipo === 'ganho' 
+                        ? 'text-success' 
+                        : neg.estagio?.tipo === 'perdido'
+                        ? 'text-destructive'
+                        : 'text-foreground'
+                    }`}>
+                      {formatCurrency(neg.valor || 0)}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate text-sm md:text-base">{deal.nome}</p>
-                    <p className="text-xs md:text-sm text-muted-foreground">{deal.estagio}</p>
-                  </div>
-                  <div className="text-xs md:text-sm font-semibold text-success flex-shrink-0">
-                    {formatCurrency(deal.valor)}
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
               <a href="/crm" className="block text-center text-sm text-primary hover:underline pt-1">
                 Ver todas
               </a>
@@ -442,7 +697,7 @@ export default function Dashboard() {
       {/* Modal de Escolha de Conexão */}
       <EscolhaConexaoModal 
         open={showEscolhaConexao} 
-        onOpenChange={setShowEscolhaConexao} 
+        onOpenChange={setShowEscolhaConexao}
       />
     </MainLayout>
   );
