@@ -112,10 +112,10 @@ export function NegociacaoDetalheModal({
   // Form state
   const [titulo, setTitulo] = useState('');
   const [valor, setValor] = useState('');
-  const [status, setStatus] = useState('aberto');
   const [probabilidade, setProbabilidade] = useState(50);
   const [notas, setNotas] = useState('');
   const [estagioId, setEstagioId] = useState('');
+  const [salvandoNotas, setSalvandoNotas] = useState(false);
   
   // Conversa state
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
@@ -133,7 +133,6 @@ export function NegociacaoDetalheModal({
     if (negociacao) {
       setTitulo(negociacao.titulo);
       setValor(String(negociacao.valor || 0));
-      setStatus(negociacao.status || 'aberto');
       setProbabilidade(negociacao.probabilidade || 50);
       setNotas(negociacao.notas || '');
       setEstagioId(negociacao.estagio_id || '');
@@ -192,9 +191,7 @@ export function NegociacaoDetalheModal({
         .update({
           titulo: titulo.trim(),
           valor: parseFloat(valor) || 0,
-          status: status as 'aberto' | 'ganho' | 'perdido',
           probabilidade,
-          notas: notas.trim() || null,
           estagio_id: estagioId || null,
         })
         .eq('id', negociacao.id);
@@ -205,7 +202,6 @@ export function NegociacaoDetalheModal({
         ...negociacao,
         titulo: titulo.trim(),
         valor: parseFloat(valor) || 0,
-        status: status as 'aberto' | 'ganho' | 'perdido',
         probabilidade,
         notas: notas.trim() || undefined,
         estagio_id: estagioId,
@@ -218,6 +214,32 @@ export function NegociacaoDetalheModal({
       toast.error('Erro ao atualizar negociação');
     } finally {
       setSalvando(false);
+    }
+  };
+
+  const handleSalvarNotas = async () => {
+    if (!negociacao || notas === (negociacao.notas || '')) return;
+    
+    setSalvandoNotas(true);
+    try {
+      const { error } = await supabase
+        .from('negociacoes')
+        .update({ notas: notas.trim() || null })
+        .eq('id', negociacao.id);
+
+      if (error) throw error;
+
+      onUpdate({
+        ...negociacao,
+        notas: notas.trim() || undefined,
+      });
+      
+      toast.success('Notas salvas!');
+    } catch (error) {
+      console.error('Erro ao salvar notas:', error);
+      toast.error('Erro ao salvar notas');
+    } finally {
+      setSalvandoNotas(false);
     }
   };
 
@@ -382,31 +404,6 @@ export function NegociacaoDetalheModal({
               </div>
 
               <div className="space-y-2">
-                <Label>Status</Label>
-                {editando ? (
-                  <Select value={status} onValueChange={setStatus}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="aberto">Aberto</SelectItem>
-                      <SelectItem value="ganho">Ganho</SelectItem>
-                      <SelectItem value="perdido">Perdido</SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <div className={cn(
-                    'inline-flex px-2.5 py-1 rounded-full text-sm font-medium',
-                    negociacao.status === 'ganho' && 'bg-success/20 text-success',
-                    negociacao.status === 'perdido' && 'bg-destructive/20 text-destructive',
-                    negociacao.status === 'aberto' && 'bg-primary/20 text-primary'
-                  )}>
-                    {negociacao.status === 'ganho' ? 'Ganho' : negociacao.status === 'perdido' ? 'Perdido' : 'Aberto'}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
                 <Label>Estágio</Label>
                 {editando ? (
                   <Select value={estagioId} onValueChange={setEstagioId}>
@@ -472,19 +469,22 @@ export function NegociacaoDetalheModal({
               </div>
 
               <div className="col-span-2 space-y-2">
-                <Label>Notas</Label>
-                {editando ? (
-                  <Textarea
-                    value={notas}
-                    onChange={(e) => setNotas(e.target.value)}
-                    placeholder="Anotações sobre a negociação..."
-                    rows={3}
-                  />
-                ) : (
-                  <p className="text-muted-foreground text-sm">
-                    {negociacao.notas || 'Sem anotações'}
-                  </p>
-                )}
+                <div className="flex items-center justify-between">
+                  <Label>Notas</Label>
+                  {salvandoNotas && (
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Salvando...
+                    </span>
+                  )}
+                </div>
+                <Textarea
+                  value={notas}
+                  onChange={(e) => setNotas(e.target.value)}
+                  onBlur={handleSalvarNotas}
+                  placeholder="Anotações sobre a negociação..."
+                  rows={3}
+                />
               </div>
             </div>
 
