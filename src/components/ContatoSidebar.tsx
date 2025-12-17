@@ -852,36 +852,6 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
               </button>
             </div>
 
-            {/* Card de Resumo */}
-            {negociacoes.length > 0 && (
-              <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent rounded-2xl border border-primary/20 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <TrendingUp className="h-4 w-4 text-primary" />
-                  <span className="text-xs font-semibold text-primary uppercase tracking-wider">Resumo</span>
-                </div>
-                
-                <div className="text-2xl font-bold text-foreground mb-4">
-                  {formatCurrency(resumoNegociacoes.valorAberto)}
-                  <span className="text-xs font-normal text-muted-foreground ml-2">em aberto</span>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-2.5 w-2.5 rounded-full bg-blue-500" />
-                    <span className="text-xs text-muted-foreground">{resumoNegociacoes.abertas} abertas</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                    <span className="text-xs text-muted-foreground">{resumoNegociacoes.ganhas} ganhas</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-2.5 w-2.5 rounded-full bg-red-500" />
-                    <span className="text-xs text-muted-foreground">{resumoNegociacoes.perdidas} perdidas</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Lista de Negociações */}
             {loadingNegociacoes ? (
               <div className="flex items-center justify-center py-8">
