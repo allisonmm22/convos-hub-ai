@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-type ResourceType = 'usuarios' | 'agentes' | 'funis' | 'conexoes' | 'conexoes_evolution' | 'conexoes_meta' | 'instagram'
+type ResourceType = 'usuarios' | 'agentes' | 'funis' | 'conexoes' | 'conexoes_evolution' | 'conexoes_meta' | 'instagram' | 'mensagens'
 
 interface ValidationRequest {
   conta_id: string
@@ -19,6 +19,7 @@ interface PlanLimits {
   limite_conexoes_whatsapp: number
   limite_conexoes_evolution: number
   limite_conexoes_meta: number
+  limite_mensagens_mes: number
   permite_instagram: boolean
 }
 
@@ -72,7 +73,7 @@ Deno.serve(async (req) => {
     // Get plan limits
     const { data: plano, error: planoError } = await supabase
       .from('planos')
-      .select('nome, limite_usuarios, limite_agentes, limite_funis, limite_conexoes_whatsapp, limite_conexoes_evolution, limite_conexoes_meta, permite_instagram')
+      .select('nome, limite_usuarios, limite_agentes, limite_funis, limite_conexoes_whatsapp, limite_conexoes_evolution, limite_conexoes_meta, limite_mensagens_mes, permite_instagram')
       .eq('id', conta.plano_id)
       .single()
 
@@ -182,6 +183,49 @@ Deno.serve(async (req) => {
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
+
+      case 'mensagens':
+        // Contar mensagens deste mês para esta conta
+        const primeiroDiaMes = new Date()
+        primeiroDiaMes.setDate(1)
+        primeiroDiaMes.setHours(0, 0, 0, 0)
+        
+        // Contar mensagens através das conversas da conta
+        const { data: conversasIds } = await supabase
+          .from('conversas')
+          .select('id')
+          .eq('conta_id', conta_id)
+        
+        const conversaIdList = conversasIds?.map(c => c.id) || []
+        
+        let msgCount = 0
+        if (conversaIdList.length > 0) {
+          const { count } = await supabase
+            .from('mensagens')
+            .select('*', { count: 'exact', head: true })
+            .in('conversa_id', conversaIdList)
+            .gte('created_at', primeiroDiaMes.toISOString())
+          msgCount = count || 0
+        }
+        
+        currentCount = msgCount
+        limit = plano.limite_mensagens_mes ?? 10000
+        resourceName = 'mensagens/mês'
+        
+        // Se limite é 999999, considera ilimitado
+        if (limit >= 999999) {
+          return new Response(
+            JSON.stringify({
+              allowed: true,
+              message: `Mensagens ilimitadas no plano "${plano.nome}"`,
+              current: currentCount,
+              limit: limit,
+              plan_name: plano.nome
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+        break
 
       default:
         return new Response(

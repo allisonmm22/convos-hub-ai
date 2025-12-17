@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-export type ResourceType = 'usuarios' | 'agentes' | 'funis' | 'conexoes' | 'conexoes_evolution' | 'conexoes_meta' | 'instagram';
+export type ResourceType = 'usuarios' | 'agentes' | 'funis' | 'conexoes' | 'conexoes_evolution' | 'conexoes_meta' | 'instagram' | 'mensagens';
 
 interface ValidationResult {
   allowed: boolean;
@@ -38,12 +38,23 @@ export async function validarLimitePlano(
 
 export async function validarEExibirErro(
   contaId: string,
-  resourceType: ResourceType
+  resourceType: ResourceType,
+  showUpgradeAction: boolean = false
 ): Promise<boolean> {
   const result = await validarLimitePlano(contaId, resourceType);
   
   if (!result.allowed) {
-    toast.error(result.message);
+    if (showUpgradeAction && resourceType === 'mensagens') {
+      toast.error(result.message, {
+        duration: 6000,
+        action: {
+          label: 'Ver Planos',
+          onClick: () => window.location.href = '/configuracoes'
+        }
+      });
+    } else {
+      toast.error(result.message);
+    }
     return false;
   }
   
