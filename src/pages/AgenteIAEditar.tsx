@@ -45,6 +45,7 @@ interface AgentConfig {
   tamanho_max_fracao: number;
   delay_entre_fracoes: number;
   simular_digitacao: boolean;
+  quantidade_mensagens_contexto: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -200,6 +201,7 @@ export default function AgenteIAEditar() {
           tamanho_max_fracao: data.tamanho_max_fracao ?? 500,
           delay_entre_fracoes: data.delay_entre_fracoes ?? 2,
           simular_digitacao: data.simular_digitacao ?? false,
+          quantidade_mensagens_contexto: data.quantidade_mensagens_contexto ?? 20,
         });
         setTempName(data.nome || '');
         
@@ -245,6 +247,7 @@ export default function AgenteIAEditar() {
           tamanho_max_fracao: config.tamanho_max_fracao,
           delay_entre_fracoes: config.delay_entre_fracoes,
           simular_digitacao: config.simular_digitacao,
+          quantidade_mensagens_contexto: config.quantidade_mensagens_contexto,
         })
         .eq('id', config.id);
 
@@ -1772,6 +1775,48 @@ function ConfiguracaoAPITab({
               <span>1s (rápido)</span>
               <span>30s (aguarda mais)</span>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Context Message Limit */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="h-10 w-10 rounded-xl bg-violet-500/10 flex items-center justify-center">
+              <Layers className="h-5 w-5 text-violet-500" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground">Limite de Contexto</h3>
+              <p className="text-sm text-muted-foreground">
+                Quantidade de mensagens que a IA considera ao responder
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-foreground">
+                Mensagens no contexto
+              </span>
+              <span className="text-lg font-bold text-violet-500">{config.quantidade_mensagens_contexto || 20}</span>
+            </div>
+            <input
+              type="range"
+              min="5"
+              max="50"
+              step="5"
+              value={config.quantidade_mensagens_contexto || 20}
+              onChange={(e) => setConfig({ ...config, quantidade_mensagens_contexto: parseInt(e.target.value) })}
+              className="w-full accent-violet-500"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>5 (econômico)</span>
+              <span>50 (máx contexto)</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Menos mensagens = respostas mais rápidas e econômicas. Mais mensagens = melhor memória da conversa.
+            </p>
           </div>
         </CardContent>
       </Card>
