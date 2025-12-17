@@ -103,6 +103,7 @@ export type Database = {
           modelo: string | null
           nome: string | null
           prompt_sistema: string | null
+          quantidade_mensagens_contexto: number | null
           simular_digitacao: boolean | null
           tamanho_max_fracao: number | null
           temperatura: number | null
@@ -128,6 +129,7 @@ export type Database = {
           modelo?: string | null
           nome?: string | null
           prompt_sistema?: string | null
+          quantidade_mensagens_contexto?: number | null
           simular_digitacao?: boolean | null
           tamanho_max_fracao?: number | null
           temperatura?: number | null
@@ -153,6 +155,7 @@ export type Database = {
           modelo?: string | null
           nome?: string | null
           prompt_sistema?: string | null
+          quantidade_mensagens_contexto?: number | null
           simular_digitacao?: boolean | null
           tamanho_max_fracao?: number | null
           temperatura?: number | null

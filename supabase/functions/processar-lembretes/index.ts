@@ -44,6 +44,27 @@ serve(async (req) => {
 
     console.log('[processar-lembretes] Iniciando processamento...');
 
+    // OTIMIZAÇÃO: Early-exit - verificar se há agendamentos nas próximas 6 horas
+    const agora = new Date();
+    const limite = new Date(agora.getTime() + 6 * 60 * 60 * 1000); // 6 horas
+    
+    const { count: agendamentosProximos } = await supabase
+      .from('agendamentos')
+      .select('*', { count: 'exact', head: true })
+      .eq('concluido', false)
+      .gte('data_inicio', agora.toISOString())
+      .lte('data_inicio', limite.toISOString())
+      .not('contato_id', 'is', null);
+    
+    if (!agendamentosProximos || agendamentosProximos === 0) {
+      console.log('[processar-lembretes] Nenhum agendamento nas próximas 6h, encerrando.');
+      return new Response(JSON.stringify({ message: 'Nenhum agendamento próximo', skipped: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
+    console.log(`[processar-lembretes] ${agendamentosProximos} agendamentos nas próximas 6h`);
+
     // Buscar todas as regras de lembrete ativas
     const { data: regras, error: regrasError } = await supabase
       .from('lembrete_regras')
