@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-export type ResourceType = 'usuarios' | 'agentes' | 'funis' | 'conexoes';
+export type ResourceType = 'usuarios' | 'agentes' | 'funis' | 'conexoes' | 'conexoes_evolution' | 'conexoes_meta' | 'instagram';
 
 interface ValidationResult {
   allowed: boolean;

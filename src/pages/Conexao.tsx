@@ -137,7 +137,7 @@ export default function Conexao() {
 
     setCreating(true);
     try {
-      const permitido = await validarEExibirErro(usuario!.conta_id, 'conexoes');
+      const permitido = await validarEExibirErro(usuario!.conta_id, 'conexoes_evolution');
       if (!permitido) {
         setCreating(false);
         return;
@@ -182,7 +182,7 @@ export default function Conexao() {
 
     setCreating(true);
     try {
-      const permitido = await validarEExibirErro(usuario!.conta_id, 'conexoes');
+      const permitido = await validarEExibirErro(usuario!.conta_id, 'conexoes_meta');
       if (!permitido) {
         setCreating(false);
         return;
@@ -233,7 +233,7 @@ export default function Conexao() {
 
     setCreatingInstagram(true);
     try {
-      const permitido = await validarEExibirErro(usuario!.conta_id, 'conexoes');
+      const permitido = await validarEExibirErro(usuario!.conta_id, 'instagram');
       if (!permitido) {
         setCreatingInstagram(false);
         return;
