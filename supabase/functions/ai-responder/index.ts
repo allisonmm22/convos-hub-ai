@@ -654,13 +654,16 @@ serve(async (req) => {
     const memoriaLimpaEm = conversa?.memoria_limpa_em;
     const etapaIAAtual = conversa?.etapa_ia_atual;
 
-    // 6. Buscar histórico de mensagens da conversa (últimas 20, filtrando por memoria_limpa_em)
+    // 6. Buscar histórico de mensagens da conversa (limite configurável por agente, filtrando por memoria_limpa_em)
+    const limiteContexto = agente.quantidade_mensagens_contexto || 20;
+    console.log('Limite de mensagens no contexto:', limiteContexto);
+    
     let historicoQuery = supabase
       .from('mensagens')
       .select('conteudo, direcao, created_at')
       .eq('conversa_id', conversa_id)
       .order('created_at', { ascending: true })
-      .limit(20);
+      .limit(limiteContexto);
 
     // Se há data de limpeza de memória, ignorar mensagens anteriores
     if (memoriaLimpaEm) {

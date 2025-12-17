@@ -426,11 +426,19 @@ serve(async (req) => {
     const instance = payload.instance;
     const data = payload.data;
 
+    // OTIMIZAÇÃO: Early-exit para eventos não relevantes
+    const eventosRelevantes = ['messages.upsert', 'messages_upsert', 'message', 'connection.update', 'connection_update', 'qrcode.updated', 'qrcode_updated', 'qr'];
+    const normalizedEvent = event.replace(/_/g, '.').toLowerCase();
+    
+    if (!eventosRelevantes.includes(normalizedEvent) && !eventosRelevantes.includes(event)) {
+      console.log('Evento não relevante, ignorando:', event);
+      return new Response(JSON.stringify({ success: true, skipped: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     console.log('Evento:', event);
     console.log('Instância:', instance);
-
-    // Normalizar evento (Evolution API v2 usa maiúsculas)
-    const normalizedEvent = event.replace(/_/g, '.').toLowerCase();
     console.log('Evento normalizado:', normalizedEvent);
 
     // Tratar evento de atualização de conexão
