@@ -120,10 +120,11 @@ export default function MinhaAssinatura() {
         supabase.from('agent_ia').select('id', { count: 'exact', head: true }).eq('conta_id', contaId),
         supabase.from('funis').select('id', { count: 'exact', head: true }).eq('conta_id', contaId),
         supabase.from('conexoes_whatsapp').select('id, tipo_provedor').eq('conta_id', contaId),
-        // Mensagens do mês atual
+        // Mensagens IA do mês atual
         supabase.from('mensagens')
           .select('id', { count: 'exact', head: true })
           .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
+          .eq('enviada_por_ia', true)
       ]);
 
       const conexoes = conexoesRes.data || [];

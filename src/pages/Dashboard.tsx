@@ -77,11 +77,12 @@ export default function Dashboard() {
         supabase.from('negociacoes').select('valor').eq('conta_id', usuario!.conta_id),
         supabase.from('contatos').select('id', { count: 'exact' }).eq('conta_id', usuario!.conta_id),
         supabase.from('mensagens').select('id', { count: 'exact' }),
-        // Contar mensagens deste mês
+        // Contar mensagens IA deste mês
         supabase
           .from('mensagens')
           .select('id', { count: 'exact' })
-          .gte('created_at', primeiroDiaMes.toISOString()),
+          .gte('created_at', primeiroDiaMes.toISOString())
+          .eq('enviada_por_ia', true),
         supabase.from('conexoes_whatsapp').select('status').eq('conta_id', usuario!.conta_id).maybeSingle(),
         supabase
           .from('contas')

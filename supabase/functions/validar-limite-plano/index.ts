@@ -205,6 +205,7 @@ Deno.serve(async (req) => {
             .select('*', { count: 'exact', head: true })
             .in('conversa_id', conversaIdList)
             .gte('created_at', primeiroDiaMes.toISOString())
+            .eq('enviada_por_ia', true)
           msgCount = count || 0
         }
         
