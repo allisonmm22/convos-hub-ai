@@ -66,6 +66,22 @@ async function verifyStripeSignature(
   }
 }
 
+// Função auxiliar para buscar dados da subscription no Stripe
+async function fetchStripeSubscription(subscriptionId: string, secretKey: string) {
+  const response = await fetch(`https://api.stripe.com/v1/subscriptions/${subscriptionId}`, {
+    headers: {
+      'Authorization': `Bearer ${secretKey}`,
+    },
+  });
+  
+  if (!response.ok) {
+    console.error('[stripe-webhook] Erro ao buscar subscription:', await response.text());
+    return null;
+  }
+  
+  return await response.json();
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -77,14 +93,24 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Buscar webhook secret da tabela de configurações
+    // Buscar webhook secret e stripe secret key da tabela de configurações
     const { data: configData, error: configError } = await supabase
       .from('configuracoes_plataforma')
-      .select('valor')
-      .eq('chave', 'stripe_webhook_secret')
-      .single();
+      .select('chave, valor')
+      .in('chave', ['stripe_webhook_secret', 'stripe_secret_key']);
 
-    if (configError || !configData?.valor) {
+    if (configError) {
+      console.error('[stripe-webhook] Erro ao buscar configurações:', configError);
+      return new Response(
+        JSON.stringify({ error: 'Erro ao buscar configurações' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    const webhookSecret = configData?.find(c => c.chave === 'stripe_webhook_secret')?.valor;
+    const stripeSecretKey = configData?.find(c => c.chave === 'stripe_secret_key')?.valor;
+
+    if (!webhookSecret) {
       console.error('[stripe-webhook] Webhook secret não configurado');
       return new Response(
         JSON.stringify({ error: 'Webhook secret não configurado' }),
@@ -92,7 +118,6 @@ serve(async (req) => {
       );
     }
 
-    const webhookSecret = configData.valor;
     const signature = req.headers.get('stripe-signature');
     const payload = await req.text();
 
@@ -126,18 +151,41 @@ serve(async (req) => {
         // Extrair metadados
         const contaId = session.metadata?.conta_id;
         const planoId = session.metadata?.plano_id;
+        const customerId = session.customer;
+        const subscriptionId = session.subscription;
         
         if (contaId && planoId) {
-          // Atualizar plano da conta
+          // Buscar dados completos da subscription se disponível
+          let subscriptionData: any = null;
+          if (subscriptionId && stripeSecretKey) {
+            subscriptionData = await fetchStripeSubscription(subscriptionId, stripeSecretKey);
+          }
+          
+          // Preparar dados de atualização
+          const updateData: any = { 
+            plano_id: planoId,
+            stripe_customer_id: customerId,
+            stripe_subscription_id: subscriptionId,
+            stripe_subscription_status: 'active',
+          };
+          
+          // Se temos dados da subscription, adicionar período
+          if (subscriptionData) {
+            updateData.stripe_current_period_start = new Date(subscriptionData.current_period_start * 1000).toISOString();
+            updateData.stripe_current_period_end = new Date(subscriptionData.current_period_end * 1000).toISOString();
+            updateData.stripe_cancel_at_period_end = subscriptionData.cancel_at_period_end || false;
+          }
+          
+          // Atualizar conta
           const { error: updateError } = await supabase
             .from('contas')
-            .update({ plano_id: planoId })
+            .update(updateData)
             .eq('id', contaId);
           
           if (updateError) {
             console.error('[stripe-webhook] Erro ao atualizar plano:', updateError);
           } else {
-            console.log('[stripe-webhook] Plano atualizado:', contaId, '->', planoId);
+            console.log('[stripe-webhook] Plano e assinatura atualizados:', contaId);
             
             // Registrar log
             await supabase.from('logs_atividade').insert({
@@ -147,6 +195,8 @@ serve(async (req) => {
               metadata: { 
                 session_id: session.id,
                 plano_id: planoId,
+                customer_id: customerId,
+                subscription_id: subscriptionId,
                 amount: session.amount_total,
                 currency: session.currency
               }
@@ -160,12 +210,46 @@ serve(async (req) => {
         const invoice = event.data.object;
         console.log('[stripe-webhook] Fatura paga:', invoice.id);
         
-        // Registrar pagamento recorrente
         const customerId = invoice.customer;
+        const subscriptionId = invoice.subscription;
         
-        // Buscar conta pelo customer_id (se armazenado)
-        // Por enquanto, apenas loga
-        console.log('[stripe-webhook] Customer:', customerId, 'Amount:', invoice.amount_paid);
+        // Buscar conta pelo customer_id
+        const { data: conta } = await supabase
+          .from('contas')
+          .select('id')
+          .eq('stripe_customer_id', customerId)
+          .single();
+        
+        if (conta && subscriptionId && stripeSecretKey) {
+          // Buscar dados atualizados da subscription
+          const subscriptionData = await fetchStripeSubscription(subscriptionId, stripeSecretKey);
+          
+          if (subscriptionData) {
+            await supabase
+              .from('contas')
+              .update({
+                stripe_subscription_status: subscriptionData.status,
+                stripe_current_period_start: new Date(subscriptionData.current_period_start * 1000).toISOString(),
+                stripe_current_period_end: new Date(subscriptionData.current_period_end * 1000).toISOString(),
+                stripe_cancel_at_period_end: subscriptionData.cancel_at_period_end || false,
+              })
+              .eq('id', conta.id);
+            
+            console.log('[stripe-webhook] Período de assinatura atualizado para conta:', conta.id);
+            
+            // Registrar log de renovação
+            await supabase.from('logs_atividade').insert({
+              conta_id: conta.id,
+              tipo: 'renovacao_assinatura',
+              descricao: `Assinatura renovada - Fatura paga`,
+              metadata: { 
+                invoice_id: invoice.id,
+                amount: invoice.amount_paid,
+                currency: invoice.currency
+              }
+            });
+          }
+        }
         break;
       }
 
@@ -173,10 +257,38 @@ serve(async (req) => {
         const subscription = event.data.object;
         console.log('[stripe-webhook] Assinatura atualizada:', subscription.id);
         
-        // Verificar se assinatura foi cancelada ou pausada
-        if (subscription.status === 'canceled' || subscription.status === 'unpaid') {
-          console.log('[stripe-webhook] Assinatura cancelada/não paga');
-          // Implementar lógica de downgrade se necessário
+        // Buscar conta pela subscription_id
+        const { data: conta } = await supabase
+          .from('contas')
+          .select('id')
+          .eq('stripe_subscription_id', subscription.id)
+          .single();
+        
+        if (conta) {
+          await supabase
+            .from('contas')
+            .update({
+              stripe_subscription_status: subscription.status,
+              stripe_current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+              stripe_current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+              stripe_cancel_at_period_end: subscription.cancel_at_period_end || false,
+            })
+            .eq('id', conta.id);
+          
+          console.log('[stripe-webhook] Status da assinatura atualizado:', subscription.status);
+          
+          // Log se cancelamento agendado
+          if (subscription.cancel_at_period_end) {
+            await supabase.from('logs_atividade').insert({
+              conta_id: conta.id,
+              tipo: 'cancelamento_agendado',
+              descricao: `Cancelamento agendado para o fim do período`,
+              metadata: { 
+                subscription_id: subscription.id,
+                cancel_at: subscription.cancel_at ? new Date(subscription.cancel_at * 1000).toISOString() : null
+              }
+            });
+          }
         }
         break;
       }
@@ -185,7 +297,35 @@ serve(async (req) => {
         const subscription = event.data.object;
         console.log('[stripe-webhook] Assinatura deletada:', subscription.id);
         
-        // Implementar lógica de remoção de plano
+        // Buscar conta pela subscription_id
+        const { data: conta } = await supabase
+          .from('contas')
+          .select('id')
+          .eq('stripe_subscription_id', subscription.id)
+          .single();
+        
+        if (conta) {
+          // Marcar assinatura como cancelada mas manter customer_id
+          await supabase
+            .from('contas')
+            .update({
+              stripe_subscription_status: 'canceled',
+              stripe_subscription_id: null,
+              stripe_current_period_end: null,
+              stripe_cancel_at_period_end: false,
+              plano_id: null, // Remove o plano (downgrade para free)
+            })
+            .eq('id', conta.id);
+          
+          console.log('[stripe-webhook] Assinatura removida da conta:', conta.id);
+          
+          await supabase.from('logs_atividade').insert({
+            conta_id: conta.id,
+            tipo: 'assinatura_cancelada',
+            descricao: `Assinatura cancelada definitivamente`,
+            metadata: { subscription_id: subscription.id }
+          });
+        }
         break;
       }
 
