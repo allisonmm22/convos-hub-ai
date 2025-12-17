@@ -378,14 +378,24 @@ export default function AdminContaDetalhe() {
     if (!conta) return;
 
     try {
-      const { error } = await supabase
-        .from('contas')
-        .update({ ativo: !conta.ativo } as any)
-        .eq('id', conta.id);
-
-      if (error) throw error;
-      setConta({ ...conta, ativo: !conta.ativo });
-      toast.success(conta.ativo ? 'Conta desativada' : 'Conta ativada');
+      if (conta.ativo) {
+        // Desativando → chamar edge function que desconecta integrações
+        const { error } = await supabase.functions.invoke('desativar-conta', {
+          body: { conta_id: conta.id }
+        });
+        if (error) throw error;
+        setConta({ ...conta, ativo: false });
+        toast.success('Conta desativada e integrações desconectadas');
+      } else {
+        // Reativando → apenas atualizar ativo
+        const { error } = await supabase
+          .from('contas')
+          .update({ ativo: true } as any)
+          .eq('id', conta.id);
+        if (error) throw error;
+        setConta({ ...conta, ativo: true });
+        toast.success('Conta reativada');
+      }
     } catch (error) {
       console.error('Erro ao alterar status:', error);
       toast.error('Erro ao alterar status');

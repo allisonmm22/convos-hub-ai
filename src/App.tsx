@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { OnboardingProvider } from "./contexts/OnboardingContext";
 import { OnboardingComplete } from "./components/onboarding/OnboardingComplete";
+import { ContaDesativadaOverlay } from "./components/ContaDesativadaOverlay";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Conversas from "./pages/Conversas";
@@ -42,10 +43,15 @@ function LoadingSpinner() {
 }
 
 function AppRoutes() {
-  const { user, usuario, loading } = useAuth();
+  const { user, usuario, loading, signOut } = useAuth();
 
   if (loading) {
     return <LoadingSpinner />;
+  }
+
+  // Se logado mas conta inativa → mostrar overlay
+  if (user && usuario && !usuario.isSuperAdmin && usuario.contaAtiva === false) {
+    return <ContaDesativadaOverlay onSignOut={signOut} />;
   }
 
   return (
