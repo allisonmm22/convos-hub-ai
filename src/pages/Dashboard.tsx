@@ -166,9 +166,9 @@ export default function Dashboard() {
     },
   ];
 
-  // Verificar se é um novo usuário (nenhuma config feita)
-  const isNewUser = stats.conexaoStatus === 'desconectado' && 
-    !stats.openaiConfigurado && 
+  // Verificar se falta alguma configuração (mostrar tutorial se qualquer uma não estiver completa)
+  const needsSetup = stats.conexaoStatus !== 'conectado' || 
+    !stats.openaiConfigurado || 
     !stats.agenteConfigurado;
 
   // Cálculo do uso de mensagens
@@ -204,7 +204,7 @@ export default function Dashboard() {
               Bem-vindo, {usuario?.nome?.split(' ')[0]}!
             </p>
           </div>
-          {!isOnboardingActive && isNewUser && (
+          {!isOnboardingActive && !loading && needsSetup && (
             <Button onClick={handleStartTutorial} className="gap-2">
               <Sparkles className="h-4 w-4" />
               <span className="hidden sm:inline">Iniciar Tutorial</span>
