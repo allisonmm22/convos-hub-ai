@@ -54,6 +54,7 @@ import { ContatoSidebar } from '@/components/ContatoSidebar';
 import { notifyNewMessage, requestNotificationPermission } from '@/lib/notificationSound';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { validarEExibirErro } from '@/hooks/useValidarLimitePlano';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   DropdownMenu,
@@ -616,6 +617,12 @@ export default function Conversas() {
   const enviarTemplate = async () => {
     if (!conversaSelecionada || !selectedTemplate) return;
     
+    // Validar limite de mensagens do plano
+    if (usuario?.conta_id) {
+      const permitido = await validarEExibirErro(usuario.conta_id, 'mensagens', true);
+      if (!permitido) return;
+    }
+
     setEnviando(true);
     try {
       const { error } = await supabase.functions.invoke('meta-send-message', {
@@ -712,6 +719,12 @@ export default function Conversas() {
 
   const enviarMensagem = async () => {
     if (!novaMensagem.trim() || !conversaSelecionada || enviando) return;
+
+    // Validar limite de mensagens do plano
+    if (usuario?.conta_id) {
+      const permitido = await validarEExibirErro(usuario.conta_id, 'mensagens', true);
+      if (!permitido) return;
+    }
 
     setEnviando(true);
     try {
@@ -922,6 +935,17 @@ export default function Conversas() {
     const file = e.target.files?.[0];
     if (!file || !conversaSelecionada) return;
 
+    // Validar limite de mensagens do plano
+    if (usuario?.conta_id) {
+      const permitido = await validarEExibirErro(usuario.conta_id, 'mensagens', true);
+      if (!permitido) {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+    }
+
     setUploading(true);
     try {
       // Converter arquivo para base64
@@ -1018,6 +1042,12 @@ export default function Conversas() {
 
   const handleSendAudio = async (audioBase64: string, duration: number, mimeType: string = 'audio/mpeg') => {
     if (!conversaSelecionada) return;
+
+    // Validar limite de mensagens do plano
+    if (usuario?.conta_id) {
+      const permitido = await validarEExibirErro(usuario.conta_id, 'mensagens', true);
+      if (!permitido) return;
+    }
 
     try {
       // Determinar extensão baseada no mimeType
