@@ -27,6 +27,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminContas from "./pages/admin/AdminContas";
 import AdminContaDetalhe from "./pages/admin/AdminContaDetalhe";
 import AdminPlanos from "./pages/admin/AdminPlanos";
+import Upgrade from "./pages/Upgrade";
 
 const queryClient = new QueryClient();
 
@@ -206,15 +207,23 @@ function AppRoutes() {
           <Configuracoes />
         } 
       />
-      <Route 
-        path="/relatorios/anuncios" 
-        element={
-          !user ? <Navigate to="/auth" replace /> :
-          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
-          <RelatorioAnuncios />
-        } 
-      />
-      <Route path="*" element={<NotFound />} />
+        <Route 
+          path="/relatorios/anuncios" 
+          element={
+            !user ? <Navigate to="/auth" replace /> :
+            usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+            <RelatorioAnuncios />
+          } 
+        />
+        <Route 
+          path="/upgrade" 
+          element={
+            !user ? <Navigate to="/auth" replace /> :
+            usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+            <Upgrade />
+          } 
+        />
+        <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

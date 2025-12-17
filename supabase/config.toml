@@ -116,3 +116,6 @@ verify_jwt = false
 
 [functions.verificar-limites-plano]
 verify_jwt = false
+
+[functions.stripe-checkout]
+verify_jwt = false
