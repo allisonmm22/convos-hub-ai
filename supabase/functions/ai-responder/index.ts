@@ -322,6 +322,42 @@ async function executarAgendaLocal(
   return { sucesso: true, mensagem: 'Ação de agenda processada' };
 }
 
+// Função para detectar se a mensagem parece ser uma confirmação de agendamento
+function detectarConfirmacaoAgendamento(mensagem: string, historico: string[]): boolean {
+  const msgLower = mensagem.toLowerCase().trim();
+  
+  // Padrões que indicam confirmação de horário
+  const padroesConfirmacao = [
+    /^(pode ser|confirmo|fechado|ok|beleza|perfeito|bora|vamos|combinado|certo|tá bom|tudo bem|sim|s)/i,
+    /às?\s*\d{1,2}h?/i, // "às 15h", "as 8"
+    /\d{1,2}[:h]\d{0,2}/i, // "14:00", "8h"
+    /(segunda|terça|quarta|quinta|sexta|sábado|domingo).*\d/i, // "segunda às 10h"
+    /esse (horário|dia)/i,
+    /pode agendar/i,
+    /por favor.*agend/i,
+    /^s$/i, // "s" isolado (sim)
+  ];
+  
+  // Verificar se há consulta de disponibilidade recente no histórico
+  const temConsultaRecente = historico.some(msg => 
+    msg.includes('📅 Consulta de disponibilidade') || 
+    msg.includes('horários livres') ||
+    msg.includes('disponibilidade') && msg.includes('horário')
+  );
+  
+  // Se houver consulta recente E a mensagem bater com padrão de confirmação
+  if (temConsultaRecente) {
+    for (const padrao of padroesConfirmacao) {
+      if (padrao.test(msgLower)) {
+        console.log('🎯 [DETECÇÃO] Confirmação de agendamento detectada:', msgLower);
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
 async function callOpenAI(
   apiKey: string,
   messages: { role: string; content: string }[],
@@ -329,7 +365,8 @@ async function callOpenAI(
   maxTokens: number,
   temperatura: number,
   tools?: any[],
-  executarAgendaFn?: (valor: string) => Promise<{ sucesso: boolean; mensagem: string; dados?: any }>
+  executarAgendaFn?: (valor: string) => Promise<{ sucesso: boolean; mensagem: string; dados?: any }>,
+  forcarFerramentaAgenda?: boolean
 ): Promise<AIResponse> {
   const isModeloNovo = modelo.includes('gpt-5') || modelo.includes('gpt-4.1') || 
                        modelo.includes('o3') || modelo.includes('o4');
@@ -341,7 +378,14 @@ async function callOpenAI(
 
   if (tools && tools.length > 0) {
     requestBody.tools = tools;
-    requestBody.tool_choice = 'auto';
+    
+    // Se detectamos confirmação de agendamento, forçar uso de ferramenta
+    if (forcarFerramentaAgenda) {
+      console.log('🔧 [TOOL CHOICE] Forçando uso de ferramenta para agendamento');
+      requestBody.tool_choice = 'required';
+    } else {
+      requestBody.tool_choice = 'auto';
+    }
   }
 
   if (isModeloNovo) {
@@ -831,14 +875,21 @@ serve(async (req) => {
       promptCompleto += '- Exemplo: @agenda:criar:Reunião com Cliente|2025-01-20T14:00:00-03:00\n';
       promptCompleto += '- O resultado terá "meet_link" - INCLUA NA RESPOSTA!\n\n';
       
-      promptCompleto += '**EXEMPLOS DE CONFIRMAÇÃO (quando usar @agenda:criar):**\n';
-      promptCompleto += '- "as 15h" → CONFIRMOU! Criar evento\n';
-      promptCompleto += '- "pode ser segunda às 10h" → CONFIRMOU! Criar evento\n';
-      promptCompleto += '- "confirmo" → CONFIRMOU! Criar evento\n';
-      promptCompleto += '- "esse horário está bom" → CONFIRMOU! Criar evento\n';
-      promptCompleto += '- "pode agendar" → CONFIRMOU! Criar evento\n';
-      promptCompleto += '- "fechado" → CONFIRMOU! Criar evento\n';
-      promptCompleto += '- "beleza, pode ser 14h" → CONFIRMOU! Criar evento\n\n';
+      promptCompleto += '**⚠️ REGRA OBRIGATÓRIA - CRIAÇÃO DE EVENTOS:**\n';
+      promptCompleto += '- Para CRIAR um evento, você DEVE usar a ferramenta executar_acao com tipo="agenda" e valor="criar:..."\n';
+      promptCompleto += '- NUNCA responda "Reunião agendada", "Pronto, agendei" ou inclua link de meet SEM ANTES chamar a ferramenta!\n';
+      promptCompleto += '- Se você NÃO chamou a ferramenta, o evento NÃO foi criado - não minta para o cliente!\n';
+      promptCompleto += '- NUNCA invente links do Google Meet! Eles vêm do resultado da ferramenta.\n';
+      promptCompleto += '- O link do Meet tem formato: https://meet.google.com/xxx-xxxx-xxx (NUNCA invente isso!)\n\n';
+      
+      promptCompleto += '**EXEMPLOS DE CONFIRMAÇÃO (quando DEVE usar executar_acao com agenda:criar):**\n';
+      promptCompleto += '- "as 15h" → CONFIRMOU! Chamar ferramenta para criar evento\n';
+      promptCompleto += '- "pode ser segunda às 10h" → CONFIRMOU! Chamar ferramenta para criar evento\n';
+      promptCompleto += '- "confirmo" → CONFIRMOU! Chamar ferramenta para criar evento\n';
+      promptCompleto += '- "esse horário está bom" → CONFIRMOU! Chamar ferramenta para criar evento\n';
+      promptCompleto += '- "pode agendar" → CONFIRMOU! Chamar ferramenta para criar evento\n';
+      promptCompleto += '- "fechado" → CONFIRMOU! Chamar ferramenta para criar evento\n';
+      promptCompleto += '- "beleza, pode ser 14h" → CONFIRMOU! Chamar ferramenta para criar evento\n\n';
       
       promptCompleto += '**EXEMPLOS DE NÃO-CONFIRMAÇÃO (NÃO usar @agenda:criar):**\n';
       promptCompleto += '- "quero agendar uma reunião" → Apenas consultar!\n';
@@ -846,7 +897,7 @@ serve(async (req) => {
       promptCompleto += '- "que horários tem?" → Apenas consultar!\n';
       promptCompleto += '- "talvez..." → Esperar confirmação!\n\n';
       
-      promptCompleto += '**REGRA DE OURO:** Se o cliente mencionou um horário específico APÓS você mostrar opções, é uma CONFIRMAÇÃO!\n';
+      promptCompleto += '**REGRA DE OURO:** Se o cliente mencionou um horário específico APÓS você mostrar opções, é uma CONFIRMAÇÃO e você DEVE chamar a ferramenta!\n';
       
       promptCompleto += '\nQuando identificar que uma ação deve ser executada baseado no contexto da conversa, use a ferramenta executar_acao.\n';
       promptCompleto += '\n## REGRAS IMPORTANTES\n';
@@ -935,12 +986,20 @@ serve(async (req) => {
       return await executarAgendaLocal(supabase, supabaseUrl, supabaseKey, conta_id, conversa_id, contatoId, valor);
     };
 
+    // Detectar se é uma confirmação de agendamento para forçar uso de ferramenta
+    const historicoTextos = historico?.map((m: any) => m.conteudo) || [];
+    const forcarFerramentaAgenda = detectarConfirmacaoAgendamento(mensagem, historicoTextos);
+    
+    if (forcarFerramentaAgenda) {
+      console.log('🎯 [AGENDAMENTO] Forçando uso de ferramenta - confirmação detectada');
+    }
+
     let result: AIResponse;
 
     // Usar OpenAI (único provedor suportado)
     try {
       console.log('Usando OpenAI com modelo:', modelo);
-      result = await callOpenAI(conta.openai_api_key, messages, modelo, maxTokens, temperatura, tools, executarAgendaFn);
+      result = await callOpenAI(conta.openai_api_key, messages, modelo, maxTokens, temperatura, tools, executarAgendaFn, forcarFerramentaAgenda);
       console.log('✅ Resposta via OpenAI');
     } catch (openaiError: any) {
       const errorMsg = openaiError.message || '';
@@ -1013,6 +1072,49 @@ serve(async (req) => {
     
     // Remover menções de transferência que possam ter escapado
     respostaFinal = respostaFinal.replace(/estou transferindo.*?(humano|agente|atendente).*?\./gi, '').trim();
+
+    // VALIDAÇÃO FINAL: Detectar se a IA inventou um agendamento sem chamar a ferramenta
+    const temAcaoAgendaCriar = result.acoes?.some(a => a.tipo === 'agenda' && a.valor?.startsWith('criar:'));
+    const respostaLower = respostaFinal.toLowerCase();
+    
+    // Padrões que indicam que a IA disse que agendou
+    const padroesFalsoAgendamento = [
+      /reuni(ã|a)o.*agendad[ao]/i,
+      /agendad[ao].*sucesso/i,
+      /pronto.*agend(ei|ado|ada)/i,
+      /meet\.google\.com/i,
+      /link.*meet/i,
+      /meet.*link/i,
+      /confirmad[ao].*agenda/i,
+      /sua reuni(ã|a)o.*marcad[ao]/i,
+      /evento.*criad[ao]/i,
+    ];
+    
+    const mencionouAgendamento = padroesFalsoAgendamento.some(p => p.test(respostaFinal));
+    
+    if (mencionouAgendamento && !temAcaoAgendaCriar) {
+      console.log('⚠️ [VALIDAÇÃO] IA mencionou agendamento sem chamar ferramenta! Corrigindo resposta...');
+      console.log('Resposta original:', respostaFinal.substring(0, 200));
+      
+      // Logar esse comportamento problemático
+      try {
+        await supabase.from('logs_atividade').insert({
+          conta_id,
+          tipo: 'erro_ia_agendamento_falso',
+          descricao: 'IA inventou agendamento sem chamar ferramenta executar_acao',
+          metadata: { 
+            resposta_original: respostaFinal.substring(0, 500),
+            mensagem_cliente: mensagem,
+            acoes_executadas: result.acoes || [],
+          },
+        });
+      } catch (logError) {
+        console.error('Erro ao logar agendamento falso:', logError);
+      }
+      
+      // Substituir resposta por uma genérica pedindo confirmação
+      respostaFinal = 'Desculpe, houve um problema ao processar o agendamento. Poderia confirmar novamente o horário desejado para que eu possa criar a reunião?';
+    }
 
     return new Response(
       JSON.stringify({ 
