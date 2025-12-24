@@ -275,10 +275,27 @@ export default function Conversas() {
   const [pollingActive, setPollingActive] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Helper: buscar conexão específica de uma conversa
+  // Helper: buscar conexão específica de uma conversa (com fallback inteligente)
   const getConexaoDaConversa = useCallback((conversa: Conversa | null): Conexao | null => {
-    if (!conversa?.conexao_id) return null;
-    return conexoes.find(c => c.id === conversa.conexao_id) || null;
+    if (!conversa) return null;
+    
+    // Se tem conexao_id definido, usar ela
+    if (conversa.conexao_id) {
+      const conexaoEspecifica = conexoes.find(c => c.id === conversa.conexao_id);
+      if (conexaoEspecifica) return conexaoEspecifica;
+    }
+    
+    // FALLBACK: Se não tem conexao_id ou não encontrou, tentar encontrar uma conexão conectada
+    // Para grupos (contato com grupo_jid), preferir conexão Evolution
+    if (conversa.contatos?.grupo_jid) {
+      const conexaoEvolution = conexoes.find(c => 
+        c.status === 'conectado' && c.tipo_provedor === 'evolution'
+      );
+      if (conexaoEvolution) return conexaoEvolution;
+    }
+    
+    // Fallback geral: usar primeira conexão conectada
+    return conexoes.find(c => c.status === 'conectado') || null;
   }, [conexoes]);
 
   // Helper: verificar se alguma conexão está conectada
