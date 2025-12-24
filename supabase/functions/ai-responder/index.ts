@@ -1033,6 +1033,22 @@ serve(async (req) => {
     promptCompleto += `- Período do dia: ${periodo}\n`;
     promptCompleto += `\nUse estas informações para cumprimentos apropriados (Bom dia/Boa tarde/Boa noite) e referências temporais.\n`;
 
+    // Adicionar contexto do contato/lead
+    if (dadosContato) {
+      promptCompleto += `\n\n## DADOS DO CONTATO/LEAD\n`;
+      promptCompleto += `- **Nome do contato:** ${dadosContato.nome || 'Não identificado'}\n`;
+      if (dadosContato.telefone) {
+        promptCompleto += `- Telefone: ${dadosContato.telefone}\n`;
+      }
+      if (dadosContato.email) {
+        promptCompleto += `- Email: ${dadosContato.email}\n`;
+      }
+      if (dadosContato.tags && dadosContato.tags.length > 0) {
+        promptCompleto += `- Tags: ${dadosContato.tags.join(', ')}\n`;
+      }
+      promptCompleto += `\n**IMPORTANTE:** Use o nome "${dadosContato.nome || 'Cliente'}" para se referir ao contato de forma personalizada quando apropriado.\n`;
+    }
+
     // Adicionar contexto do CRM se disponível
     if (crmContexto) {
       promptCompleto += `\n\n## CONTEXTO DO CRM\n`;
