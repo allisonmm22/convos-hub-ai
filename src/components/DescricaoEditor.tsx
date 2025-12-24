@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect, useState, useMemo, memo, forwardRef } from 'react';
-import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen, Handshake, X, CalendarSearch, CalendarPlus } from 'lucide-react';
+import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen, Handshake, X, CalendarSearch, CalendarPlus, FileEdit, FileSearch } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface DescricaoEditorProps {
@@ -156,6 +156,30 @@ function parseAcao(acao: string): ChipConfig {
       colorClass: 'text-emerald-700 dark:text-emerald-400',
       bgClass: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700',
     };
+  } else if (acaoLower.startsWith('@campo:')) {
+    const valor = acao.replace(/^@campo:/i, '');
+    const partes = valor.split(':');
+    const nomeCampo = partes[0]?.replace(/-/g, ' ') || valor;
+    const valorCampo = partes.slice(1).join(':');
+    
+    const label = valorCampo 
+      ? `Atualizar ${nomeCampo}: ${valorCampo}`
+      : `Atualizar Campo: ${nomeCampo}`;
+    
+    config = {
+      icon: FileEdit,
+      label,
+      colorClass: 'text-violet-700 dark:text-violet-400',
+      bgClass: 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-700',
+    };
+  } else if (acaoLower.startsWith('@obter:')) {
+    const valor = acao.replace(/^@obter:/i, '').replace(/-/g, ' ');
+    config = {
+      icon: FileSearch,
+      label: `Obter Campo: ${valor}`,
+      colorClass: 'text-cyan-700 dark:text-cyan-400',
+      bgClass: 'bg-cyan-100 dark:bg-cyan-900/40 border-cyan-300 dark:border-cyan-700',
+    };
   } else {
     config = {
       icon: Tag,
@@ -225,7 +249,7 @@ const SHARED_STYLES: React.CSSProperties = {
 };
 
 // Regex pattern for matching actions
-const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao|agenda)(:[^\s@<>.,;!?]+)?/gi;
+const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao|agenda|campo|obter)(:[^\s@<>.,;!?]+)?/gi;
 
 export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick, onCursorChange }: DescricaoEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
