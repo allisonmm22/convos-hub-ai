@@ -13,16 +13,16 @@ serve(async (req) => {
     if (error) {
       console.error('[google-calendar-callback] Erro do Google:', error);
       return new Response(
-        `<html><body><script>window.opener?.postMessage({type:'google-calendar-error',error:'${error}'},'*');window.close();</script>Erro: ${error}</body></html>`,
-        { headers: { 'Content-Type': 'text/html' } }
+        `<!DOCTYPE html><html><body><script>window.opener?.postMessage({type:'google-calendar-error',error:'${error}'},'*');window.close();</script>Erro: ${error}</body></html>`,
+        { headers: { 'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff' } }
       );
     }
 
     if (!code || !state) {
       console.error('[google-calendar-callback] Parâmetros ausentes');
       return new Response(
-        '<html><body><script>window.opener?.postMessage({type:"google-calendar-error",error:"Parâmetros inválidos"},"*");window.close();</script>Parâmetros inválidos</body></html>',
-        { headers: { 'Content-Type': 'text/html' } }
+        '<!DOCTYPE html><html><body><script>window.opener?.postMessage({type:"google-calendar-error",error:"Parâmetros inválidos"},"*");window.close();</script>Parâmetros inválidos</body></html>',
+        { headers: { 'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff' } }
       );
     }
 
@@ -33,8 +33,8 @@ serve(async (req) => {
     } catch (e) {
       console.error('[google-calendar-callback] State inválido');
       return new Response(
-        '<html><body><script>window.opener?.postMessage({type:"google-calendar-error",error:"State inválido"},"*");window.close();</script>State inválido</body></html>',
-        { headers: { 'Content-Type': 'text/html' } }
+        '<!DOCTYPE html><html><body><script>window.opener?.postMessage({type:"google-calendar-error",error:"State inválido"},"*");window.close();</script>State inválido</body></html>',
+        { headers: { 'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff' } }
       );
     }
 
@@ -49,8 +49,8 @@ serve(async (req) => {
     if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !SUPABASE_SERVICE_ROLE_KEY) {
       console.error('[google-calendar-callback] Configuração ausente');
       return new Response(
-        '<html><body><script>window.opener?.postMessage({type:"google-calendar-error",error:"Configuração do servidor incompleta"},"*");window.close();</script>Configuração incompleta</body></html>',
-        { headers: { 'Content-Type': 'text/html' } }
+        '<!DOCTYPE html><html><body><script>window.opener?.postMessage({type:"google-calendar-error",error:"Configuração do servidor incompleta"},"*");window.close();</script>Configuração incompleta</body></html>',
+        { headers: { 'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff' } }
       );
     }
 
@@ -75,8 +75,8 @@ serve(async (req) => {
     if (tokenData.error) {
       console.error('[google-calendar-callback] Erro ao obter tokens:', tokenData);
       return new Response(
-        `<html><body><script>window.opener?.postMessage({type:"google-calendar-error",error:"${tokenData.error_description || tokenData.error}"},"*");window.close();</script>Erro: ${tokenData.error}</body></html>`,
-        { headers: { 'Content-Type': 'text/html' } }
+        `<!DOCTYPE html><html><body><script>window.opener?.postMessage({type:"google-calendar-error",error:"${tokenData.error_description || tokenData.error}"},"*");window.close();</script>Erro: ${tokenData.error}</body></html>`,
+        { headers: { 'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff' } }
       );
     }
 
@@ -119,8 +119,8 @@ serve(async (req) => {
       if (updateError) {
         console.error('[google-calendar-callback] Erro ao atualizar:', updateError);
         return new Response(
-          `<html><body><script>window.opener?.postMessage({type:"google-calendar-error",error:"Erro ao salvar: ${updateError.message}"},"*");window.close();</script>Erro</body></html>`,
-          { headers: { 'Content-Type': 'text/html' } }
+          `<!DOCTYPE html><html><body><script>window.opener?.postMessage({type:"google-calendar-error",error:"Erro ao salvar: ${updateError.message}"},"*");window.close();</script>Erro</body></html>`,
+          { headers: { 'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff' } }
         );
       }
       console.log('[google-calendar-callback] Calendário atualizado');
@@ -141,16 +141,15 @@ serve(async (req) => {
       if (insertError) {
         console.error('[google-calendar-callback] Erro ao inserir:', insertError);
         return new Response(
-          `<html><body><script>window.opener?.postMessage({type:"google-calendar-error",error:"Erro ao salvar: ${insertError.message}"},"*");window.close();</script>Erro</body></html>`,
-          { headers: { 'Content-Type': 'text/html' } }
+          `<!DOCTYPE html><html><body><script>window.opener?.postMessage({type:"google-calendar-error",error:"Erro ao salvar: ${insertError.message}"},"*");window.close();</script>Erro</body></html>`,
+          { headers: { 'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff' } }
         );
       }
       console.log('[google-calendar-callback] Novo calendário criado');
     }
 
     // Sucesso - fechar popup e notificar janela pai
-    const successHtml = `
-      <!DOCTYPE html>
+    const successHtml = `<!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
@@ -216,14 +215,19 @@ serve(async (req) => {
       </html>
     `;
 
-    return new Response(successHtml, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    return new Response(successHtml, { 
+      headers: { 
+        'Content-Type': 'text/html; charset=utf-8',
+        'X-Content-Type-Options': 'nosniff'
+      } 
+    });
 
   } catch (error: unknown) {
     console.error('[google-calendar-callback] Erro:', error);
     const message = error instanceof Error ? error.message : 'Erro desconhecido';
     return new Response(
-      `<html><body><script>window.opener?.postMessage({type:"google-calendar-error",error:"${message}"},"*");window.close();</script>Erro: ${message}</body></html>`,
-      { headers: { 'Content-Type': 'text/html' } }
+      `<!DOCTYPE html><html><body><script>window.opener?.postMessage({type:"google-calendar-error",error:"${message}"},"*");window.close();</script>Erro: ${message}</body></html>`,
+      { headers: { 'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff' } }
     );
   }
 });
