@@ -117,6 +117,7 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
   const { usuario } = useAuth();
   const navigate = useNavigate();
   const [editando, setEditando] = useState(false);
+  const [nomeEdit, setNomeEdit] = useState(contato.nome);
   const [telefoneEdit, setTelefoneEdit] = useState(contato.telefone);
   const [emailEdit, setEmailEdit] = useState(contato.email || '');
   const [salvando, setSalvando] = useState(false);
@@ -139,6 +140,7 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
   const [salvandoTags, setSalvandoTags] = useState(false);
 
   useEffect(() => {
+    setNomeEdit(contato.nome);
     setTelefoneEdit(contato.telefone);
     setEmailEdit(contato.email || '');
     setEditando(false);
@@ -267,11 +269,17 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
   };
 
   const handleSave = async () => {
+    if (!nomeEdit.trim()) {
+      toast.error('O nome é obrigatório');
+      return;
+    }
+    
     setSalvando(true);
     try {
       const { error } = await supabase
         .from('contatos')
         .update({
+          nome: nomeEdit.trim(),
           telefone: telefoneEdit,
           email: emailEdit || null,
         })
@@ -285,6 +293,7 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
       if (onContatoUpdate) {
         onContatoUpdate({
           ...contato,
+          nome: nomeEdit.trim(),
           telefone: telefoneEdit,
           email: emailEdit || null,
         });
@@ -543,7 +552,17 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
                 {contato.nome.charAt(0).toUpperCase()}
               </div>
             )}
-            <h2 className="text-xl font-bold text-foreground mt-4">{contato.nome}</h2>
+            {editando ? (
+              <input
+                type="text"
+                value={nomeEdit}
+                onChange={(e) => setNomeEdit(e.target.value)}
+                className="text-xl font-bold text-foreground mt-4 text-center bg-background border border-border rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary w-full max-w-[280px]"
+                placeholder="Nome do contato"
+              />
+            ) : (
+              <h2 className="text-xl font-bold text-foreground mt-4">{contato.nome}</h2>
+            )}
             
             {/* Ações rápidas */}
             <div className="flex items-center gap-2 mt-3">
