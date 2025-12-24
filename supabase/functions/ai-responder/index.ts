@@ -19,7 +19,7 @@ interface AIResponse {
 }
 
 interface Acao {
-  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda';
+  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda' | 'campo' | 'obter';
   valor?: string;
   calendario_id?: string;
 }
@@ -55,7 +55,7 @@ function calcularCustoEstimado(
 
 // Parser de ações do prompt
 function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: Acao[] } {
-  const acoesRegex = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda)(?::([^\s@:]+)(?::([^\s@]+))?)?/gi;
+  const acoesRegex = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter)(?::([^\s@:]+)(?::([^\s@]+))?)?/gi;
   const matches = [...texto.matchAll(acoesRegex)];
   
   const acoes: string[] = [];
@@ -85,7 +85,8 @@ function substituirPlaceholders(texto: string, dados: {
   telefone?: string | null;
   email?: string | null;
   tags?: string[] | null;
-}): string {
+  metadata?: Record<string, any> | null;
+}, camposPersonalizados?: { id: string; nome: string; tipo: string }[]): string {
   let resultado = texto;
   
   // Placeholders suportados (case insensitive)
@@ -95,6 +96,16 @@ function substituirPlaceholders(texto: string, dados: {
   resultado = resultado.replace(/\[Telefone\]/gi, dados.telefone || '');
   resultado = resultado.replace(/\[Email\]/gi, dados.email || '');
   resultado = resultado.replace(/\[Tags\]/gi, dados.tags?.join(', ') || '');
+  
+  // Placeholders para campos personalizados
+  if (camposPersonalizados && dados.metadata) {
+    for (const campo of camposPersonalizados) {
+      const valor = dados.metadata[`campo_${campo.id}`] || '';
+      // Substituir [Nome do Campo] pelo valor
+      const regex = new RegExp(`\\[${campo.nome}\\]`, 'gi');
+      resultado = resultado.replace(regex, valor);
+    }
+  }
   
   return resultado;
 }
@@ -896,19 +907,40 @@ serve(async (req) => {
     const etapaIAAtual = conversa?.etapa_ia_atual;
 
     // 5.1 Buscar dados do contato para placeholders
-    let dadosContato: { nome?: string | null; telefone?: string | null; email?: string | null; tags?: string[] | null } | null = null;
+    interface DadosContato {
+      nome?: string | null;
+      telefone?: string | null;
+      email?: string | null;
+      tags?: string[] | null;
+      metadata?: Record<string, any> | null;
+    }
+    let dadosContato: DadosContato | null = null;
     if (contatoId) {
       const { data: contatoData } = await supabase
         .from('contatos')
-        .select('nome, telefone, email, tags')
+        .select('nome, telefone, email, tags, metadata')
         .eq('id', contatoId)
         .single();
       
       if (contatoData) {
-        dadosContato = contatoData;
+        dadosContato = contatoData as DadosContato;
         console.log('📋 Dados do contato para placeholders:', dadosContato.nome);
       }
     }
+
+    // 5.1.1 Buscar campos personalizados da conta
+    let camposPersonalizados: { id: string; nome: string; tipo: string }[] = [];
+    const { data: camposData } = await supabase
+      .from('campos_personalizados')
+      .select('id, nome, tipo')
+      .eq('conta_id', conta_id)
+      .order('ordem', { ascending: true });
+    
+    if (camposData) {
+      camposPersonalizados = camposData;
+      console.log('📝 Campos personalizados disponíveis:', camposPersonalizados.length);
+    }
+
 
     // 5.2 Buscar contexto do CRM (negociação e etapa) para informar a IA
     let crmContexto = null;
@@ -1046,6 +1078,16 @@ serve(async (req) => {
       if (dadosContato.tags && dadosContato.tags.length > 0) {
         promptCompleto += `- Tags: ${dadosContato.tags.join(', ')}\n`;
       }
+      
+      // Adicionar campos personalizados do contato
+      if (camposPersonalizados.length > 0 && dadosContato.metadata) {
+        promptCompleto += `\n**Campos Personalizados:**\n`;
+        for (const campo of camposPersonalizados) {
+          const valor = dadosContato.metadata[`campo_${campo.id}`];
+          promptCompleto += `- ${campo.nome}: ${valor || 'não informado'}\n`;
+        }
+      }
+      
       promptCompleto += `\n**IMPORTANTE:** Use o nome "${dadosContato.nome || 'Cliente'}" para se referir ao contato de forma personalizada quando apropriado.\n`;
     }
 
@@ -1147,8 +1189,25 @@ serve(async (req) => {
       promptCompleto += '- @notificar - Enviar notificação para a equipe\n';
       promptCompleto += '- @finalizar - Encerrar a conversa\n';
       promptCompleto += '- @nome:<novo nome> - Alterar o nome do contato/lead (use quando o cliente se identificar)\n';
+      promptCompleto += '- @campo:<nome-do-campo>:<valor> - Atualizar um campo personalizado do contato (ex: @campo:data-nascimento:15/03/1990)\n';
+      promptCompleto += '- @obter:<nome-do-campo> - Obter o valor de um campo personalizado do contato (ex: @obter:cidade)\n';
       promptCompleto += '- @agenda:consultar - Consultar disponibilidade do calendário (próximos 7 dias)\n';
       promptCompleto += '- @agenda:criar:<titulo>|<data_inicio> - Criar evento no calendário com Google Meet (datas em ISO8601)\n';
+      
+      // Adicionar lista de campos personalizados disponíveis
+      if (camposPersonalizados.length > 0) {
+        promptCompleto += '\n### CAMPOS PERSONALIZADOS DISPONÍVEIS\n';
+        promptCompleto += 'Você pode usar @campo para salvar dados nos seguintes campos:\n';
+        for (const campo of camposPersonalizados) {
+          promptCompleto += `- ${campo.nome} (${campo.tipo})\n`;
+        }
+        promptCompleto += '\n**INSTRUÇÕES PARA CAMPOS PERSONALIZADOS:**\n';
+        promptCompleto += '- Quando o lead fornecer uma informação que corresponde a um campo personalizado, use @campo:<nome-do-campo>:<valor> para salvar\n';
+        promptCompleto += '- Use hífens no lugar de espaços no nome do campo (ex: "Data de Nascimento" → @campo:data-de-nascimento:valor)\n';
+        promptCompleto += '- Os valores dos campos já salvos aparecem na seção DADOS DO CONTATO/LEAD acima\n';
+        promptCompleto += '- Use @obter:<nome-do-campo> se precisar confirmar um valor antes de usar\n';
+      }
+      
       promptCompleto += '\n### INSTRUÇÕES DE AGENDAMENTO (CRÍTICO - SIGA EXATAMENTE)\n';
       promptCompleto += 'O agendamento DEVE ser feito em 2 TURNOS SEPARADOS DE CONVERSA:\n\n';
       
@@ -1208,7 +1267,7 @@ serve(async (req) => {
 
     // Substituir placeholders no prompt com dados do contato
     if (dadosContato) {
-      promptCompleto = substituirPlaceholders(promptCompleto, dadosContato);
+      promptCompleto = substituirPlaceholders(promptCompleto, dadosContato, camposPersonalizados);
       console.log('✅ Placeholders substituídos no prompt');
     }
 
@@ -1242,14 +1301,14 @@ serve(async (req) => {
         type: 'function',
         function: {
           name: 'executar_acao',
-          description: 'Executa uma ação automatizada como mover lead para etapa do CRM, adicionar tag, transferir conversa, alterar nome do contato, consultar agenda ou criar evento.',
+          description: 'Executa uma ação automatizada como mover lead para etapa do CRM, adicionar tag, transferir conversa, alterar nome do contato, atualizar campo personalizado, obter valor de campo, consultar agenda ou criar evento.',
           parameters: {
             type: 'object',
             properties: {
               tipo: {
                 type: 'string',
-                enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar', 'nome', 'negociacao', 'agenda'],
-                description: 'Tipo da ação a ser executada. Use "nome" para alterar o nome do contato quando ele se identificar. Use "negociacao" para criar uma nova negociação no CRM. Use "agenda" para consultar disponibilidade ou criar eventos.',
+                enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar', 'nome', 'negociacao', 'agenda', 'campo', 'obter'],
+                description: 'Tipo da ação a ser executada. Use "nome" para alterar o nome do contato quando ele se identificar. Use "negociacao" para criar uma nova negociação no CRM. Use "agenda" para consultar disponibilidade ou criar eventos. Use "campo" para salvar um valor em um campo personalizado (formato: nome-do-campo:valor). Use "obter" para consultar o valor de um campo personalizado.',
               },
               valor: {
                 type: 'string',
@@ -1364,7 +1423,7 @@ serve(async (req) => {
 
     // Limpar comandos @ que possam ter vazado para o texto da resposta
     let respostaFinal = result.resposta;
-    respostaFinal = respostaFinal.replace(/@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda)(?::[^\s@.,!?]+(?::[^\s@.,!?]+)?)?/gi, '').trim();
+    respostaFinal = respostaFinal.replace(/@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter)(?::[^\s@.,!?]+(?::[^\s@.,!?]+)?)?/gi, '').trim();
     respostaFinal = respostaFinal.replace(/\s{2,}/g, ' ').trim();
     
     // Remover menções de transferência que possam ter escapado

@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface Acao {
-  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda';
+  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda' | 'campo' | 'obter';
   valor?: string;
 }
 
@@ -43,6 +43,13 @@ function gerarMensagemSistema(tipo: string, valor: string | undefined, resultado
         return `📅 Evento criado na agenda: ${valor.replace('criar:', '')}`;
       }
       return `📅 Ação de agenda executada`;
+    case 'campo':
+      const partesCampo = valor?.split(':') || [];
+      const nomeCampo = partesCampo[0]?.replace(/-/g, ' ');
+      const valorCampo = partesCampo.slice(1).join(':');
+      return `📝 Campo "${nomeCampo}" atualizado para "${valorCampo}"`;
+    case 'obter':
+      return `🔍 Campo "${valor?.replace(/-/g, ' ')}" consultado`;
     default:
       return `⚙️ Ação executada: ${tipo}`;
   }
@@ -844,6 +851,111 @@ serve(async (req) => {
         } else {
           resultado = { sucesso: false, mensagem: 'Subação de agenda não reconhecida' };
         }
+        break;
+      }
+
+      case 'campo': {
+        // Atualizar campo personalizado do contato
+        // Formato: @campo:nome-do-campo:valor
+        // Ex: @campo:data-nascimento:15/03/1990
+        
+        const partes = acaoObj.valor?.split(':') || [];
+        const nomeCampo = partes[0]?.replace(/-/g, ' ').trim();
+        const valorCampo = partes.slice(1).join(':').trim(); // Para permitir ":" no valor
+        
+        console.log('📝 Atualizando campo personalizado:', nomeCampo, '=', valorCampo);
+        
+        if (!nomeCampo) {
+          resultado = { sucesso: false, mensagem: 'Nome do campo não fornecido' };
+          break;
+        }
+        
+        // Buscar campo personalizado pelo nome (case insensitive)
+        const { data: campo } = await supabase
+          .from('campos_personalizados')
+          .select('id, nome, tipo')
+          .eq('conta_id', conta_id)
+          .ilike('nome', nomeCampo)
+          .maybeSingle();
+        
+        if (!campo) {
+          console.log(`Campo "${nomeCampo}" não encontrado para conta ${conta_id}`);
+          resultado = { sucesso: false, mensagem: `Campo "${nomeCampo}" não encontrado. Crie o campo primeiro em Campos Personalizados.` };
+          break;
+        }
+        
+        console.log(`Campo encontrado: "${campo.nome}" (ID: ${campo.id}, tipo: ${campo.tipo})`);
+        
+        // Buscar metadata atual do contato
+        const { data: contato } = await supabase
+          .from('contatos')
+          .select('metadata')
+          .eq('id', contato_id)
+          .single();
+        
+        // Atualizar metadata com novo valor
+        const metadataAtual = (contato?.metadata as Record<string, any>) || {};
+        const novaMetadata = {
+          ...metadataAtual,
+          [`campo_${campo.id}`]: valorCampo
+        };
+        
+        const { error } = await supabase
+          .from('contatos')
+          .update({ metadata: novaMetadata })
+          .eq('id', contato_id);
+        
+        if (error) throw error;
+        
+        console.log(`✅ Campo "${campo.nome}" atualizado para "${valorCampo}"`);
+        resultado = { sucesso: true, mensagem: `Campo "${campo.nome}" atualizado para "${valorCampo}"` };
+        break;
+      }
+
+      case 'obter': {
+        // Obter valor de um campo personalizado do contato
+        // Formato: @obter:nome-do-campo
+        // Retorna o valor para uso no contexto da IA
+        
+        const nomeCampo = acaoObj.valor?.replace(/-/g, ' ').trim();
+        
+        console.log('🔍 Obtendo campo personalizado:', nomeCampo);
+        
+        if (!nomeCampo) {
+          resultado = { sucesso: false, mensagem: 'Nome do campo não fornecido' };
+          break;
+        }
+        
+        // Buscar campo personalizado pelo nome
+        const { data: campo } = await supabase
+          .from('campos_personalizados')
+          .select('id, nome, tipo')
+          .eq('conta_id', conta_id)
+          .ilike('nome', nomeCampo)
+          .maybeSingle();
+        
+        if (!campo) {
+          console.log(`Campo "${nomeCampo}" não encontrado`);
+          resultado = { sucesso: false, mensagem: `Campo "${nomeCampo}" não encontrado` };
+          break;
+        }
+        
+        // Buscar metadata do contato
+        const { data: contatoData } = await supabase
+          .from('contatos')
+          .select('metadata')
+          .eq('id', contato_id)
+          .single();
+        
+        const metadataContato = (contatoData?.metadata as Record<string, any>) || {};
+        const valorEncontrado = metadataContato[`campo_${campo.id}`] || 'não informado';
+        
+        console.log(`✅ Valor do campo "${campo.nome}": ${valorEncontrado}`);
+        resultado = { 
+          sucesso: true, 
+          mensagem: `Valor do campo "${campo.nome}": ${valorEncontrado}`,
+          dados: { campo: campo.nome, valor: valorEncontrado }
+        };
         break;
       }
 
