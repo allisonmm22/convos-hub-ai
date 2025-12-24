@@ -213,7 +213,7 @@ interface MetaTemplate {
 
 type StatusFilter = 'todos' | 'abertos' | 'em_atendimento' | 'aguardando_cliente' | 'encerrado';
 type AtendenteFilter = 'todos' | 'agente_ia' | 'humano';
-type TipoFilter = 'todos' | 'individual' | 'grupo';
+type TipoFilter = 'todos' | 'individual' | 'grupo' | 'cliente';
 type CanalFilter = 'todos' | 'whatsapp' | 'instagram';
 
 const FILTERS_STORAGE_KEY = 'conversas_filters';
@@ -1321,7 +1321,8 @@ export default function Conversas() {
     const matchesTipo =
       tipoFilter === 'todos' ||
       (tipoFilter === 'grupo' && c.contatos.is_grupo === true) ||
-      (tipoFilter === 'individual' && !c.contatos.is_grupo);
+      (tipoFilter === 'individual' && !c.contatos.is_grupo) ||
+      (tipoFilter === 'cliente' && c.negociacoes?.some(n => n.estagio?.tipo === 'cliente'));
     const matchesTags = 
       tagsFilter.length === 0 ||
       tagsFilter.some(tag => c.contatos.tags?.includes(tag));
@@ -1854,6 +1855,18 @@ export default function Conversas() {
                           >
                             <Users className="h-4 w-4" />
                             Grupos
+                          </button>
+                          <button
+                            onClick={() => setTipoFilter('cliente')}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                              tipoFilter === 'cliente'
+                                ? 'bg-cyan-500 text-white'
+                                : 'text-foreground hover:bg-muted'
+                            )}
+                          >
+                            <UserCheck className="h-4 w-4" />
+                            Clientes
                           </button>
                         </div>
                       </div>
