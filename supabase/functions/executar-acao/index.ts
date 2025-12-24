@@ -720,7 +720,57 @@ serve(async (req) => {
           
           const tituloFinal = titulo || `Reunião com ${contatoData?.nome || 'Lead'}`;
           
-          console.log('Criando evento com:', { 
+          // Calcular data_fim para validação de conflitos
+          const dataInicioDate = new Date(dataInicio);
+          const dataFimDate = new Date(dataInicioDate.getTime() + duracaoMinutos * 60 * 1000);
+          
+          console.log('Validando conflitos antes de criar evento:', { 
+            titulo: tituloFinal, 
+            dataInicio, 
+            dataFim: dataFimDate.toISOString(),
+            duracaoMinutos 
+          });
+          
+          // === VALIDAÇÃO ANTI-CONFLITO ===
+          // Consultar Google Calendar para verificar se o horário está livre
+          const consultaConflito = await fetch(`${supabaseUrl}/functions/v1/google-calendar-actions`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              operacao: 'consultar',
+              calendario_id: calendario.id,
+              dados: { 
+                data_inicio: dataInicio, 
+                data_fim: dataFimDate.toISOString() 
+              },
+            }),
+          });
+          
+          const consultaResult = await consultaConflito.json();
+          console.log('Resultado da consulta de conflitos:', consultaResult);
+          
+          // Verificar se há eventos que conflitam com o horário desejado
+          const eventosConflitantes = consultaResult.eventos?.filter((evento: { inicio: string; fim: string }) => {
+            const eventoInicio = new Date(evento.inicio);
+            const eventoFim = new Date(evento.fim);
+            
+            // Verifica sobreposição: slot começa antes do evento terminar E slot termina depois do evento começar
+            return dataInicioDate < eventoFim && dataFimDate > eventoInicio;
+          }) || [];
+          
+          if (eventosConflitantes.length > 0) {
+            console.log('Conflito detectado! Eventos conflitantes:', eventosConflitantes);
+            resultado = { 
+              sucesso: false, 
+              mensagem: 'Este horário já está ocupado na agenda. Por favor, consulte novamente os horários disponíveis.' 
+            };
+            break;
+          }
+          
+          console.log('Nenhum conflito detectado, criando evento:', { 
             titulo: tituloFinal, 
             dataInicio, 
             duracaoMinutos, 
@@ -752,9 +802,7 @@ serve(async (req) => {
           if (calendarResult.error) {
             resultado = { sucesso: false, mensagem: calendarResult.error };
           } else {
-            // Calcular data_fim baseado na duração
-            const dataInicioDate = new Date(dataInicio);
-            const dataFimDate = new Date(dataInicioDate.getTime() + duracaoMinutos * 60 * 1000);
+            // Usar dataFimDate já calculada anteriormente
             
             // Criar agendamento interno no CRM
             const { error: agendamentoError } = await supabase
