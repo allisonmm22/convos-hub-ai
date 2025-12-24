@@ -130,11 +130,40 @@ async function executarAgendaLocal(
   contaId: string,
   conversaId: string,
   contatoId: string,
-  valor: string
+  valor: string,
+  agenteId?: string
 ): Promise<{ sucesso: boolean; mensagem: string; dados?: any }> {
   console.log('Executando ação de agenda local:', valor);
   
-  // Buscar calendário ativo da conta
+  // Buscar configuração de agendamento do agente (se existir)
+  let agendamentoConfig = null;
+  let horariosConfig: any[] = [];
+  
+  if (agenteId) {
+    const { data: configData } = await supabase
+      .from('agent_ia_agendamento_config')
+      .select('*')
+      .eq('agent_ia_id', agenteId)
+      .eq('ativo', true)
+      .maybeSingle();
+    
+    agendamentoConfig = configData;
+    
+    if (configData) {
+      const { data: horariosData } = await supabase
+        .from('agent_ia_agendamento_horarios')
+        .select('*')
+        .eq('config_id', configData.id)
+        .eq('ativo', true);
+      
+      horariosConfig = horariosData || [];
+    }
+  }
+  
+  const usarAgendaInterna = agendamentoConfig?.tipo_agenda === 'interno' && horariosConfig.length > 0;
+  console.log('📅 [AGENDA] Usar agenda interna:', usarAgendaInterna);
+  
+  // Buscar calendário ativo da conta (para criar eventos)
   const { data: calendario } = await supabase
     .from('calendarios_google')
     .select('id, nome')
@@ -143,13 +172,112 @@ async function executarAgendaLocal(
     .limit(1)
     .maybeSingle();
   
-  if (!calendario) {
-    return { sucesso: false, mensagem: 'Nenhum calendário Google conectado' };
-  }
-  
   // CONSULTAR disponibilidade
   if (valor === 'consultar' || valor.startsWith('consultar:')) {
     console.log('📅 [AGENDA] Executando consulta de disponibilidade...');
+    
+    // Se usa agenda interna, consultar tabelas locais
+    if (usarAgendaInterna) {
+      console.log('📅 [AGENDA] Consultando agenda INTERNA...');
+      
+      const agora = new Date();
+      const diasMaximos = agendamentoConfig?.antecedencia_maxima_dias || 30;
+      const antecedenciaMinima = agendamentoConfig?.antecedencia_minima_horas || 1;
+      const duracaoPadrao = agendamentoConfig?.duracao_padrao || 60;
+      const limitePorHorario = agendamentoConfig?.limite_por_horario || 1;
+      
+      // Buscar agendamentos existentes para verificar conflitos
+      const dataFim = new Date(agora.getTime() + diasMaximos * 24 * 60 * 60 * 1000);
+      const { data: agendamentosExistentes } = await supabase
+        .from('agendamentos')
+        .select('data_inicio, data_fim')
+        .eq('conta_id', contaId)
+        .gte('data_inicio', agora.toISOString())
+        .lte('data_inicio', dataFim.toISOString())
+        .eq('concluido', false);
+      
+      // Gerar lista de horários disponíveis baseado na config
+      const horariosDisponiveis: string[] = [];
+      const horariosComISO: { display: string; iso: string }[] = [];
+      
+      for (let dia = 0; dia < diasMaximos && horariosDisponiveis.length < 15; dia++) {
+        const data = new Date(agora);
+        data.setDate(data.getDate() + dia);
+        data.setHours(0, 0, 0, 0);
+        
+        const diaSemana = data.getDay();
+        
+        // Buscar janelas de horário para este dia da semana
+        const janelasNoDia = horariosConfig.filter(h => h.dia_semana === diaSemana);
+        
+        if (janelasNoDia.length === 0) continue;
+        
+        for (const janela of janelasNoDia) {
+          const [horaInicio, minInicio] = janela.hora_inicio.split(':').map(Number);
+          const [horaFim, minFim] = janela.hora_fim.split(':').map(Number);
+          
+          // Gerar slots a cada "duracaoPadrao" minutos
+          for (let hora = horaInicio; hora < horaFim; hora++) {
+            const horarioCheck = new Date(data);
+            horarioCheck.setHours(hora, 0, 0, 0);
+            
+            // Pular horários passados ou muito próximos
+            const minimoAceitavel = new Date(agora.getTime() + antecedenciaMinima * 60 * 60 * 1000);
+            if (horarioCheck <= minimoAceitavel) continue;
+            
+            // Verificar conflitos com agendamentos existentes
+            const conflitos = (agendamentosExistentes || []).filter((ag: any) => {
+              const agInicio = new Date(ag.data_inicio);
+              const agFim = new Date(ag.data_fim);
+              return horarioCheck >= agInicio && horarioCheck < agFim;
+            });
+            
+            if (conflitos.length >= limitePorHorario) continue;
+            
+            const diasSemana = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+            const diaSemanaStr = diasSemana[horarioCheck.getDay()];
+            const diaStr = horarioCheck.getDate().toString().padStart(2, '0');
+            const mesStr = (horarioCheck.getMonth() + 1).toString().padStart(2, '0');
+            const displayStr = `${diaSemanaStr} ${diaStr}/${mesStr} às ${hora}h`;
+            const isoStr = horarioCheck.toISOString().replace('Z', '-03:00');
+            
+            horariosDisponiveis.push(displayStr);
+            horariosComISO.push({ display: displayStr, iso: isoStr });
+            
+            if (horariosDisponiveis.length >= 15) break;
+          }
+        }
+      }
+      
+      console.log(`✅ [AGENDA INTERNA] ${horariosDisponiveis.length} horários livres encontrados`);
+      
+      // Inserir mensagem de sistema
+      await supabase.from('mensagens').insert({
+        conversa_id: conversaId,
+        contato_id: contatoId,
+        tipo: 'sistema',
+        direcao: 'saida',
+        conteudo: `📅 Consulta de disponibilidade (agenda interna): ${horariosDisponiveis.length} horários livres encontrados`,
+        enviada_por_ia: true,
+      });
+      
+      return { 
+        sucesso: true, 
+        mensagem: `Disponibilidade consultada. Horários livres: ${horariosDisponiveis.slice(0, 5).join(', ')}`,
+        dados: {
+          eventos_ocupados: [],
+          horarios_disponiveis: horariosDisponiveis.slice(0, 10),
+          horarios_com_iso: horariosComISO.slice(0, 10),
+          calendario_nome: 'Agenda Interna',
+          tipo_agenda: 'interno',
+        }
+      };
+    }
+    
+    // Fallback: consultar Google Calendar (comportamento original)
+    if (!calendario) {
+      return { sucesso: false, mensagem: 'Nenhum calendário Google conectado' };
+    }
     
     // Consultar disponibilidade para os próximos 7 dias
     const dataInicio = new Date().toISOString();
@@ -206,14 +334,11 @@ async function executarAgendaLocal(
           if (horarioCheck <= agora) continue;
           
           // Verificar se está ocupado
-          // IMPORTANTE: Um evento das 14h-15h NÃO ocupa o slot das 15h
-          // porque 15h >= 15h (fim) é verdade, então horarioCheck < eventoFim é FALSE
           const ocupado = horariosOcupados.some((e: any) => {
             const eventoInicio = new Date(e.inicio);
             const eventoFim = new Date(e.fim);
             const estaOcupado = horarioCheck >= eventoInicio && horarioCheck < eventoFim;
             
-            // Log de debug para horários específicos
             if (hora >= 14 && hora <= 16) {
               console.log(`🔍 [DEBUG] Verificando ${hora}h: evento "${e.titulo}" (${eventoInicio.toISOString()} - ${eventoFim.toISOString()}), check: ${horarioCheck.toISOString()}, ocupado: ${estaOcupado}`);
             }
@@ -266,6 +391,58 @@ async function executarAgendaLocal(
   if (valor.startsWith('criar:')) {
     console.log('📅 [AGENDA] Executando criação de evento:', valor);
     
+    // Se usa agenda interna, validar disponibilidade antes
+    if (usarAgendaInterna) {
+      // Parse do valor para extrair data
+      const dadosEvento = valor.replace('criar:', '');
+      const partes = dadosEvento.split('|');
+      let dataInicio = partes[partes.length - 1]; // Último elemento é a data
+      
+      if (dataInicio) {
+        const dataHorario = new Date(dataInicio);
+        const diaSemana = dataHorario.getDay();
+        const hora = dataHorario.getHours();
+        
+        // Verificar se o dia/hora está nas janelas configuradas
+        const janelaValida = horariosConfig.some(h => {
+          if (h.dia_semana !== diaSemana) return false;
+          const [horaInicio] = h.hora_inicio.split(':').map(Number);
+          const [horaFim] = h.hora_fim.split(':').map(Number);
+          return hora >= horaInicio && hora < horaFim;
+        });
+        
+        if (!janelaValida) {
+          console.log('❌ [AGENDA INTERNA] Horário fora da disponibilidade configurada');
+          return { 
+            sucesso: false, 
+            mensagem: 'Este horário não está disponível. Por favor, escolha um dos horários oferecidos.' 
+          };
+        }
+        
+        // Verificar limite por horário
+        const limitePorHorario = agendamentoConfig?.limite_por_horario || 1;
+        const duracaoPadrao = agendamentoConfig?.duracao_padrao || 60;
+        const dataFimCheck = new Date(dataHorario.getTime() + duracaoPadrao * 60 * 1000);
+        
+        const { data: conflitos } = await supabase
+          .from('agendamentos')
+          .select('id')
+          .eq('conta_id', contaId)
+          .gte('data_inicio', dataHorario.toISOString())
+          .lt('data_inicio', dataFimCheck.toISOString())
+          .eq('concluido', false);
+        
+        if (conflitos && conflitos.length >= limitePorHorario) {
+          console.log('❌ [AGENDA INTERNA] Limite de agendamentos no horário atingido');
+          return { 
+            sucesso: false, 
+            mensagem: 'Este horário já está ocupado. Por favor, escolha outro horário.' 
+          };
+        }
+      }
+    }
+    
+    // Criar evento via executar-acao
     try {
       const response = await fetch(`${supabaseUrl}/functions/v1/executar-acao`, {
         method: 'POST',

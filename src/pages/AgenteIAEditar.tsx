@@ -5,7 +5,7 @@ import {
   FileText, MessageCircle, HelpCircle, Zap, Layers, Calendar,
   ChevronDown, ChevronUp, Plus, GripVertical, Trash2, Crown,
   Settings2, CheckCircle2, Circle, AlertCircle, Power, Brain,
-  Timer, SplitSquareHorizontal
+  Timer, SplitSquareHorizontal, CalendarCheck
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,6 +23,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import { AgendamentoTab } from '@/components/agente/AgendamentoTab';
 
 interface AgentConfig {
   id: string;
@@ -50,7 +51,7 @@ interface AgentConfig {
   updated_at?: string;
 }
 
-type Tab = 'regras' | 'etapas' | 'perguntas' | 'horario' | 'configuracao';
+type Tab = 'regras' | 'etapas' | 'perguntas' | 'horario' | 'agendamento' | 'configuracao';
 
 const MAX_CARACTERES = 15000;
 
@@ -113,6 +114,16 @@ const tabConfig = [
     color: 'text-amber-500',
     bgColor: 'bg-amber-500/10',
     borderColor: 'border-amber-500/20',
+    group: 'operation'
+  },
+  { 
+    id: 'agendamento' as Tab, 
+    label: 'Agendamento', 
+    shortLabel: 'Agendamento',
+    icon: CalendarCheck, 
+    color: 'text-rose-500',
+    bgColor: 'bg-rose-500/10',
+    borderColor: 'border-rose-500/20',
     group: 'operation'
   },
   { 
@@ -315,6 +326,8 @@ export default function AgenteIAEditar() {
       case 'horario':
         if (config.atender_24h || (config.dias_ativos.length > 0 && config.horario_inicio && config.horario_fim)) return 'complete';
         return 'empty';
+      case 'agendamento':
+        return 'empty'; // Status dinâmico pode ser implementado depois
       case 'configuracao':
         return config.modelo ? 'complete' : 'empty';
       default:
@@ -699,6 +712,10 @@ export default function AgenteIAEditar() {
                   saving={saving}
                   toggleDia={toggleDia}
                 />
+              )}
+
+              {activeTab === 'agendamento' && config && (
+                <AgendamentoTab agentId={config.id} />
               )}
 
               {activeTab === 'configuracao' && config && (
