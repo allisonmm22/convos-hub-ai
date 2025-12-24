@@ -442,6 +442,95 @@ export type Database = {
         }
         Relationships: []
       }
+      campos_personalizados: {
+        Row: {
+          conta_id: string
+          created_at: string
+          grupo_id: string | null
+          id: string
+          nome: string
+          obrigatorio: boolean | null
+          opcoes: Json | null
+          ordem: number | null
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          conta_id: string
+          created_at?: string
+          grupo_id?: string | null
+          id?: string
+          nome: string
+          obrigatorio?: boolean | null
+          opcoes?: Json | null
+          ordem?: number | null
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          conta_id?: string
+          created_at?: string
+          grupo_id?: string | null
+          id?: string
+          nome?: string
+          obrigatorio?: boolean | null
+          opcoes?: Json | null
+          ordem?: number | null
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campos_personalizados_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campos_personalizados_grupo_id_fkey"
+            columns: ["grupo_id"]
+            isOneToOne: false
+            referencedRelation: "campos_personalizados_grupos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campos_personalizados_grupos: {
+        Row: {
+          conta_id: string
+          created_at: string
+          id: string
+          nome: string
+          ordem: number | null
+          updated_at: string
+        }
+        Insert: {
+          conta_id: string
+          created_at?: string
+          id?: string
+          nome: string
+          ordem?: number | null
+          updated_at?: string
+        }
+        Update: {
+          conta_id?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          ordem?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campos_personalizados_grupos_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conexoes_whatsapp: {
         Row: {
           conta_id: string
