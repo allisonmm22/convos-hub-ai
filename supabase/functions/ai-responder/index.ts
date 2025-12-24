@@ -79,6 +79,26 @@ function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: A
   return { acoes, acoesParseadas };
 }
 
+// Função para substituir placeholders no prompt com dados do contato
+function substituirPlaceholders(texto: string, dados: {
+  nome?: string | null;
+  telefone?: string | null;
+  email?: string | null;
+  tags?: string[] | null;
+}): string {
+  let resultado = texto;
+  
+  // Placeholders suportados (case insensitive)
+  resultado = resultado.replace(/\[Nome do cliente\]/gi, dados.nome || 'Cliente');
+  resultado = resultado.replace(/\[Nome do lead\]/gi, dados.nome || 'Cliente');
+  resultado = resultado.replace(/\[Nome\]/gi, dados.nome || 'Cliente');
+  resultado = resultado.replace(/\[Telefone\]/gi, dados.telefone || '');
+  resultado = resultado.replace(/\[Email\]/gi, dados.email || '');
+  resultado = resultado.replace(/\[Tags\]/gi, dados.tags?.join(', ') || '');
+  
+  return resultado;
+}
+
 // Mapear nome de etapa para ID
 async function mapearEtapaNome(supabase: any, contaId: string, nomeEtapa: string): Promise<string | null> {
   // Normalizar nome (remover hífens, pontuação final, lowercase)
@@ -875,7 +895,22 @@ serve(async (req) => {
     const memoriaLimpaEm = conversa?.memoria_limpa_em;
     const etapaIAAtual = conversa?.etapa_ia_atual;
 
-    // 5.1 Buscar contexto do CRM (negociação e etapa) para informar a IA
+    // 5.1 Buscar dados do contato para placeholders
+    let dadosContato: { nome?: string | null; telefone?: string | null; email?: string | null; tags?: string[] | null } | null = null;
+    if (contatoId) {
+      const { data: contatoData } = await supabase
+        .from('contatos')
+        .select('nome, telefone, email, tags')
+        .eq('id', contatoId)
+        .single();
+      
+      if (contatoData) {
+        dadosContato = contatoData;
+        console.log('📋 Dados do contato para placeholders:', dadosContato.nome);
+      }
+    }
+
+    // 5.2 Buscar contexto do CRM (negociação e etapa) para informar a IA
     let crmContexto = null;
     if (contatoId) {
       const { data: negociacaoData } = await supabase
@@ -1154,6 +1189,12 @@ serve(async (req) => {
     promptCompleto += '- Se não houver informação suficiente no prompt configurado para responder uma pergunta sobre você ou a empresa, diga educadamente que pode ajudar com outras questões ou solicite que o lead entre em contato com a equipe.\n';
     promptCompleto += '- NUNCA adicione detalhes, funções, serviços ou características que não foram mencionados nas instruções acima.\n';
     promptCompleto += '- Mantenha-se estritamente dentro do escopo das informações fornecidas.\n';
+
+    // Substituir placeholders no prompt com dados do contato
+    if (dadosContato) {
+      promptCompleto = substituirPlaceholders(promptCompleto, dadosContato);
+      console.log('✅ Placeholders substituídos no prompt');
+    }
 
     console.log('Prompt montado com', promptCompleto.length, 'caracteres');
     console.log('Ações disponíveis:', acoesDisponiveis.length);
