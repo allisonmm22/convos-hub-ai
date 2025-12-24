@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, Key, Save, Eye, EyeOff, Trash2, Play, MessageSquare, RefreshCw, User, Sparkles, Crown, Zap, Power, PowerOff, Bell } from 'lucide-react';
+import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, Key, Save, Eye, EyeOff, Trash2, Play, MessageSquare, RefreshCw, User, Sparkles, Crown, Zap, Power, PowerOff, Bell, ListChecks } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOnboarding } from '@/contexts/OnboardingContext';
@@ -11,6 +11,7 @@ import { FollowUpRegraModal } from '@/components/FollowUpRegraModal';
 import { LembreteRegraModal } from '@/components/LembreteRegraModal';
 import { validarEExibirErro } from '@/hooks/useValidarLimitePlano';
 import { format } from 'date-fns';
+import { CamposPersonalizadosContent } from '@/components/campos/CamposPersonalizadosContent';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -39,7 +40,7 @@ interface Agent {
   created_at?: string;
 }
 
-type SubPage = 'agentes' | 'followup' | 'lembretes' | 'sessoes' | 'configuracao';
+type SubPage = 'agentes' | 'followup' | 'lembretes' | 'sessoes' | 'campos-personalizados' | 'configuracao';
 
 export default function AgenteIA() {
   const { usuario } = useAuth();
@@ -171,6 +172,7 @@ export default function AgenteIA() {
     { id: 'followup' as SubPage, label: 'Follow-up', icon: Clock },
     { id: 'lembretes' as SubPage, label: 'Lembretes', icon: Bell },
     { id: 'sessoes' as SubPage, label: 'Sessões', icon: Users },
+    { id: 'campos-personalizados' as SubPage, label: 'Campos Personalizados', icon: ListChecks },
     { id: 'configuracao' as SubPage, label: 'Configuração', icon: Key },
   ];
 
@@ -451,6 +453,10 @@ export default function AgenteIA() {
 
           {subPage === 'configuracao' && (
             <ConfiguracaoPage />
+          )}
+
+          {subPage === 'campos-personalizados' && (
+            <CamposPersonalizadosContent />
           )}
         </div>
       </div>
