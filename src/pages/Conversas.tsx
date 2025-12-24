@@ -134,6 +134,14 @@ interface EtapaIA {
   numero: number;
 }
 
+interface NegociacaoEstagio {
+  id: string;
+  estagio: {
+    nome: string;
+    tipo: string | null;
+  } | null;
+}
+
 interface Conversa {
   id: string;
   contato_id: string;
@@ -150,6 +158,7 @@ interface Conversa {
   contatos: Contato;
   agent_ia?: AgenteIA | null;
   etapa_ia?: EtapaIA | null;
+  negociacoes?: NegociacaoEstagio[];
 }
 
 interface MensagemMetadata {
@@ -516,13 +525,46 @@ export default function Conversas() {
     try {
       const { data, error } = await supabase
         .from('conversas')
-        .select(`*, contatos(*), agent_ia:agente_ia_id(id, nome, ativo, tipo), etapa_ia:etapa_ia_atual(id, nome, numero)`)
+        .select(`
+          *, 
+          contatos(*), 
+          agent_ia:agente_ia_id(id, nome, ativo, tipo), 
+          etapa_ia:etapa_ia_atual(id, nome, numero)
+        `)
         .eq('conta_id', usuario!.conta_id)
         .eq('arquivada', false)
         .order('ultima_mensagem_at', { ascending: false });
 
       if (error) throw error;
-      setConversas(data || []);
+      
+      // Buscar negociações para verificar se são clientes
+      const contatoIds = data?.map(c => c.contato_id).filter(Boolean) || [];
+      
+      if (contatoIds.length > 0) {
+        const { data: negociacoes } = await supabase
+          .from('negociacoes')
+          .select('id, contato_id, estagio:estagios(nome, tipo)')
+          .in('contato_id', contatoIds)
+          .eq('status', 'aberto');
+        
+        // Mapear negociações por contato_id
+        const negociacoesPorContato = new Map<string, NegociacaoEstagio[]>();
+        negociacoes?.forEach(neg => {
+          const existing = negociacoesPorContato.get(neg.contato_id) || [];
+          existing.push({ id: neg.id, estagio: neg.estagio });
+          negociacoesPorContato.set(neg.contato_id, existing);
+        });
+        
+        // Adicionar negociações às conversas
+        const conversasComNegociacoes = data?.map(conversa => ({
+          ...conversa,
+          negociacoes: negociacoesPorContato.get(conversa.contato_id) || []
+        })) || [];
+        
+        setConversas(conversasComNegociacoes);
+      } else {
+        setConversas(data || []);
+      }
     } catch (error) {
       console.error('Erro ao buscar conversas:', error);
     } finally {
@@ -2101,6 +2143,12 @@ export default function Conversas() {
                           <Megaphone className="h-2.5 w-2.5" /> Anúncio
                         </span>
                       ) : null}
+                      {/* Badge de Cliente */}
+                      {conversa.negociacoes?.some(n => n.estagio?.tipo === 'cliente') && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 flex items-center gap-0.5">
+                          <UserCheck className="h-2.5 w-2.5" /> Cliente
+                        </span>
+                      )}
                     </div>
                   </div>
                   {(conversa.nao_lidas || 0) > 0 && (
