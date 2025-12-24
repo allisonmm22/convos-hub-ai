@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { 
   Tag, UserRound, Bot, Globe, Layers, Bell, Package, StopCircle,
-  Check, AlertCircle, Loader2, UserPen, Handshake, CalendarSearch, CalendarPlus
+  Check, AlertCircle, Loader2, UserPen, Handshake, CalendarSearch, CalendarPlus,
+  FileEdit, FileSearch
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -141,6 +142,22 @@ const tiposAcao: AcaoTipo[] = [
     color: 'hsl(150 80% 40%)',
     bgColor: 'hsl(150 80% 40% / 0.1)',
   },
+  {
+    id: 'campo',
+    label: 'Atualizar Campo',
+    description: 'Salva valor em campo personalizado',
+    icon: FileEdit,
+    color: 'hsl(280 80% 50%)',
+    bgColor: 'hsl(280 80% 50% / 0.1)',
+  },
+  {
+    id: 'obter',
+    label: 'Obter Campo',
+    description: 'Lê valor de campo personalizado',
+    icon: FileSearch,
+    color: 'hsl(45 80% 50%)',
+    bgColor: 'hsl(45 80% 50% / 0.1)',
+  },
 ];
 
 interface TagItem {
@@ -160,6 +177,7 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
   const [agentes, setAgentes] = useState<{ id: string; nome: string }[]>([]);
   const [calendarios, setCalendarios] = useState<{ id: string; nome: string }[]>([]);
   const [tagsDisponiveis, setTagsDisponiveis] = useState<TagItem[]>([]);
+  const [camposPersonalizados, setCamposPersonalizados] = useState<{ id: string; nome: string }[]>([]);
   
   const [tagValue, setTagValue] = useState('');
   const [funilSelecionado, setFunilSelecionado] = useState('');
@@ -173,6 +191,7 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
   const [calendarioSelecionado, setCalendarioSelecionado] = useState('');
   const [duracaoEvento, setDuracaoEvento] = useState('60');
   const [gerarMeet, setGerarMeet] = useState(false);
+  const [campoSelecionado, setCampoSelecionado] = useState('');
 
   useEffect(() => {
     if (!isOpen) {
@@ -189,6 +208,7 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
       setCalendarioSelecionado('');
       setDuracaoEvento('60');
       setGerarMeet(false);
+      setCampoSelecionado('');
     }
   }, [isOpen]);
 
@@ -201,7 +221,7 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [funisRes, usuariosRes, agentesRes, calendariosRes, tagsRes] = await Promise.all([
+      const [funisRes, usuariosRes, agentesRes, calendariosRes, tagsRes, camposRes] = await Promise.all([
         supabase
           .from('funis')
           .select('id, nome')
@@ -226,6 +246,11 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
           .select('id, nome, cor')
           .eq('conta_id', usuario!.conta_id)
           .order('nome'),
+        supabase
+          .from('campos_personalizados')
+          .select('id, nome')
+          .eq('conta_id', usuario!.conta_id)
+          .order('nome'),
       ]);
 
       if (funisRes.data) setFunis(funisRes.data);
@@ -233,6 +258,7 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
       if (agentesRes.data) setAgentes(agentesRes.data);
       if (calendariosRes.data) setCalendarios(calendariosRes.data);
       if (tagsRes.data) setTagsDisponiveis(tagsRes.data);
+      if (camposRes.data) setCamposPersonalizados(camposRes.data);
 
       if (funisRes.data && funisRes.data.length > 0) {
         const { data: estagiosData } = await supabase
@@ -276,6 +302,9 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
       case 'agenda-consultar':
       case 'agenda-criar':
         return calendarioSelecionado !== '';
+      case 'campo':
+      case 'obter':
+        return campoSelecionado !== '';
       default:
         return false;
     }
@@ -336,6 +365,16 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
         const calSlug = cal?.nome.toLowerCase().replace(/\s+/g, '-') || calendarioSelecionado;
         const meetFlag = gerarMeet ? 'meet' : 'no-meet';
         return `@agenda:criar:${calSlug}:${duracaoEvento}:${meetFlag}`;
+      }
+      case 'campo': {
+        const campo = camposPersonalizados.find(c => c.id === campoSelecionado);
+        const campoSlug = campo?.nome.toLowerCase().replace(/\s+/g, '-') || campoSelecionado;
+        return `@campo:${campoSlug}:`;
+      }
+      case 'obter': {
+        const campo = camposPersonalizados.find(c => c.id === campoSelecionado);
+        const campoSlug = campo?.nome.toLowerCase().replace(/\s+/g, '-') || campoSelecionado;
+        return `@obter:${campoSlug}`;
       }
       default:
         return '';
@@ -752,6 +791,70 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
                     {calendarios.length === 0 && (
                       <p className="text-xs text-amber-600 dark:text-amber-400">
                         ⚠️ Nenhum calendário conectado. Conecte um Google Calendar nas configurações.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {tipoSelecionado === 'campo' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Selecione o Campo</label>
+                      <select
+                        value={campoSelecionado}
+                        onChange={(e) => setCampoSelecionado(e.target.value)}
+                        className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">Selecione um campo...</option>
+                        {camposPersonalizados.map(campo => (
+                          <option key={campo.id} value={campo.id}>{campo.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="p-4 rounded-lg bg-purple-100 dark:bg-purple-900/30 border border-purple-300 dark:border-purple-700">
+                      <p className="text-sm text-purple-700 dark:text-purple-300 mb-1">
+                        ✏️ <strong>Atualizar Campo Personalizado</strong>
+                      </p>
+                      <p className="text-xs text-purple-600 dark:text-purple-400">
+                        O agente irá salvar o valor informado pelo lead neste campo. 
+                        Adicione o valor após os dois pontos: <code className="bg-purple-200 dark:bg-purple-800 px-1 rounded">@campo:nome:VALOR</code>
+                      </p>
+                    </div>
+                    {camposPersonalizados.length === 0 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        ⚠️ Nenhum campo personalizado cadastrado. Crie campos na página de Campos Personalizados.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {tipoSelecionado === 'obter' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Selecione o Campo</label>
+                      <select
+                        value={campoSelecionado}
+                        onChange={(e) => setCampoSelecionado(e.target.value)}
+                        className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">Selecione um campo...</option>
+                        {camposPersonalizados.map(campo => (
+                          <option key={campo.id} value={campo.id}>{campo.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="p-4 rounded-lg bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700">
+                      <p className="text-sm text-amber-700 dark:text-amber-300 mb-1">
+                        🔍 <strong>Obter Valor do Campo</strong>
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        O agente irá buscar o valor deste campo e poderá usar na conversa. 
+                        O resultado será informado ao agente para compor a resposta.
+                      </p>
+                    </div>
+                    {camposPersonalizados.length === 0 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        ⚠️ Nenhum campo personalizado cadastrado. Crie campos na página de Campos Personalizados.
                       </p>
                     )}
                   </div>
