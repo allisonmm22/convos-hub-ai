@@ -1160,7 +1160,7 @@ serve(async (req) => {
 
     // Criar função de execução de agenda para passar para as chamadas de IA
     const executarAgendaFn = async (valor: string) => {
-      return await executarAgendaLocal(supabase, supabaseUrl, supabaseKey, conta_id, conversa_id, contatoId, valor);
+      return await executarAgendaLocal(supabase, supabaseUrl, supabaseKey, conta_id, conversa_id, contatoId, valor, agente.id);
     };
 
     // Detectar se é uma confirmação de agendamento para forçar uso de ferramenta
