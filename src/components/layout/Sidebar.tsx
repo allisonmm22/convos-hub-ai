@@ -16,6 +16,7 @@ import {
   LogOut,
   Megaphone,
   CreditCard,
+  ListChecks,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,7 @@ const menuItems = [
   { icon: Kanban, label: 'CRM', path: '/crm' },
   { icon: Calendar, label: 'Agendamentos', path: '/agendamentos' },
   { icon: Users, label: 'Contatos', path: '/contatos' },
+  { icon: ListChecks, label: 'Campos Personalizados', path: '/campos-personalizados' },
   { icon: Megaphone, label: 'Anúncios Meta', path: '/relatorios/anuncios' },
   { icon: UserCog, label: 'Usuários', path: '/usuarios' },
   { icon: Plug, label: 'Conexão', path: '/conexao' },

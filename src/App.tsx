@@ -24,6 +24,7 @@ import IntegracaoGoogleCalendar from "./pages/IntegracaoGoogleCalendar";
 import Configuracoes from "./pages/Configuracoes";
 import RelatorioAnuncios from "./pages/RelatorioAnuncios";
 import NotFound from "./pages/NotFound";
+import CamposPersonalizados from "./pages/CamposPersonalizados";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminContas from "./pages/admin/AdminContas";
 import AdminContaDetalhe from "./pages/admin/AdminContaDetalhe";
@@ -223,8 +224,16 @@ function AppRoutes() {
           <Configuracoes />
         } 
       />
+      <Route 
+        path="/campos-personalizados" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+          <CamposPersonalizados />
+        } 
+      />
         <Route 
-          path="/relatorios/anuncios" 
+          path="/relatorios/anuncios"
           element={
             !user ? <Navigate to="/auth" replace /> :
             usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
