@@ -3,7 +3,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { 
   ArrowLeft, Plus, Trash2, Edit2, GripVertical, Loader2, 
   Settings, Tag, Bell, BellOff, ChevronUp, ChevronDown,
-  Layers, ArrowRight, X, Copy, Trophy, XCircle, Zap
+  Layers, ArrowRight, X, Copy, Trophy, XCircle, Zap, UserCheck
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,7 +38,7 @@ interface Estagio {
   ordem: number;
   funil_id: string;
   followup_ativo: boolean;
-  tipo: 'normal' | 'ganho' | 'perdido';
+  tipo: 'normal' | 'ganho' | 'perdido' | 'cliente';
 }
 
 interface Funil {
@@ -85,7 +85,7 @@ export default function CRMConfiguracoes() {
   
   // Form states
   const [funilForm, setFunilForm] = useState({ nome: '', descricao: '', cor: '#3b82f6' });
-  const [estagioForm, setEstagioForm] = useState({ nome: '', cor: '#3b82f6', followup_ativo: true, tipo: 'normal' as 'normal' | 'ganho' | 'perdido' });
+  const [estagioForm, setEstagioForm] = useState({ nome: '', cor: '#3b82f6', followup_ativo: true, tipo: 'normal' as 'normal' | 'ganho' | 'perdido' | 'cliente' });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -234,7 +234,7 @@ export default function CRMConfiguracoes() {
         ...funil,
         estagios: (funil.estagios || []).sort((a, b) => (a.ordem || 0) - (b.ordem || 0)).map(e => ({
           ...e,
-          tipo: (e.tipo || 'normal') as 'normal' | 'ganho' | 'perdido'
+          tipo: (e.tipo || 'normal') as 'normal' | 'ganho' | 'perdido' | 'cliente'
         }))
       }));
 
@@ -825,6 +825,12 @@ export default function CRMConfiguracoes() {
                                               Perdido
                                             </span>
                                           )}
+                                          {estagio.tipo === 'cliente' && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-500/10 text-cyan-600">
+                                              <UserCheck className="h-3 w-3" />
+                                              Cliente
+                                            </span>
+                                          )}
                                         </div>
                                         <p className="text-xs text-muted-foreground">
                                           {estagio.followup_ativo !== false ? 'Follow-up ativo' : 'Follow-up desativado'}
@@ -1142,7 +1148,7 @@ export default function CRMConfiguracoes() {
               {/* Tipo de Etapa */}
               <div className="space-y-3">
                 <Label>Tipo de etapa</Label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-4 gap-2">
                   <button
                     type="button"
                     onClick={() => setEstagioForm({ ...estagioForm, tipo: 'normal' })}
@@ -1154,7 +1160,20 @@ export default function CRMConfiguracoes() {
                     )}
                   >
                     <Zap className={cn("h-5 w-5", estagioForm.tipo === 'normal' ? "text-primary" : "text-muted-foreground")} />
-                    <span className={cn("text-sm font-medium", estagioForm.tipo === 'normal' ? "text-primary" : "text-muted-foreground")}>Normal</span>
+                    <span className={cn("text-xs font-medium", estagioForm.tipo === 'normal' ? "text-primary" : "text-muted-foreground")}>Normal</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEstagioForm({ ...estagioForm, tipo: 'cliente', cor: '#06b6d4' })}
+                    className={cn(
+                      "flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all",
+                      estagioForm.tipo === 'cliente' 
+                        ? "border-cyan-500 bg-cyan-500/10" 
+                        : "border-border hover:border-muted-foreground/50"
+                    )}
+                  >
+                    <UserCheck className={cn("h-5 w-5", estagioForm.tipo === 'cliente' ? "text-cyan-500" : "text-muted-foreground")} />
+                    <span className={cn("text-xs font-medium", estagioForm.tipo === 'cliente' ? "text-cyan-500" : "text-muted-foreground")}>Cliente</span>
                   </button>
                   <button
                     type="button"
@@ -1167,7 +1186,7 @@ export default function CRMConfiguracoes() {
                     )}
                   >
                     <Trophy className={cn("h-5 w-5", estagioForm.tipo === 'ganho' ? "text-emerald-500" : "text-muted-foreground")} />
-                    <span className={cn("text-sm font-medium", estagioForm.tipo === 'ganho' ? "text-emerald-500" : "text-muted-foreground")}>Ganho</span>
+                    <span className={cn("text-xs font-medium", estagioForm.tipo === 'ganho' ? "text-emerald-500" : "text-muted-foreground")}>Ganho</span>
                   </button>
                   <button
                     type="button"
@@ -1180,12 +1199,13 @@ export default function CRMConfiguracoes() {
                     )}
                   >
                     <XCircle className={cn("h-5 w-5", estagioForm.tipo === 'perdido' ? "text-red-500" : "text-muted-foreground")} />
-                    <span className={cn("text-sm font-medium", estagioForm.tipo === 'perdido' ? "text-red-500" : "text-muted-foreground")}>Perdido</span>
+                    <span className={cn("text-xs font-medium", estagioForm.tipo === 'perdido' ? "text-red-500" : "text-muted-foreground")}>Perdido</span>
                   </button>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {estagioForm.tipo === 'ganho' && "Negociações nesta etapa serão marcadas como ganhas automaticamente."}
                   {estagioForm.tipo === 'perdido' && "Negociações nesta etapa serão marcadas como perdidas automaticamente."}
+                  {estagioForm.tipo === 'cliente' && "Lead convertido para cliente ativo. A IA reconhecerá como cliente."}
                   {estagioForm.tipo === 'normal' && "Etapa regular no fluxo de vendas."}
                 </p>
               </div>

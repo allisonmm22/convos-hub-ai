@@ -875,6 +875,50 @@ serve(async (req) => {
     const memoriaLimpaEm = conversa?.memoria_limpa_em;
     const etapaIAAtual = conversa?.etapa_ia_atual;
 
+    // 5.1 Buscar contexto do CRM (negociação e etapa) para informar a IA
+    let crmContexto = null;
+    if (contatoId) {
+      const { data: negociacaoData } = await supabase
+        .from('negociacoes')
+        .select(`
+          id, 
+          titulo, 
+          status, 
+          valor,
+          estagio_id,
+          estagios!negociacoes_estagio_id_fkey (
+            id,
+            nome,
+            tipo,
+            funil_id,
+            funis!estagios_funil_id_fkey (
+              id,
+              nome
+            )
+          )
+        `)
+        .eq('contato_id', contatoId)
+        .eq('status', 'aberto')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (negociacaoData?.estagios) {
+        const estagio = negociacaoData.estagios as any;
+        const funil = estagio?.funis as any;
+        crmContexto = {
+          negociacao_id: negociacaoData.id,
+          negociacao_titulo: negociacaoData.titulo,
+          negociacao_valor: negociacaoData.valor,
+          estagio_nome: estagio?.nome,
+          estagio_tipo: estagio?.tipo,
+          funil_nome: funil?.nome,
+          is_cliente: estagio?.tipo === 'cliente',
+        };
+        console.log('Contexto CRM encontrado:', crmContexto);
+      }
+    }
+
     // 6. Buscar histórico de mensagens da conversa (limite configurável por agente, filtrando por memoria_limpa_em)
     const limiteContexto = agente.quantidade_mensagens_contexto || 20;
     console.log('Limite de mensagens no contexto:', limiteContexto);
@@ -953,6 +997,25 @@ serve(async (req) => {
     promptCompleto += `- Horário atual: ${hora}:${minuto} (horário de Brasília)\n`;
     promptCompleto += `- Período do dia: ${periodo}\n`;
     promptCompleto += `\nUse estas informações para cumprimentos apropriados (Bom dia/Boa tarde/Boa noite) e referências temporais.\n`;
+
+    // Adicionar contexto do CRM se disponível
+    if (crmContexto) {
+      promptCompleto += `\n\n## CONTEXTO DO CRM\n`;
+      if (crmContexto.is_cliente) {
+        promptCompleto += `**⭐ ESTE É UM CLIENTE ATIVO!**\n`;
+        promptCompleto += `- Status: Cliente (já convertido)\n`;
+        promptCompleto += `- Trate este contato como um cliente existente, não como um novo lead.\n`;
+        promptCompleto += `- Seja mais familiar e personalizado no atendimento.\n`;
+      } else {
+        promptCompleto += `- Status: Lead em negociação\n`;
+      }
+      promptCompleto += `- Etapa atual no CRM: ${crmContexto.estagio_nome || 'Não definida'}\n`;
+      promptCompleto += `- Funil: ${crmContexto.funil_nome || 'Não definido'}\n`;
+      if (crmContexto.negociacao_valor && crmContexto.negociacao_valor > 0) {
+        promptCompleto += `- Valor da negociação: R$ ${crmContexto.negociacao_valor.toLocaleString('pt-BR')}\n`;
+      }
+      promptCompleto += `\nUse estas informações para contextualizar melhor o atendimento.\n`;
+    }
 
     // Adicionar contexto de mídia se for áudio com transcrição
     if (mensagem_tipo === 'audio' && transcricao) {
