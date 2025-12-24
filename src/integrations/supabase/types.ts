@@ -173,6 +173,119 @@ export type Database = {
           },
         ]
       }
+      agent_ia_agendamento_config: {
+        Row: {
+          agent_ia_id: string
+          antecedencia_maxima_dias: number | null
+          antecedencia_minima_horas: number | null
+          ativo: boolean | null
+          created_at: string | null
+          descricao_agendamento: string | null
+          duracao_padrao: number | null
+          gerar_meet: boolean | null
+          google_calendar_id: string | null
+          id: string
+          intervalo_entre_agendamentos: number | null
+          limite_por_horario: number | null
+          nome_agendamento: string | null
+          prompt_consulta_horarios: string | null
+          prompt_marcacao_horario: string | null
+          tipo_agenda: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          agent_ia_id: string
+          antecedencia_maxima_dias?: number | null
+          antecedencia_minima_horas?: number | null
+          ativo?: boolean | null
+          created_at?: string | null
+          descricao_agendamento?: string | null
+          duracao_padrao?: number | null
+          gerar_meet?: boolean | null
+          google_calendar_id?: string | null
+          id?: string
+          intervalo_entre_agendamentos?: number | null
+          limite_por_horario?: number | null
+          nome_agendamento?: string | null
+          prompt_consulta_horarios?: string | null
+          prompt_marcacao_horario?: string | null
+          tipo_agenda?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          agent_ia_id?: string
+          antecedencia_maxima_dias?: number | null
+          antecedencia_minima_horas?: number | null
+          ativo?: boolean | null
+          created_at?: string | null
+          descricao_agendamento?: string | null
+          duracao_padrao?: number | null
+          gerar_meet?: boolean | null
+          google_calendar_id?: string | null
+          id?: string
+          intervalo_entre_agendamentos?: number | null
+          limite_por_horario?: number | null
+          nome_agendamento?: string | null
+          prompt_consulta_horarios?: string | null
+          prompt_marcacao_horario?: string | null
+          tipo_agenda?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_ia_agendamento_config_agent_ia_id_fkey"
+            columns: ["agent_ia_id"]
+            isOneToOne: true
+            referencedRelation: "agent_ia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_ia_agendamento_config_google_calendar_id_fkey"
+            columns: ["google_calendar_id"]
+            isOneToOne: false
+            referencedRelation: "calendarios_google"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_ia_agendamento_horarios: {
+        Row: {
+          ativo: boolean | null
+          config_id: string
+          created_at: string | null
+          dia_semana: number
+          hora_fim: string
+          hora_inicio: string
+          id: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          config_id: string
+          created_at?: string | null
+          dia_semana: number
+          hora_fim: string
+          hora_inicio: string
+          id?: string
+        }
+        Update: {
+          ativo?: boolean | null
+          config_id?: string
+          created_at?: string | null
+          dia_semana?: number
+          hora_fim?: string
+          hora_inicio?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_ia_agendamento_horarios_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "agent_ia_agendamento_config"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_ia_etapas: {
         Row: {
           agent_ia_id: string
