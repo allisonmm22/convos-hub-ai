@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,11 +8,19 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { User, Lock, Save, Eye, EyeOff } from 'lucide-react';
+import { User, Lock, Save, Eye, EyeOff, PenLine } from 'lucide-react';
 
 export default function Perfil() {
   const { usuario, refreshUsuario } = useAuth();
   const { toast } = useToast();
+  
+  const [assinaturaAtiva, setAssinaturaAtiva] = useState(usuario?.assinatura_ativa ?? true);
+
+  useEffect(() => {
+    if (usuario) {
+      setAssinaturaAtiva(usuario.assinatura_ativa ?? true);
+    }
+  }, [usuario]);
   
   const [nome, setNome] = useState(usuario?.nome || '');
   const [savingNome, setSavingNome] = useState(false);
@@ -60,6 +68,31 @@ export default function Perfil() {
       });
     } finally {
       setSavingNome(false);
+    }
+  };
+
+  const handleAssinaturaToggle = async (enabled: boolean) => {
+    if (!usuario?.id) return;
+    try {
+      const { error } = await supabase
+        .from('usuarios')
+        .update({ assinatura_ativa: enabled })
+        .eq('id', usuario.id);
+
+      if (error) throw error;
+      
+      setAssinaturaAtiva(enabled);
+      await refreshUsuario();
+      toast({
+        title: 'Sucesso',
+        description: enabled ? 'Assinatura ativada' : 'Assinatura desativada',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Erro',
+        description: 'Erro ao salvar preferência',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -171,6 +204,29 @@ export default function Perfil() {
                 <p className="text-xs text-muted-foreground">
                   O email não pode ser alterado por aqui.
                 </p>
+              </div>
+
+              {/* Assinatura nas Mensagens */}
+              <div className="flex items-center justify-between gap-3 p-3 md:p-4 rounded-lg bg-muted/50 border border-border">
+                <div className="flex items-center gap-3 min-w-0">
+                  <PenLine className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground text-sm md:text-base">Assinatura nas Mensagens</p>
+                    <p className="text-xs md:text-sm text-muted-foreground">Adicionar seu nome ao final das mensagens</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleAssinaturaToggle(!assinaturaAtiva)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+                    assinaturaAtiva ? 'bg-primary' : 'bg-muted-foreground/30'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      assinaturaAtiva ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
 
               <Button onClick={handleSaveNome} disabled={savingNome}>

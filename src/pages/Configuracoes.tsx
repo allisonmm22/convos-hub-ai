@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { User, Building, Save, Loader2, Bell, Volume2, PenLine } from 'lucide-react';
+import { Building, Save, Loader2, Bell, Volume2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -9,17 +9,12 @@ import { requestNotificationPermission } from '@/lib/notificationSound';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function Configuracoes() {
-  const { usuario, refreshUsuario } = useAuth();
+  const { usuario } = useAuth();
   const isMobile = useIsMobile();
   const [loading, setLoading] = useState(false);
-  const [userData, setUserData] = useState({
-    nome: '',
-    email: '',
-  });
   const [contaData, setContaData] = useState({
     nome: '',
   });
-  const [assinaturaAtiva, setAssinaturaAtiva] = useState(true);
 
   const { 
     soundEnabled, 
@@ -30,11 +25,6 @@ export default function Configuracoes() {
 
   useEffect(() => {
     if (usuario) {
-      setUserData({
-        nome: usuario.nome,
-        email: usuario.email,
-      });
-      setAssinaturaAtiva(usuario.assinatura_ativa ?? true);
       fetchConta();
     }
   }, [usuario]);
@@ -48,23 +38,6 @@ export default function Configuracoes() {
 
     if (data) {
       setContaData({ nome: data.nome });
-    }
-  };
-
-  const handleSaveUser = async () => {
-    setLoading(true);
-    try {
-      const { error } = await supabase
-        .from('usuarios')
-        .update({ nome: userData.nome })
-        .eq('id', usuario!.id);
-
-      if (error) throw error;
-      toast.success('Perfil atualizado!');
-    } catch (error) {
-      toast.error('Erro ao salvar');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -102,23 +75,6 @@ export default function Configuracoes() {
     toast.success(enabled ? 'Notificações sonoras ativadas' : 'Notificações sonoras desativadas');
   };
 
-  const handleAssinaturaToggle = async (enabled: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('usuarios')
-        .update({ assinatura_ativa: enabled })
-        .eq('id', usuario!.id);
-
-      if (error) throw error;
-      
-      setAssinaturaAtiva(enabled);
-      await refreshUsuario();
-      toast.success(enabled ? 'Assinatura ativada' : 'Assinatura desativada');
-    } catch (error) {
-      toast.error('Erro ao salvar preferência');
-    }
-  };
-
   return (
     <MainLayout>
       <div className={`max-w-2xl space-y-6 md:space-y-8 animate-fade-in ${isMobile ? 'px-4 py-4' : ''}`}>
@@ -127,82 +83,6 @@ export default function Configuracoes() {
           <p className="text-muted-foreground mt-1 text-sm md:text-base">
             Gerencie suas preferências e configurações da conta.
           </p>
-        </div>
-
-        {/* Perfil */}
-        <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-4 md:space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20 flex-shrink-0">
-              <User className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">Perfil</h2>
-              <p className="text-sm text-muted-foreground">Suas informações pessoais</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Nome</label>
-              <input
-                type="text"
-                value={userData.nome}
-                onChange={(e) => setUserData({ ...userData, nome: e.target.value })}
-                className="w-full h-11 px-4 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Email</label>
-              <input
-                type="email"
-                value={userData.email}
-                disabled
-                className="w-full h-11 px-4 rounded-lg bg-muted border border-border text-muted-foreground cursor-not-allowed"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                O email não pode ser alterado
-              </p>
-            </div>
-
-            {/* Assinatura */}
-            <div className="flex items-center justify-between gap-3 p-3 md:p-4 rounded-lg bg-muted/50 border border-border">
-              <div className="flex items-center gap-3 min-w-0">
-                <PenLine className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="font-medium text-foreground text-sm md:text-base">Assinatura nas Mensagens</p>
-                  <p className="text-xs md:text-sm text-muted-foreground truncate">Adicionar seu nome ao final das mensagens</p>
-                </div>
-              </div>
-              <button
-                onClick={() => handleAssinaturaToggle(!assinaturaAtiva)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
-                  assinaturaAtiva ? 'bg-primary' : 'bg-muted-foreground/30'
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    assinaturaAtiva ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
-              </button>
-            </div>
-          </div>
-
-          <button
-            onClick={handleSaveUser}
-            disabled={loading}
-            className="h-10 px-6 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-50"
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                Salvar Perfil
-              </>
-            )}
-          </button>
         </div>
 
         {/* Notificações */}
