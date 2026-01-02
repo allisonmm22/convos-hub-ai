@@ -173,14 +173,20 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
 
           {/* User Info & Logout */}
           <div className="border-t border-sidebar-border p-4">
-            <div className="flex items-center gap-3 mb-4">
+            <button
+              onClick={() => {
+                navigate('/perfil');
+                onOpenChange(false);
+              }}
+              className="flex items-center gap-3 mb-4 w-full rounded-lg hover:bg-sidebar-accent/50 p-2 -m-2 transition-colors"
+            >
               <Avatar className="h-10 w-10">
                 <AvatarImage src={usuario?.avatar_url || ''} />
                 <AvatarFallback className="bg-primary text-primary-foreground">
                   {usuario?.nome?.charAt(0)?.toUpperCase() || 'U'}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 text-left">
                 <p className="text-sm font-medium text-sidebar-foreground truncate">
                   {usuario?.nome || 'Usuário'}
                 </p>
@@ -188,7 +194,7 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
                   {usuario?.email || ''}
                 </p>
               </div>
-            </div>
+            </button>
             <Button
               variant="ghost"
               className="w-full justify-start gap-3 text-sidebar-foreground hover:bg-sidebar-accent/50"

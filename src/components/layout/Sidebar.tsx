@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   MessageSquare,
@@ -60,6 +60,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [configExpanded, setConfigExpanded] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { usuario, signOut } = useAuth();
 
   // Auto-expand config menu when on a config submenu route
@@ -184,10 +185,13 @@ export function Sidebar() {
       {/* User Section */}
       <div className="absolute bottom-0 left-0 right-0 border-t border-sidebar-border p-2">
         {!collapsed && usuario && (
-          <div className="mb-2 px-3 py-2">
+          <button
+            onClick={() => navigate('/perfil')}
+            className="mb-2 px-3 py-2 w-full text-left rounded-lg hover:bg-sidebar-accent transition-colors"
+          >
             <p className="text-sm font-medium text-foreground truncate">{usuario.nome}</p>
             <p className="text-xs text-muted-foreground truncate">{usuario.email}</p>
-          </div>
+          </button>
         )}
         <button
           onClick={signOut}
