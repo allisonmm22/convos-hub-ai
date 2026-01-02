@@ -32,7 +32,7 @@ import AdminPlanos from "./pages/admin/AdminPlanos";
 import AdminPagamentos from "./pages/admin/AdminPagamentos";
 import Upgrade from "./pages/Upgrade";
 import MinhaAssinatura from "./pages/MinhaAssinatura";
-
+import Perfil from "./pages/Perfil";
 const queryClient = new QueryClient();
 
 function LoadingSpinner() {
@@ -253,7 +253,15 @@ function AppRoutes() {
           element={
             !user ? <Navigate to="/auth" replace /> :
             usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
-            <MinhaAssinatura />
+          <MinhaAssinatura />
+          } 
+        />
+        <Route 
+          path="/perfil" 
+          element={
+            !user ? <Navigate to="/auth" replace /> :
+            usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+            <Perfil />
           } 
         />
         <Route path="*" element={<NotFound />} />
