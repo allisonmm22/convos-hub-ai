@@ -42,7 +42,6 @@ const menuItems: MenuItem[] = [
   { icon: Kanban, label: 'CRM', path: '/crm' },
   { icon: Calendar, label: 'Agendamentos', path: '/agendamentos' },
   { icon: Users, label: 'Contatos', path: '/contatos' },
-  { icon: Megaphone, label: 'Anúncios Meta', path: '/relatorios/anuncios' },
   { icon: Plug, label: 'Conexão', path: '/conexao' },
   { icon: CreditCard, label: 'Minha Assinatura', path: '/minha-assinatura' },
   { 
@@ -52,6 +51,7 @@ const menuItems: MenuItem[] = [
       { icon: Settings, label: 'Geral', path: '/configuracoes' },
       { icon: UserCog, label: 'Usuários', path: '/usuarios' },
       { icon: Puzzle, label: 'Integrações', path: '/integracoes' },
+      { icon: Megaphone, label: 'Anúncios Meta', path: '/relatorios/anuncios' },
     ]
   },
 ];
@@ -64,7 +64,7 @@ export function Sidebar() {
 
   // Auto-expand config menu when on a config submenu route
   useEffect(() => {
-    const configPaths = ['/configuracoes', '/usuarios', '/integracoes'];
+    const configPaths = ['/configuracoes', '/usuarios', '/integracoes', '/relatorios/anuncios'];
     if (configPaths.some(path => location.pathname.startsWith(path))) {
       setConfigExpanded(true);
     }
