@@ -154,15 +154,21 @@ export default function Agendamentos() {
 
   useEffect(() => {
     if (usuario?.conta_id) {
-      fetchAgendamentos();
-      sincronizarGoogleCalendar();
+      // Executa sincronização e depois busca agendamentos sequencialmente
+      const init = async () => {
+        await sincronizarGoogleCalendar();
+        await fetchAgendamentos();
+      };
+      init();
     }
   }, [usuario, currentDate]);
 
   const sincronizarGoogleCalendar = async (manual = false) => {
     if (!usuario?.conta_id) return;
     
-    if (manual) setSyncing(true);
+    // Evitar execuções paralelas
+    if (syncing) return;
+    setSyncing(true);
     
     try {
       // Buscar calendário Google ativo
@@ -199,66 +205,41 @@ export default function Agendamentos() {
         return;
       }
 
-      let syncCount = 0;
+      // Usar upsert para evitar duplicatas (constraint: google_event_id + conta_id)
+      const eventosParaUpsert = googleResult.eventos.map((evento: any) => ({
+        conta_id: usuario.conta_id,
+        usuario_id: usuario.id,
+        titulo: evento.titulo || 'Evento sem título',
+        descricao: evento.descricao || null,
+        data_inicio: evento.inicio,
+        data_fim: evento.fim || evento.inicio,
+        google_event_id: evento.id,
+      }));
 
-      // Para cada evento do Google, sincronizar com banco local
-      for (const evento of googleResult.eventos) {
-        // Verificar se já existe no banco pelo google_event_id
-        const { data: existente } = await supabase
+      if (eventosParaUpsert.length > 0) {
+        const { error: upsertError } = await supabase
           .from('agendamentos')
-          .select('id, titulo, data_inicio, data_fim')
-          .eq('google_event_id', evento.id)
-          .eq('conta_id', usuario.conta_id)
-          .maybeSingle();
-
-        if (existente) {
-          // Verificar se precisa atualizar
-          const eventoInicio = new Date(evento.inicio).getTime();
-          const existenteInicio = new Date(existente.data_inicio).getTime();
-          
-          if (existente.titulo !== evento.titulo || eventoInicio !== existenteInicio) {
-            await supabase
-              .from('agendamentos')
-              .update({
-                titulo: evento.titulo || existente.titulo,
-                descricao: evento.descricao || null,
-                data_inicio: evento.inicio,
-                data_fim: evento.fim || evento.inicio,
-              })
-              .eq('id', existente.id);
-            syncCount++;
-          }
-        } else {
-          // Inserir novo agendamento
-          await supabase.from('agendamentos').insert({
-            conta_id: usuario.conta_id,
-            usuario_id: usuario.id,
-            titulo: evento.titulo || 'Evento sem título',
-            descricao: evento.descricao || null,
-            data_inicio: evento.inicio,
-            data_fim: evento.fim || evento.inicio,
-            google_event_id: evento.id,
+          .upsert(eventosParaUpsert, {
+            onConflict: 'google_event_id,conta_id',
+            ignoreDuplicates: false
           });
-          syncCount++;
+
+        if (upsertError) {
+          console.error('Erro ao upsert agendamentos:', upsertError);
+          if (manual) toast.error('Erro ao sincronizar eventos');
+          return;
         }
       }
 
       if (manual) {
-        if (syncCount > 0) {
-          toast.success(`${syncCount} evento(s) sincronizado(s)`);
-          fetchAgendamentos();
-        } else {
-          toast.success('Calendário já está sincronizado');
-        }
-      } else if (syncCount > 0) {
-        // Refresh silencioso se houve mudanças
+        toast.success(`${eventosParaUpsert.length} evento(s) sincronizado(s)`);
         fetchAgendamentos();
       }
     } catch (error) {
       console.error('Erro na sincronização:', error);
       if (manual) toast.error('Erro ao sincronizar');
     } finally {
-      if (manual) setSyncing(false);
+      setSyncing(false);
     }
   };
 
