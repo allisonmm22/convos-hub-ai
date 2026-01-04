@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Calendar, Plus, Clock, Check, Loader2, ChevronLeft, ChevronRight, X, Pencil, Trash2, Video, MessageSquare, Bell, CheckCircle, AlertCircle, XCircle, RefreshCw } from 'lucide-react';
+import { Calendar, Plus, Clock, Check, Loader2, ChevronLeft, ChevronRight, X, Pencil, Trash2, Video, MessageSquare, Bell, CheckCircle, AlertCircle, XCircle, RefreshCw, User } from 'lucide-react';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -114,6 +115,12 @@ const formatarMinutosAntes = (minutos: number): string => {
   return `${minutos}min antes`;
 };
 
+interface Contato {
+  id: string;
+  nome: string;
+  telefone: string;
+}
+
 export default function Agendamentos() {
   const { usuario } = useAuth();
   const navigate = useNavigate();
@@ -121,6 +128,7 @@ export default function Agendamentos() {
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [regrasLembrete, setRegrasLembrete] = useState<LembreteRegra[]>([]);
   const [lembretesEnviados, setLembretesEnviados] = useState<LembreteEnviado[]>([]);
+  const [contatos, setContatos] = useState<Contato[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -131,6 +139,7 @@ export default function Agendamentos() {
     descricao: '',
     data_inicio: '',
     hora_inicio: '',
+    contato_id: '',
   });
 
   // Estados para edição
@@ -141,6 +150,7 @@ export default function Agendamentos() {
     descricao: '',
     data_inicio: '',
     hora_inicio: '',
+    contato_id: '',
   });
 
   // Estados para exclusão
@@ -278,9 +288,18 @@ export default function Agendamentos() {
         lembretesData = data || [];
       }
 
+      // Buscar contatos
+      const { data: contatosData } = await supabase
+        .from('contatos')
+        .select('id, nome, telefone')
+        .eq('conta_id', usuario!.conta_id)
+        .eq('is_grupo', false)
+        .order('nome');
+
       setAgendamentos(agendamentosData || []);
       setRegrasLembrete(regrasData || []);
       setLembretesEnviados(lembretesData);
+      setContatos(contatosData || []);
     } catch (error) {
       console.error('Erro ao buscar agendamentos:', error);
     } finally {
@@ -344,6 +363,7 @@ export default function Agendamentos() {
         data_fim: dataFim.toISOString(),
         google_event_id: googleEventId,
         google_meet_link: googleMeetLink,
+        contato_id: formData.contato_id || null,
       });
 
       if (error) throw error;
@@ -353,7 +373,7 @@ export default function Agendamentos() {
         : 'Agendamento criado!'
       );
       setShowModal(false);
-      setFormData({ titulo: '', descricao: '', data_inicio: '', hora_inicio: '' });
+      setFormData({ titulo: '', descricao: '', data_inicio: '', hora_inicio: '', contato_id: '' });
       setGerarMeet(true);
       fetchAgendamentos();
     } catch (error) {
@@ -372,6 +392,7 @@ export default function Agendamentos() {
       descricao: agendamento.descricao || '',
       data_inicio: dataInicio.toISOString().split('T')[0],
       hora_inicio: dataInicio.toTimeString().slice(0, 5),
+      contato_id: agendamento.contato_id || '',
     });
     setShowEditModal(true);
   };
@@ -395,6 +416,7 @@ export default function Agendamentos() {
           descricao: editFormData.descricao || null,
           data_inicio: novaDataInicio.toISOString(),
           data_fim: novaDataFim.toISOString(),
+          contato_id: editFormData.contato_id || null,
         })
         .eq('id', editingAgendamento.id);
 
@@ -1034,6 +1056,32 @@ export default function Agendamentos() {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Contato <span className="text-muted-foreground text-xs">(opcional)</span>
+                  </label>
+                  <Select 
+                    value={formData.contato_id} 
+                    onValueChange={(value) => setFormData({ ...formData, contato_id: value === 'none' ? '' : value })}
+                  >
+                    <SelectTrigger className="w-full h-11">
+                      <SelectValue placeholder="Selecione um contato" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum contato</SelectItem>
+                      {contatos.map((contato) => (
+                        <SelectItem key={contato.id} value={contato.id}>
+                          <div className="flex items-center gap-2">
+                            <User className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span>{contato.nome}</span>
+                            <span className="text-muted-foreground text-xs">- {contato.telefone}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">Data *</label>
@@ -1079,7 +1127,7 @@ export default function Agendamentos() {
                 <button
                   onClick={() => {
                     setShowModal(false);
-                    setFormData({ titulo: '', descricao: '', data_inicio: '', hora_inicio: '' });
+                    setFormData({ titulo: '', descricao: '', data_inicio: '', hora_inicio: '', contato_id: '' });
                     setGerarMeet(true);
                   }}
                   className="flex-1 h-11 rounded-lg bg-muted text-foreground font-medium hover:bg-muted/80 transition-colors"
@@ -1126,6 +1174,32 @@ export default function Agendamentos() {
                     className="w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
                     placeholder="Detalhes do agendamento..."
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Contato <span className="text-muted-foreground text-xs">(opcional)</span>
+                  </label>
+                  <Select 
+                    value={editFormData.contato_id} 
+                    onValueChange={(value) => setEditFormData({ ...editFormData, contato_id: value === 'none' ? '' : value })}
+                  >
+                    <SelectTrigger className="w-full h-11">
+                      <SelectValue placeholder="Selecione um contato" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum contato</SelectItem>
+                      {contatos.map((contato) => (
+                        <SelectItem key={contato.id} value={contato.id}>
+                          <div className="flex items-center gap-2">
+                            <User className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span>{contato.nome}</span>
+                            <span className="text-muted-foreground text-xs">- {contato.telefone}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
