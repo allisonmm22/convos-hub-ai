@@ -207,25 +207,72 @@ export default function Agendamentos() {
       return;
     }
 
+    setActionLoading(true);
     try {
       const dataInicio = new Date(`${formData.data_inicio}T${formData.hora_inicio}`);
+      const dataFim = new Date(dataInicio.getTime() + 60 * 60 * 1000); // +1 hora
 
+      let googleEventId: string | null = null;
+      let googleMeetLink: string | null = null;
+
+      // Verificar se tem calendário Google ativo
+      const { data: calendarios } = await supabase
+        .from('calendarios_google')
+        .select('id')
+        .eq('conta_id', usuario!.conta_id)
+        .eq('ativo', true)
+        .limit(1);
+
+      if (calendarios && calendarios.length > 0) {
+        // Criar evento no Google Calendar com Meet
+        const { data: googleResult, error: googleError } = await supabase.functions.invoke('google-calendar-actions', {
+          body: {
+            operacao: 'criar',
+            calendario_id: calendarios[0].id,
+            dados: {
+              titulo: formData.titulo,
+              descricao: formData.descricao || '',
+              data_inicio: dataInicio.toISOString(),
+              data_fim: dataFim.toISOString(),
+              gerar_meet: true,
+            }
+          }
+        });
+
+        if (!googleError && googleResult?.id) {
+          googleEventId = googleResult.id;
+          googleMeetLink = googleResult.meet_link || null;
+        } else if (googleError) {
+          console.error('Erro ao criar no Google Calendar:', googleError);
+        }
+      }
+
+      // Salvar no banco local
       const { error } = await supabase.from('agendamentos').insert({
         conta_id: usuario!.conta_id,
         usuario_id: usuario!.id,
         titulo: formData.titulo,
         descricao: formData.descricao || null,
         data_inicio: dataInicio.toISOString(),
+        data_fim: dataFim.toISOString(),
+        google_event_id: googleEventId,
+        google_meet_link: googleMeetLink,
       });
 
       if (error) throw error;
 
-      toast.success('Agendamento criado!');
+      toast.success(googleEventId 
+        ? 'Agendamento criado e sincronizado com Google Calendar!' 
+        : 'Agendamento criado!'
+      );
       setShowModal(false);
       setFormData({ titulo: '', descricao: '', data_inicio: '', hora_inicio: '' });
       fetchAgendamentos();
     } catch (error) {
+      console.error('Erro ao criar agendamento:', error);
       toast.error('Erro ao criar agendamento');
+    } finally {
+      setActionLoading(false);
     }
   };
 
