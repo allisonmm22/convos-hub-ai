@@ -184,6 +184,8 @@ export type Database = {
           duracao_padrao: number | null
           gerar_meet: boolean | null
           google_calendar_id: string | null
+          horario_fim_dia: string | null
+          horario_inicio_dia: string | null
           id: string
           intervalo_entre_agendamentos: number | null
           limite_por_horario: number | null
@@ -203,6 +205,8 @@ export type Database = {
           duracao_padrao?: number | null
           gerar_meet?: boolean | null
           google_calendar_id?: string | null
+          horario_fim_dia?: string | null
+          horario_inicio_dia?: string | null
           id?: string
           intervalo_entre_agendamentos?: number | null
           limite_por_horario?: number | null
@@ -222,6 +226,8 @@ export type Database = {
           duracao_padrao?: number | null
           gerar_meet?: boolean | null
           google_calendar_id?: string | null
+          horario_fim_dia?: string | null
+          horario_inicio_dia?: string | null
           id?: string
           intervalo_entre_agendamentos?: number | null
           limite_por_horario?: number | null
