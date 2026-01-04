@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Calendar, Plus, Clock, Check, Loader2, ChevronLeft, ChevronRight, X, Pencil, Trash2, Video, MessageSquare, Bell, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
+import { Calendar, Plus, Clock, Check, Loader2, ChevronLeft, ChevronRight, X, Pencil, Trash2, Video, MessageSquare, Bell, CheckCircle, AlertCircle, XCircle, RefreshCw } from 'lucide-react';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -147,6 +147,7 @@ export default function Agendamentos() {
   const [deletingAgendamento, setDeletingAgendamento] = useState<Agendamento | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -154,8 +155,112 @@ export default function Agendamentos() {
   useEffect(() => {
     if (usuario?.conta_id) {
       fetchAgendamentos();
+      sincronizarGoogleCalendar();
     }
   }, [usuario, currentDate]);
+
+  const sincronizarGoogleCalendar = async (manual = false) => {
+    if (!usuario?.conta_id) return;
+    
+    if (manual) setSyncing(true);
+    
+    try {
+      // Buscar calendário Google ativo
+      const { data: calendarios } = await supabase
+        .from('calendarios_google')
+        .select('id')
+        .eq('conta_id', usuario.conta_id)
+        .eq('ativo', true)
+        .limit(1);
+
+      if (!calendarios?.length) {
+        if (manual) toast.info('Nenhum Google Calendar conectado');
+        return;
+      }
+
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
+
+      // Consultar eventos do Google Calendar
+      const { data: googleResult, error: googleError } = await supabase.functions.invoke('google-calendar-actions', {
+        body: {
+          operacao: 'consultar',
+          calendario_id: calendarios[0].id,
+          dados: {
+            data_inicio: startOfMonth.toISOString(),
+            data_fim: endOfMonth.toISOString(),
+          }
+        }
+      });
+
+      if (googleError || !googleResult?.eventos) {
+        console.error('Erro ao consultar Google Calendar:', googleError);
+        if (manual) toast.error('Erro ao sincronizar com Google Calendar');
+        return;
+      }
+
+      let syncCount = 0;
+
+      // Para cada evento do Google, sincronizar com banco local
+      for (const evento of googleResult.eventos) {
+        // Verificar se já existe no banco pelo google_event_id
+        const { data: existente } = await supabase
+          .from('agendamentos')
+          .select('id, titulo, data_inicio, data_fim')
+          .eq('google_event_id', evento.id)
+          .eq('conta_id', usuario.conta_id)
+          .maybeSingle();
+
+        if (existente) {
+          // Verificar se precisa atualizar
+          const eventoInicio = new Date(evento.inicio).getTime();
+          const existenteInicio = new Date(existente.data_inicio).getTime();
+          
+          if (existente.titulo !== evento.titulo || eventoInicio !== existenteInicio) {
+            await supabase
+              .from('agendamentos')
+              .update({
+                titulo: evento.titulo || existente.titulo,
+                descricao: evento.descricao || null,
+                data_inicio: evento.inicio,
+                data_fim: evento.fim || evento.inicio,
+              })
+              .eq('id', existente.id);
+            syncCount++;
+          }
+        } else {
+          // Inserir novo agendamento
+          await supabase.from('agendamentos').insert({
+            conta_id: usuario.conta_id,
+            usuario_id: usuario.id,
+            titulo: evento.titulo || 'Evento sem título',
+            descricao: evento.descricao || null,
+            data_inicio: evento.inicio,
+            data_fim: evento.fim || evento.inicio,
+            google_event_id: evento.id,
+          });
+          syncCount++;
+        }
+      }
+
+      if (manual) {
+        if (syncCount > 0) {
+          toast.success(`${syncCount} evento(s) sincronizado(s)`);
+          fetchAgendamentos();
+        } else {
+          toast.success('Calendário já está sincronizado');
+        }
+      } else if (syncCount > 0) {
+        // Refresh silencioso se houve mudanças
+        fetchAgendamentos();
+      }
+    } catch (error) {
+      console.error('Erro na sincronização:', error);
+      if (manual) toast.error('Erro ao sincronizar');
+    } finally {
+      if (manual) setSyncing(false);
+    }
+  };
 
   const fetchAgendamentos = async () => {
     try {
@@ -538,13 +643,24 @@ export default function Agendamentos() {
               Organize suas tarefas e compromissos.
             </p>
           </div>
-          <button
-            onClick={() => openNewAgendamentoModal()}
-            className="h-10 px-3 md:px-4 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="h-5 w-5" />
-            <span className="hidden sm:inline">Novo Agendamento</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => sincronizarGoogleCalendar(true)}
+              disabled={syncing}
+              className="h-10 px-3 rounded-lg bg-muted text-muted-foreground font-medium flex items-center gap-2 hover:bg-muted/80 transition-colors disabled:opacity-50"
+              title="Sincronizar com Google Calendar"
+            >
+              <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
+              <span className="hidden sm:inline">Sincronizar</span>
+            </button>
+            <button
+              onClick={() => openNewAgendamentoModal()}
+              className="h-10 px-3 md:px-4 rounded-lg bg-primary text-primary-foreground font-medium flex items-center gap-2 hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="h-5 w-5" />
+              <span className="hidden sm:inline">Novo Agendamento</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-4 md:gap-6">
@@ -632,13 +748,21 @@ export default function Agendamentos() {
                               <div
                                 key={a.id}
                                 className={cn(
-                                  'text-xs px-1.5 py-0.5 rounded truncate',
+                                  'text-xs px-1.5 py-0.5 rounded truncate flex items-center gap-1',
                                   a.concluido
                                     ? 'bg-muted text-muted-foreground line-through'
                                     : 'bg-primary/10 text-primary'
                                 )}
                               >
-                                {a.titulo}
+                                {a.google_event_id && (
+                                  <svg className="h-3 w-3 flex-shrink-0" viewBox="0 0 24 24">
+                                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                                  </svg>
+                                )}
+                                <span className="truncate">{a.titulo}</span>
                               </div>
                             ))}
                             {dayAgendamentos.length > 2 && (
@@ -731,14 +855,24 @@ export default function Agendamentos() {
                               )}
                             </button>
                             <div className="flex-1 min-w-0">
-                              <h4
-                                className={cn(
-                                  'font-medium text-sm text-foreground',
-                                  agendamento.concluido && 'line-through'
+                              <div className="flex items-center gap-1.5">
+                                {agendamento.google_event_id && (
+                                  <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 24 24">
+                                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                                  </svg>
                                 )}
-                              >
-                                {agendamento.titulo}
-                              </h4>
+                                <h4
+                                  className={cn(
+                                    'font-medium text-sm text-foreground',
+                                    agendamento.concluido && 'line-through'
+                                  )}
+                                >
+                                  {agendamento.titulo}
+                                </h4>
+                              </div>
                               {agendamento.descricao && (
                                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                                   {agendamento.descricao}
