@@ -125,6 +125,7 @@ export default function Agendamentos() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [gerarMeet, setGerarMeet] = useState(true);
   const [formData, setFormData] = useState({
     titulo: '',
     descricao: '',
@@ -234,7 +235,7 @@ export default function Agendamentos() {
               descricao: formData.descricao || '',
               data_inicio: dataInicio.toISOString(),
               data_fim: dataFim.toISOString(),
-              gerar_meet: true,
+              gerar_meet: gerarMeet,
             }
           }
         });
@@ -267,6 +268,7 @@ export default function Agendamentos() {
       );
       setShowModal(false);
       setFormData({ titulo: '', descricao: '', data_inicio: '', hora_inicio: '' });
+      setGerarMeet(true);
       fetchAgendamentos();
     } catch (error) {
       console.error('Erro ao criar agendamento:', error);
@@ -937,6 +939,25 @@ export default function Agendamentos() {
                     />
                   </div>
                 </div>
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setGerarMeet(!gerarMeet)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      gerarMeet ? 'bg-primary' : 'bg-muted-foreground/30'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        gerarMeet ? 'translate-x-4' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <Video className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm text-foreground">Gerar link do Google Meet</span>
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-3 mt-6">
@@ -944,6 +965,7 @@ export default function Agendamentos() {
                   onClick={() => {
                     setShowModal(false);
                     setFormData({ titulo: '', descricao: '', data_inicio: '', hora_inicio: '' });
+                    setGerarMeet(true);
                   }}
                   className="flex-1 h-11 rounded-lg bg-muted text-foreground font-medium hover:bg-muted/80 transition-colors"
                 >
