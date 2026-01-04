@@ -738,7 +738,33 @@ serve(async (req) => {
             duracaoMinutos 
           });
           
-          // === VALIDAÇÃO ANTI-CONFLITO ===
+          // === VALIDAÇÃO ANTI-CONFLITO NA AGENDA INTERNA ===
+          // Verificar se há agendamentos internos (sem google_event_id) que conflitam
+          const { data: conflitosInternos } = await supabase
+            .from('agendamentos')
+            .select('id, titulo, data_inicio, data_fim')
+            .eq('conta_id', conta_id)
+            .eq('concluido', false)
+            .is('google_event_id', null) // Só os que NÃO vieram do Google
+            .or(`and(data_inicio.lte.${dataFimDate.toISOString()},data_fim.gte.${dataInicio})`);
+
+          const conflitosAgendaInterna = (conflitosInternos || []).filter((ag: any) => {
+            const agInicio = new Date(ag.data_inicio);
+            const agFim = new Date(ag.data_fim);
+            // Sobreposição: novo começa antes do existente terminar E novo termina depois do existente começar
+            return dataInicioDate < agFim && dataFimDate > agInicio;
+          });
+
+          if (conflitosAgendaInterna.length > 0) {
+            console.log('Conflito com agenda interna detectado:', conflitosAgendaInterna);
+            resultado = { 
+              sucesso: false, 
+              mensagem: 'Este horário já está ocupado na agenda interna. Por favor, consulte novamente os horários disponíveis.' 
+            };
+            break;
+          }
+          
+          // === VALIDAÇÃO ANTI-CONFLITO NO GOOGLE CALENDAR ===
           // Consultar Google Calendar para verificar se o horário está livre
           const consultaConflito = await fetch(`${supabaseUrl}/functions/v1/google-calendar-actions`, {
             method: 'POST',
@@ -757,7 +783,7 @@ serve(async (req) => {
           });
           
           const consultaResult = await consultaConflito.json();
-          console.log('Resultado da consulta de conflitos:', consultaResult);
+          console.log('Resultado da consulta de conflitos Google:', consultaResult);
           
           // Verificar se há eventos que conflitam com o horário desejado
           const eventosConflitantes = consultaResult.eventos?.filter((evento: { inicio: string; fim: string }) => {
@@ -769,7 +795,7 @@ serve(async (req) => {
           }) || [];
           
           if (eventosConflitantes.length > 0) {
-            console.log('Conflito detectado! Eventos conflitantes:', eventosConflitantes);
+            console.log('Conflito detectado no Google! Eventos conflitantes:', eventosConflitantes);
             resultado = { 
               sucesso: false, 
               mensagem: 'Este horário já está ocupado na agenda. Por favor, consulte novamente os horários disponíveis.' 

@@ -348,31 +348,61 @@ async function executarAgendaLocal(
       const horariosComISO: { display: string; iso: string }[] = [];
       const agora = new Date();
       
-      for (let dia = 0; dia < 7; dia++) {
+      // Usar horários configurados ou padrão 8h-18h
+      const horaInicioDia = agendamentoConfig?.horario_inicio_dia 
+        ? parseInt(agendamentoConfig.horario_inicio_dia.split(':')[0]) 
+        : 8;
+      const horaFimDia = agendamentoConfig?.horario_fim_dia 
+        ? parseInt(agendamentoConfig.horario_fim_dia.split(':')[0]) 
+        : 18;
+      
+      console.log(`📅 [AGENDA GOOGLE] Usando horários configurados: ${horaInicioDia}h às ${horaFimDia}h`);
+      
+      // Também buscar agendamentos internos para evitar conflitos
+      const diasMaximos = agendamentoConfig?.antecedencia_maxima_dias || 7;
+      const dataFimConsulta = new Date(agora.getTime() + diasMaximos * 24 * 60 * 60 * 1000);
+      
+      const { data: agendamentosInternos } = await supabase
+        .from('agendamentos')
+        .select('data_inicio, data_fim')
+        .eq('conta_id', contaId)
+        .eq('concluido', false)
+        .is('google_event_id', null) // Só os que NÃO vieram do Google
+        .gte('data_inicio', agora.toISOString())
+        .lte('data_inicio', dataFimConsulta.toISOString());
+      
+      const todosHorariosOcupados = [
+        ...horariosOcupados,
+        ...(agendamentosInternos || []).map((ag: any) => ({
+          inicio: ag.data_inicio,
+          fim: ag.data_fim,
+          titulo: 'Agendamento interno',
+        }))
+      ];
+      
+      console.log(`📅 [AGENDA GOOGLE] Total de horários ocupados: ${todosHorariosOcupados.length} (${horariosOcupados.length} do Google + ${(agendamentosInternos || []).length} internos)`);
+      
+      for (let dia = 0; dia < diasMaximos; dia++) {
         const data = new Date(agora);
         data.setDate(data.getDate() + dia);
-        data.setHours(8, 0, 0, 0);
+        data.setHours(horaInicioDia, 0, 0, 0);
         
         // Pular finais de semana
         if (data.getDay() === 0 || data.getDay() === 6) continue;
         
-        // Verificar cada horário comercial (8h às 18h)
-        for (let hora = 8; hora < 18; hora++) {
+        // Verificar cada horário comercial (usando horários configurados)
+        for (let hora = horaInicioDia; hora < horaFimDia; hora++) {
           const horarioCheck = new Date(data);
           horarioCheck.setHours(hora, 0, 0, 0);
           
           // Pular horários passados
           if (horarioCheck <= agora) continue;
           
-          // Verificar se está ocupado
-          const ocupado = horariosOcupados.some((e: any) => {
+          // Verificar se está ocupado (incluindo agendamentos internos)
+          const ocupado = todosHorariosOcupados.some((e: any) => {
             const eventoInicio = new Date(e.inicio);
             const eventoFim = new Date(e.fim);
             const estaOcupado = horarioCheck >= eventoInicio && horarioCheck < eventoFim;
-            
-            if (hora >= 14 && hora <= 16) {
-              console.log(`🔍 [DEBUG] Verificando ${hora}h: evento "${e.titulo}" (${eventoInicio.toISOString()} - ${eventoFim.toISOString()}), check: ${horarioCheck.toISOString()}, ocupado: ${estaOcupado}`);
-            }
             
             return estaOcupado;
           });

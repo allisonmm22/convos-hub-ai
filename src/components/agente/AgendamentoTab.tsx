@@ -37,6 +37,8 @@ interface AgendamentoConfig {
   prompt_consulta_horarios: string;
   prompt_marcacao_horario: string;
   gerar_meet: boolean;
+  horario_inicio_dia: string;
+  horario_fim_dia: string;
 }
 
 interface HorarioSlot {
@@ -96,6 +98,8 @@ export function AgendamentoTab({ agentId }: AgendamentoTabProps) {
     prompt_consulta_horarios: 'Quando o lead perguntar sobre disponibilidade, agenda, horários ou quiser marcar uma reunião.',
     prompt_marcacao_horario: 'Quando o lead confirmar um horário específico para agendar.',
     gerar_meet: true,
+    horario_inicio_dia: '08:00',
+    horario_fim_dia: '18:00',
   });
   const [horarios, setHorarios] = useState<HorarioSlot[]>([]);
   const [calendarios, setCalendarios] = useState<CalendarioGoogle[]>([]);
@@ -120,6 +124,8 @@ export function AgendamentoTab({ agentId }: AgendamentoTabProps) {
         setConfig({
           ...configData,
           tipo_agenda: configData.tipo_agenda as 'interno' | 'google',
+          horario_inicio_dia: configData.horario_inicio_dia?.substring(0, 5) || '08:00',
+          horario_fim_dia: configData.horario_fim_dia?.substring(0, 5) || '18:00',
         });
 
         // Carregar horários
@@ -176,6 +182,8 @@ export function AgendamentoTab({ agentId }: AgendamentoTabProps) {
             prompt_consulta_horarios: config.prompt_consulta_horarios,
             prompt_marcacao_horario: config.prompt_marcacao_horario,
             gerar_meet: config.gerar_meet,
+            horario_inicio_dia: config.horario_inicio_dia,
+            horario_fim_dia: config.horario_fim_dia,
           })
           .eq('id', configId);
 
@@ -199,6 +207,8 @@ export function AgendamentoTab({ agentId }: AgendamentoTabProps) {
             prompt_consulta_horarios: config.prompt_consulta_horarios,
             prompt_marcacao_horario: config.prompt_marcacao_horario,
             gerar_meet: config.gerar_meet,
+            horario_inicio_dia: config.horario_inicio_dia,
+            horario_fim_dia: config.horario_fim_dia,
           })
           .select()
           .single();
@@ -489,6 +499,55 @@ export function AgendamentoTab({ agentId }: AgendamentoTabProps) {
                   </Select>
                 </div>
 
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">
+                    Horário de Início
+                  </label>
+                  <Select
+                    value={config.horario_inicio_dia}
+                    onValueChange={(v) => setConfig({ ...config, horario_inicio_dia: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 13 }, (_, i) => i + 6).map((h) => (
+                        <SelectItem key={h} value={`${h.toString().padStart(2, '0')}:00`}>
+                          {h}h
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">
+                    Horário de Fim
+                  </label>
+                  <Select
+                    value={config.horario_fim_dia}
+                    onValueChange={(v) => setConfig({ ...config, horario_fim_dia: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 13 }, (_, i) => i + 12).map((h) => (
+                        <SelectItem key={h} value={`${h.toString().padStart(2, '0')}:00`}>
+                          {h}h
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                <Info className="h-3 w-3" />
+                A IA só oferecerá horários entre {config.horario_inicio_dia?.substring(0, 2) || '08'}h e {config.horario_fim_dia?.substring(0, 2) || '18'}h
+              </p>
+
+              <div className="grid grid-cols-2 gap-4 mt-4">
                 <div>
                   <label className="text-sm font-medium text-foreground mb-2 block">
                     Antecedência Mínima
