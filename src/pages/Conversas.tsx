@@ -161,12 +161,19 @@ interface Conversa {
   negociacoes?: NegociacaoEstagio[];
 }
 
+interface MensagemReaction {
+  emoji: string;
+  from: string;
+  timestamp: string;
+}
+
 interface MensagemMetadata {
   interno?: boolean;
   acao_tipo?: string;
   acao_valor?: string;
   participante_nome?: string;
   participante_telefone?: string;
+  reactions?: MensagemReaction[];
   [key: string]: unknown;
 }
 
@@ -483,23 +490,30 @@ export default function Conversas() {
       .channel('conversas-mensagens-realtime')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'mensagens' },
+        { event: '*', schema: 'public', table: 'mensagens' },
         (payload) => {
-          console.log('Nova mensagem recebida via realtime:', payload);
-          const novaMensagem = payload.new as Mensagem;
+          console.log('Mensagem recebida via realtime:', payload.eventType, payload);
+          const mensagemPayload = payload.new as Mensagem;
           
           // Usar a ref para verificar a conversa selecionada atual
-          if (conversaSelecionadaRef.current && novaMensagem.conversa_id === conversaSelecionadaRef.current.id) {
-            setMensagens((prev) => [...prev, novaMensagem]);
+          if (conversaSelecionadaRef.current && mensagemPayload.conversa_id === conversaSelecionadaRef.current.id) {
+            if (payload.eventType === 'INSERT') {
+              setMensagens((prev) => [...prev, mensagemPayload]);
+            } else if (payload.eventType === 'UPDATE') {
+              // Atualizar mensagem existente (para reações)
+              setMensagens((prev) => prev.map(m => 
+                m.id === mensagemPayload.id ? mensagemPayload : m
+              ));
+            }
           }
           
           // Notificação sonora + browser para mensagens de entrada em conversas atendidas por humano
-          if (novaMensagem.direcao === 'entrada') {
-            const conversaDaMensagem = conversas.find(c => c.id === novaMensagem.conversa_id);
+          if (payload.eventType === 'INSERT' && mensagemPayload.direcao === 'entrada') {
+            const conversaDaMensagem = conversas.find(c => c.id === mensagemPayload.conversa_id);
             if (conversaDaMensagem && conversaDaMensagem.agente_ia_ativo === false) {
               notifyNewMessage(
                 conversaDaMensagem.contatos.nome,
-                novaMensagem.conteudo,
+                mensagemPayload.conteudo,
                 () => setConversaSelecionada(conversaDaMensagem)
               );
             }
@@ -1669,6 +1683,25 @@ export default function Conversas() {
                 )}
               </div>
             </div>
+
+            {/* Reações - badge no canto inferior da mensagem (igual WhatsApp) */}
+            {msg.metadata?.reactions && msg.metadata.reactions.length > 0 && (
+              <div className={cn(
+                'absolute -bottom-2.5 px-1.5 py-0.5 rounded-full bg-card border border-border shadow-sm flex items-center gap-0.5',
+                msg.direcao === 'saida' ? 'right-2' : 'left-2'
+              )}>
+                {/* Mostrar emojis únicos */}
+                {[...new Set(msg.metadata.reactions.map(r => r.emoji))].slice(0, 3).map((emoji, idx) => (
+                  <span key={idx} className="text-sm leading-none">{emoji}</span>
+                ))}
+                {/* Contador se mais de uma reação */}
+                {msg.metadata.reactions.length > 1 && (
+                  <span className="text-[10px] text-muted-foreground ml-0.5">
+                    {msg.metadata.reactions.length}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
