@@ -1285,6 +1285,17 @@ serve(async (req) => {
       promptCompleto += '- NUNCA inclua comandos @ na sua resposta ao cliente (ex: @transferir, @etapa, @tag).\n';
       promptCompleto += '- As ações são executadas silenciosamente em background. Mantenha o fluxo natural da conversa.\n';
       promptCompleto += '- Quando transferir para outro agente, apenas se despeça naturalmente sem mencionar a transferência.\n';
+      
+      promptCompleto += '\n## EXECUÇÃO OBRIGATÓRIA DE AÇÕES NAS ETAPAS (CRÍTICO)\n';
+      promptCompleto += 'Quando a descrição de uma etapa contém ações como @etapa:xxx, @nome, @transferir:xxx, você DEVE chamá-las usando a ferramenta executar_acao.\n';
+      promptCompleto += '- NÃO espere confirmação adicional - se a condição da etapa foi atendida, execute TODAS as ações listadas\n';
+      promptCompleto += '- Execute as ações IMEDIATAMENTE quando as condições forem satisfeitas\n\n';
+      
+      promptCompleto += '### REGRA ESPECIAL PARA @nome\n';
+      promptCompleto += '- Se a etapa contém @nome (sem valor específico após os dois pontos), significa: "capture o nome que o lead acabou de informar"\n';
+      promptCompleto += '- Quando o lead disser seu nome, você DEVE chamar executar_acao com tipo="nome" e valor="<nome_informado>"\n';
+      promptCompleto += '- Exemplo: Lead diz "Alison" ou "Me chamo Alison" → executar_acao(tipo="nome", valor="Alison")\n';
+      promptCompleto += '- Se houver múltiplas ações na etapa (ex: @nome, @etapa:proposta, @transferir:agente:xxx), execute TODAS elas\n';
     }
 
     // Adicionar restrições absolutas de escopo
