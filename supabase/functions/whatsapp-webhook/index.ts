@@ -427,7 +427,7 @@ serve(async (req) => {
     const data = payload.data;
 
     // OTIMIZAÇÃO: Early-exit para eventos não relevantes
-    const eventosRelevantes = ['messages.upsert', 'messages_upsert', 'message', 'connection.update', 'connection_update', 'qrcode.updated', 'qrcode_updated', 'qr'];
+    const eventosRelevantes = ['messages.upsert', 'messages_upsert', 'message', 'messages.reaction', 'connection.update', 'connection_update', 'qrcode.updated', 'qrcode_updated', 'qr'];
     const normalizedEvent = event.replace(/_/g, '.').toLowerCase();
     
     if (!eventosRelevantes.includes(normalizedEvent) && !eventosRelevantes.includes(event)) {
@@ -478,6 +478,82 @@ serve(async (req) => {
         console.log('Status atualizado para:', status, 'Número:', numero);
       }
 
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Tratar reações de mensagens (igual WhatsApp)
+    if (normalizedEvent === 'messages.reaction' || event === 'messages_reaction') {
+      console.log('=== EVENTO DE REAÇÃO ===');
+      console.log('Data:', JSON.stringify(data, null, 2));
+      
+      // Extrair dados da reação
+      const reaction = data?.reaction || data;
+      const reactionKey = reaction?.key || {};
+      const reactionId = reactionKey.id; // ID da mensagem que recebeu a reação
+      const emoji = reaction?.text || reaction?.reaction; // Emoji da reação (vazio = remoção)
+      const reactionFrom = reactionKey.remoteJid?.replace('@s.whatsapp.net', '').replace('@c.us', '');
+      const reactionParticipant = reactionKey.participant?.replace('@s.whatsapp.net', '').replace('@c.us', '');
+      
+      console.log('Reação:', { reactionId, emoji, reactionFrom, reactionParticipant });
+      
+      if (!reactionId) {
+        console.log('ID da mensagem não encontrado na reação, ignorando');
+        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+      }
+      
+      // Buscar a mensagem original pelo evolution_msg_id
+      const { data: mensagemOriginal, error: msgError } = await supabase
+        .from('mensagens')
+        .select('id, metadata, conversa_id')
+        .contains('metadata', { evolution_msg_id: reactionId })
+        .maybeSingle();
+      
+      if (msgError || !mensagemOriginal) {
+        console.log('Mensagem original não encontrada para reação:', reactionId);
+        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+      }
+      
+      console.log('Mensagem encontrada:', mensagemOriginal.id);
+      
+      // Obter reações existentes
+      const metadataAtual = (mensagemOriginal.metadata as Record<string, any>) || {};
+      let reactions: Array<{ emoji: string; from: string; timestamp: string }> = metadataAtual.reactions || [];
+      
+      const reagente = reactionParticipant || reactionFrom || 'desconhecido';
+      
+      if (emoji && emoji.trim() !== '') {
+        // Adicionar/atualizar reação
+        // Remover reação anterior do mesmo usuário (se existir)
+        reactions = reactions.filter(r => r.from !== reagente);
+        // Adicionar nova reação
+        reactions.push({
+          emoji: emoji,
+          from: reagente,
+          timestamp: new Date().toISOString()
+        });
+        console.log('Reação adicionada:', emoji, 'de:', reagente);
+      } else {
+        // Remover reação (emoji vazio significa remoção)
+        reactions = reactions.filter(r => r.from !== reagente);
+        console.log('Reação removida de:', reagente);
+      }
+      
+      // Atualizar metadata da mensagem com as reações
+      const novaMetadata = { ...metadataAtual, reactions };
+      
+      const { error: updateError } = await supabase
+        .from('mensagens')
+        .update({ metadata: novaMetadata })
+        .eq('id', mensagemOriginal.id);
+      
+      if (updateError) {
+        console.error('Erro ao atualizar reação:', updateError);
+      } else {
+        console.log('Reação salva com sucesso. Total de reações:', reactions.length);
+      }
+      
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
