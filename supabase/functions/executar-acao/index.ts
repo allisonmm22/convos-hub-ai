@@ -347,15 +347,20 @@ serve(async (req) => {
           resultado = { sucesso: true, mensagem: 'Conversa retornada para agente IA principal' };
         } else if (para?.startsWith('agente:')) {
           // Transferir para agente específico pelo nome ou ID
-          const agenteRef = para.replace('agente:', '').replace(/-/g, ' ').trim();
+          const agenteRefOriginal = para.replace('agente:', '').trim();
           
-          // Verificar se é UUID
+          // Verificar se é UUID ANTES de remover hífens
           let agenteId: string | null = null;
           
-          if (isValidUUID(agenteRef)) {
-            agenteId = agenteRef;
+          if (isValidUUID(agenteRefOriginal)) {
+            // É um UUID válido, usar diretamente
+            agenteId = agenteRefOriginal;
+            console.log(`Transferindo para agente por UUID: ${agenteId}`);
           } else {
-            // Buscar agente pelo nome
+            // Não é UUID, buscar por nome (convertendo hífens para espaços)
+            const agenteRefNome = agenteRefOriginal.replace(/-/g, ' ').trim();
+            console.log(`Buscando agente por nome: ${agenteRefNome}`);
+            
             const { data: agentes } = await supabase
               .from('agent_ia')
               .select('id, nome')
@@ -363,12 +368,13 @@ serve(async (req) => {
               .eq('ativo', true);
             
             const agenteEncontrado = agentes?.find((a: any) =>
-              a.nome.toLowerCase().replace(/\s+/g, '-') === agenteRef.toLowerCase().replace(/\s+/g, '-') ||
-              a.nome.toLowerCase() === agenteRef.toLowerCase()
+              a.nome.toLowerCase().replace(/\s+/g, '-') === agenteRefNome.toLowerCase().replace(/\s+/g, '-') ||
+              a.nome.toLowerCase() === agenteRefNome.toLowerCase()
             );
             
             if (agenteEncontrado) {
               agenteId = agenteEncontrado.id;
+              console.log(`Agente encontrado por nome: ${agenteEncontrado.nome} -> ${agenteId}`);
             }
           }
 
@@ -386,10 +392,10 @@ serve(async (req) => {
               .insert({
                 conversa_id,
                 para_agente_ia: true,
-                motivo: `Transferência automática para outro agente IA: ${agenteRef}`,
+                motivo: `Transferência automática para outro agente IA: ${agenteRefOriginal}`,
               });
 
-            resultado = { sucesso: true, mensagem: `Conversa transferida para agente IA: ${agenteRef}` };
+            resultado = { sucesso: true, mensagem: `Conversa transferida para agente IA: ${agenteRefOriginal}` };
             
             // Disparar resposta automática do novo agente
             console.log('Disparando resposta do novo agente:', agenteId);
@@ -485,7 +491,7 @@ serve(async (req) => {
               console.error('Erro ao gerar resposta do novo agente:', aiError);
             }
           } else {
-            resultado = { sucesso: false, mensagem: `Agente "${agenteRef}" não encontrado` };
+            resultado = { sucesso: false, mensagem: `Agente "${agenteRefOriginal}" não encontrado` };
           }
         }
         break;
