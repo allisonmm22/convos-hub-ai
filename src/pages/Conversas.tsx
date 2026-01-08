@@ -2670,6 +2670,7 @@ export default function Conversas() {
                         key={u.id}
                         onClick={() => {
                           transferirAtendimento(u.id, false);
+                          setShowTransferModal(false);
                           setTransferType('choice');
                         }}
                         className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted hover:border-orange-500/50 transition-all"
@@ -2742,7 +2743,12 @@ export default function Conversas() {
                     etapasAgenteIA.map((etapa) => (
                       <button
                         key={etapa.id}
-                        onClick={() => transferirAtendimento(null, true, agenteParaTransferir!, etapa.id)}
+                        onClick={() => {
+                          transferirAtendimento(null, true, agenteParaTransferir!, etapa.id);
+                          setShowTransferModal(false);
+                          setTransferType('choice');
+                          setAgenteParaTransferir(null);
+                        }}
                         className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted hover:border-primary/50 transition-all"
                       >
                         <span className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
@@ -2761,7 +2767,12 @@ export default function Conversas() {
                   )}
                   
                   <button
-                    onClick={() => transferirAtendimento(null, true, agenteParaTransferir!)}
+                    onClick={() => {
+                      transferirAtendimento(null, true, agenteParaTransferir!);
+                      setShowTransferModal(false);
+                      setTransferType('choice');
+                      setAgenteParaTransferir(null);
+                    }}
                     className="w-full p-3 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg hover:bg-muted hover:border-primary/50 transition-all"
                   >
                     Começar do início (sem etapa específica)
