@@ -3,7 +3,7 @@ import {
   X, Phone, Edit2, Save, Briefcase, Mail, Tag, Plus, 
   History, ChevronDown, ChevronUp, Check, MessageSquare,
   TrendingUp, Trophy, XCircle, Clock, ArrowRight, Eye, Megaphone,
-  ExternalLink, Facebook, Instagram, Globe, Target
+  ExternalLink, Facebook, Instagram, Globe, Target, FileText, Calendar, Hash, ToggleLeft
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -32,6 +32,8 @@ import {
 } from '@/components/ui/dialog';
 import { NegociacaoDetalheModal } from '@/components/NegociacaoDetalheModal';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 
 interface Contato {
   id: string;
@@ -105,6 +107,21 @@ interface TagItem {
   cor: string;
 }
 
+interface CampoPersonalizado {
+  id: string;
+  nome: string;
+  tipo: string;
+  opcoes: string[];
+  obrigatorio: boolean;
+  grupo_id: string | null;
+  grupo_nome?: string;
+}
+
+interface GrupoCampos {
+  id: string;
+  nome: string;
+}
+
 interface ContatoSidebarProps {
   contato: Contato;
   conversaId?: string;
@@ -138,18 +155,215 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
   const [tagsDisponiveis, setTagsDisponiveis] = useState<TagItem[]>([]);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [salvandoTags, setSalvandoTags] = useState(false);
+  
+  // Campos personalizados
+  const [camposPersonalizados, setCamposPersonalizados] = useState<CampoPersonalizado[]>([]);
+  const [gruposCampos, setGruposCampos] = useState<GrupoCampos[]>([]);
+  const [camposValores, setCamposValores] = useState<Record<string, string>>({});
+  const [camposEditando, setCamposEditando] = useState(false);
+  const [salvandoCampos, setSalvandoCampos] = useState(false);
 
   useEffect(() => {
     setNomeEdit(contato.nome);
     setTelefoneEdit(contato.telefone);
     setEmailEdit(contato.email || '');
     setEditando(false);
+    setCamposEditando(false);
     if (isOpen) {
       fetchNegociacoes();
       fetchFunis();
       fetchTagsDisponiveis();
+      fetchCamposPersonalizados();
+      fetchCamposValores();
     }
   }, [contato, isOpen]);
+
+  const fetchCamposPersonalizados = async () => {
+    try {
+      const [{ data: grupos }, { data: campos }] = await Promise.all([
+        supabase.from('campos_personalizados_grupos').select('id, nome').order('ordem'),
+        supabase.from('campos_personalizados').select('*').order('ordem')
+      ]);
+      
+      setGruposCampos(grupos || []);
+      
+      const camposComGrupo: CampoPersonalizado[] = (campos || []).map(c => ({
+        id: c.id,
+        nome: c.nome,
+        tipo: c.tipo,
+        opcoes: Array.isArray(c.opcoes) ? c.opcoes.map(o => String(o)) : [],
+        obrigatorio: c.obrigatorio || false,
+        grupo_id: c.grupo_id,
+        grupo_nome: grupos?.find(g => g.id === c.grupo_id)?.nome
+      }));
+      
+      setCamposPersonalizados(camposComGrupo);
+    } catch (error) {
+      console.error('Erro ao buscar campos personalizados:', error);
+    }
+  };
+
+  const fetchCamposValores = async () => {
+    try {
+      const { data } = await supabase
+        .from('contato_campos_valores')
+        .select('campo_id, valor')
+        .eq('contato_id', contato.id);
+      
+      const valores: Record<string, string> = {};
+      data?.forEach(v => valores[v.campo_id] = v.valor || '');
+      setCamposValores(valores);
+    } catch (error) {
+      console.error('Erro ao buscar valores dos campos:', error);
+    }
+  };
+
+  const handleSalvarCampos = async () => {
+    setSalvandoCampos(true);
+    try {
+      const updates = Object.entries(camposValores)
+        .filter(([_, valor]) => valor !== undefined)
+        .map(([campo_id, valor]) => ({
+          contato_id: contato.id,
+          campo_id,
+          valor: valor || null
+        }));
+      
+      if (updates.length > 0) {
+        const { error } = await supabase
+          .from('contato_campos_valores')
+          .upsert(updates, { onConflict: 'contato_id,campo_id' });
+        
+        if (error) throw error;
+      }
+      
+      toast.success('Campos salvos com sucesso!');
+      setCamposEditando(false);
+    } catch (error) {
+      console.error('Erro ao salvar campos:', error);
+      toast.error('Erro ao salvar campos');
+    } finally {
+      setSalvandoCampos(false);
+    }
+  };
+
+  const agruparCamposPorGrupo = () => {
+    const grupos: Record<string, CampoPersonalizado[]> = {};
+    
+    camposPersonalizados.forEach(campo => {
+      const grupoNome = campo.grupo_nome || 'Sem Grupo';
+      if (!grupos[grupoNome]) {
+        grupos[grupoNome] = [];
+      }
+      grupos[grupoNome].push(campo);
+    });
+    
+    return grupos;
+  };
+
+  const renderCampoInput = (campo: CampoPersonalizado) => {
+    const valor = camposValores[campo.id] || '';
+    
+    if (!camposEditando) {
+      // Modo visualização
+      let displayValue = valor || <span className="text-muted-foreground italic text-xs">Não informado</span>;
+      
+      if (campo.tipo === 'checkbox') {
+        displayValue = valor === 'true' ? 'Sim' : valor === 'false' ? 'Não' : displayValue;
+      } else if (campo.tipo === 'data' && valor) {
+        try {
+          displayValue = format(new Date(valor), 'dd/MM/yyyy', { locale: ptBR });
+        } catch {
+          displayValue = valor;
+        }
+      }
+      
+      return (
+        <div className="flex items-center justify-between py-2">
+          <span className="text-xs text-muted-foreground">{campo.nome}</span>
+          <span className="text-xs font-medium text-foreground">{displayValue}</span>
+        </div>
+      );
+    }
+    
+    // Modo edição
+    const handleChange = (novoValor: string) => {
+      setCamposValores(prev => ({ ...prev, [campo.id]: novoValor }));
+    };
+    
+    switch (campo.tipo) {
+      case 'numero':
+        return (
+          <div className="flex items-center gap-2 py-2">
+            <span className="text-xs text-muted-foreground flex-1">{campo.nome}</span>
+            <Input
+              type="number"
+              value={valor}
+              onChange={(e) => handleChange(e.target.value)}
+              className="h-8 w-32 text-xs"
+              placeholder="0"
+            />
+          </div>
+        );
+      
+      case 'data':
+        return (
+          <div className="flex items-center gap-2 py-2">
+            <span className="text-xs text-muted-foreground flex-1">{campo.nome}</span>
+            <Input
+              type="date"
+              value={valor}
+              onChange={(e) => handleChange(e.target.value)}
+              className="h-8 w-36 text-xs"
+            />
+          </div>
+        );
+      
+      case 'selecao':
+        return (
+          <div className="flex items-center gap-2 py-2">
+            <span className="text-xs text-muted-foreground flex-1">{campo.nome}</span>
+            <Select value={valor} onValueChange={handleChange}>
+              <SelectTrigger className="h-8 w-36 text-xs">
+                <SelectValue placeholder="Selecione..." />
+              </SelectTrigger>
+              <SelectContent>
+                {campo.opcoes.map((opcao, i) => (
+                  <SelectItem key={i} value={String(opcao)} className="text-xs">
+                    {String(opcao)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        );
+      
+      case 'checkbox':
+        return (
+          <div className="flex items-center gap-2 py-2">
+            <span className="text-xs text-muted-foreground flex-1">{campo.nome}</span>
+            <Switch
+              checked={valor === 'true'}
+              onCheckedChange={(checked) => handleChange(checked ? 'true' : 'false')}
+            />
+          </div>
+        );
+      
+      default: // texto
+        return (
+          <div className="flex items-center gap-2 py-2">
+            <span className="text-xs text-muted-foreground flex-1">{campo.nome}</span>
+            <Input
+              type="text"
+              value={valor}
+              onChange={(e) => handleChange(e.target.value)}
+              className="h-8 w-36 text-xs"
+              placeholder="..."
+            />
+          </div>
+        );
+    }
+  };
 
   const fetchFunis = async () => {
     try {
@@ -750,6 +964,49 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
               )}
             </div>
           </div>
+
+          {/* Campos Personalizados */}
+          {camposPersonalizados.length > 0 && (
+            <div className="mt-4 bg-card rounded-2xl border border-border shadow-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-semibold text-foreground">Campos Personalizados</span>
+                </div>
+                {!camposEditando ? (
+                  <button
+                    onClick={() => setCamposEditando(true)}
+                    className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <Edit2 className="h-3.5 w-3.5" />
+                    Editar
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSalvarCampos}
+                    disabled={salvandoCampos}
+                    className="flex items-center gap-1.5 text-xs text-emerald-500 hover:text-emerald-400 transition-colors disabled:opacity-50"
+                  >
+                    <Save className="h-3.5 w-3.5" />
+                    {salvandoCampos ? 'Salvando...' : 'Salvar'}
+                  </button>
+                )}
+              </div>
+              
+              <div className="space-y-2 divide-y divide-border">
+                {Object.entries(agruparCamposPorGrupo()).map(([grupoNome, campos]) => (
+                  <div key={grupoNome} className={grupoNome !== 'Sem Grupo' ? 'pt-2' : ''}>
+                    {grupoNome !== 'Sem Grupo' && (
+                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1">{grupoNome}</p>
+                    )}
+                    {campos.map(campo => (
+                      <div key={campo.id}>{renderCampoInput(campo)}</div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Seção Origem do Lead - Sempre Visível */}
           <div className="mt-4">

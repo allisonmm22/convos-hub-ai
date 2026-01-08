@@ -918,24 +918,14 @@ serve(async (req) => {
         
         console.log(`Campo encontrado: "${campo.nome}" (ID: ${campo.id}, tipo: ${campo.tipo})`);
         
-        // Buscar metadata atual do contato
-        const { data: contato } = await supabase
-          .from('contatos')
-          .select('metadata')
-          .eq('id', contato_id)
-          .single();
-        
-        // Atualizar metadata com novo valor
-        const metadataAtual = (contato?.metadata as Record<string, any>) || {};
-        const novaMetadata = {
-          ...metadataAtual,
-          [`campo_${campo.id}`]: valorCampo
-        };
-        
+        // Upsert no valor do campo na nova tabela
         const { error } = await supabase
-          .from('contatos')
-          .update({ metadata: novaMetadata })
-          .eq('id', contato_id);
+          .from('contato_campos_valores')
+          .upsert({
+            contato_id: contato_id,
+            campo_id: campo.id,
+            valor: valorCampo
+          }, { onConflict: 'contato_id,campo_id' });
         
         if (error) throw error;
         
@@ -972,15 +962,15 @@ serve(async (req) => {
           break;
         }
         
-        // Buscar metadata do contato
-        const { data: contatoData } = await supabase
-          .from('contatos')
-          .select('metadata')
-          .eq('id', contato_id)
-          .single();
+        // Buscar valor do campo na nova tabela
+        const { data: valorData } = await supabase
+          .from('contato_campos_valores')
+          .select('valor')
+          .eq('contato_id', contato_id)
+          .eq('campo_id', campo.id)
+          .maybeSingle();
         
-        const metadataContato = (contatoData?.metadata as Record<string, any>) || {};
-        const valorEncontrado = metadataContato[`campo_${campo.id}`] || 'não informado';
+        const valorEncontrado = valorData?.valor || 'não informado';
         
         console.log(`✅ Valor do campo "${campo.nome}": ${valorEncontrado}`);
         resultado = { 
