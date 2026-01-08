@@ -700,6 +700,48 @@ export type Database = {
           },
         ]
       }
+      contato_campos_valores: {
+        Row: {
+          campo_id: string
+          contato_id: string
+          created_at: string | null
+          id: string
+          updated_at: string | null
+          valor: string | null
+        }
+        Insert: {
+          campo_id: string
+          contato_id: string
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          valor?: string | null
+        }
+        Update: {
+          campo_id?: string
+          contato_id?: string
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          valor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contato_campos_valores_campo_id_fkey"
+            columns: ["campo_id"]
+            isOneToOne: false
+            referencedRelation: "campos_personalizados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contato_campos_valores_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "contatos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contatos: {
         Row: {
           avatar_url: string | null
