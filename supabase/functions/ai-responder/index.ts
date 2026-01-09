@@ -626,11 +626,15 @@ async function callOpenAI(
     }
   }
 
+  // Temperatura sempre aplicada (todos modelos suportam)
+  requestBody.temperature = temperatura;
+  
+  console.log(`🤖 Chamando OpenAI - Modelo: ${modelo}, Temperatura: ${temperatura}, MaxTokens: ${maxTokens}`);
+
   if (isModeloNovo) {
     requestBody.max_completion_tokens = maxTokens;
   } else {
     requestBody.max_tokens = maxTokens;
-    requestBody.temperature = temperatura;
   }
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
