@@ -1068,6 +1068,54 @@ export type Database = {
           },
         ]
       }
+      followups_agendados: {
+        Row: {
+          agente_ia_id: string | null
+          conta_id: string
+          contato_id: string
+          contexto: string | null
+          conversa_id: string
+          created_at: string | null
+          criado_por: string | null
+          data_agendada: string
+          enviado_em: string | null
+          id: string
+          mensagem_enviada: string | null
+          motivo: string | null
+          status: string
+        }
+        Insert: {
+          agente_ia_id?: string | null
+          conta_id: string
+          contato_id: string
+          contexto?: string | null
+          conversa_id: string
+          created_at?: string | null
+          criado_por?: string | null
+          data_agendada: string
+          enviado_em?: string | null
+          id?: string
+          mensagem_enviada?: string | null
+          motivo?: string | null
+          status?: string
+        }
+        Update: {
+          agente_ia_id?: string | null
+          conta_id?: string
+          contato_id?: string
+          contexto?: string | null
+          conversa_id?: string
+          created_at?: string | null
+          criado_por?: string | null
+          data_agendada?: string
+          enviado_em?: string | null
+          id?: string
+          mensagem_enviada?: string | null
+          motivo?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       funis: {
         Row: {
           conta_id: string

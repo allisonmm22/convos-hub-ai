@@ -19,7 +19,7 @@ interface AIResponse {
 }
 
 interface Acao {
-  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda' | 'campo' | 'obter';
+  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda' | 'campo' | 'obter' | 'followup';
   valor?: string;
   calendario_id?: string;
 }
@@ -55,7 +55,7 @@ function calcularCustoEstimado(
 
 // Parser de ações do prompt
 function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: Acao[] } {
-  const acoesRegex = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter)(?::([^\s@:]+)(?::([^\s@]+))?)?/gi;
+  const acoesRegex = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup)(?::([^\s@:]+)(?::([^\s@]+))?)?/gi;
   const matches = [...texto.matchAll(acoesRegex)];
   
   const acoes: string[] = [];
@@ -1374,18 +1374,18 @@ serve(async (req) => {
         type: 'function',
         function: {
           name: 'executar_acao',
-          description: 'OBRIGATÓRIO: Executa uma ação automatizada. NUNCA diga que salvou dados, atualizou campos ou criou eventos sem chamar esta função primeiro. Para campo personalizado, use tipo="campo" e valor="nome-do-campo:valor-exato" preservando o formato original (ex: valor="data-de-nascimento:22/02/1994" ou valor="data-de-nascimento:20 de janeiro de 1992").',
+          description: 'OBRIGATÓRIO: Executa uma ação automatizada. NUNCA diga que salvou dados, atualizou campos ou criou eventos sem chamar esta função primeiro. Para campo personalizado, use tipo="campo" e valor="nome-do-campo:valor-exato" preservando o formato original (ex: valor="data-de-nascimento:22/02/1994" ou valor="data-de-nascimento:20 de janeiro de 1992"). Use "followup" quando o lead pedir para falar depois, retornar em outro momento, ou agendar um lembrete de retorno.',
           parameters: {
             type: 'object',
             properties: {
               tipo: {
                 type: 'string',
-                enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar', 'nome', 'negociacao', 'agenda', 'campo', 'obter'],
-                description: 'Tipo da ação a ser executada. Use "nome" para alterar o nome do contato quando ele se identificar. Use "negociacao" para criar uma nova negociação no CRM. Use "agenda" para consultar disponibilidade ou criar eventos. Use "campo" para salvar um valor em um campo personalizado (formato: nome-do-campo:valor). Use "obter" para consultar o valor de um campo personalizado.',
+                enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar', 'nome', 'negociacao', 'agenda', 'campo', 'obter', 'followup'],
+                description: 'Tipo da ação a ser executada. Use "nome" para alterar o nome do contato quando ele se identificar. Use "negociacao" para criar uma nova negociação no CRM. Use "agenda" para consultar disponibilidade ou criar eventos. Use "campo" para salvar um valor em um campo personalizado (formato: nome-do-campo:valor). Use "obter" para consultar o valor de um campo personalizado. Use "followup" para criar um lembrete de retorno quando o lead pedir para falar depois (formato: data_iso8601:motivo).',
               },
               valor: {
                 type: 'string',
-                description: 'Valor associado à ação. Para campo: "nome-do-campo:valor" onde valor é EXATAMENTE o que o lead disse, preservando formato (ex: "data-de-nascimento:22/02/1994", "data-de-nascimento:20 de janeiro de 1992", "email:teste@email.com"). Para nome: o nome completo. Para etapa: nome ou ID. Para agenda: "consultar" ou "criar:titulo|data_iso8601".',
+                description: 'Valor associado à ação. Para campo: "nome-do-campo:valor" onde valor é EXATAMENTE o que o lead disse, preservando formato (ex: "data-de-nascimento:22/02/1994", "data-de-nascimento:20 de janeiro de 1992", "email:teste@email.com"). Para nome: o nome completo. Para etapa: nome ou ID. Para agenda: "consultar" ou "criar:titulo|data_iso8601". Para followup: "data_iso8601:motivo" (ex: "2025-01-10T14:00:00-03:00:lead pediu para retornar sexta às 14h").',
               },
             },
             required: ['tipo'],
