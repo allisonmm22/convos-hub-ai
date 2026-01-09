@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Clock, X, RefreshCw } from 'lucide-react';
+import { Calendar, Clock, X, RefreshCw, Check, ChevronDown, ChevronUp, Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -15,6 +15,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 interface FollowupAgendado {
   id: string;
@@ -23,6 +28,8 @@ interface FollowupAgendado {
   status: string;
   criado_por: string | null;
   created_at: string;
+  enviado_em: string | null;
+  mensagem_enviada: string | null;
 }
 
 interface FollowupsAgendadosSectionProps {
@@ -34,15 +41,16 @@ export function FollowupsAgendadosSection({ contatoId }: FollowupsAgendadosSecti
   const [loading, setLoading] = useState(true);
   const [cancelarId, setCancelarId] = useState<string | null>(null);
   const [cancelando, setCancelando] = useState(false);
+  const [showCancelados, setShowCancelados] = useState(false);
 
   const fetchFollowups = async () => {
     try {
       const { data, error } = await supabase
         .from('followups_agendados')
-        .select('id, data_agendada, motivo, status, criado_por, created_at')
+        .select('id, data_agendada, motivo, status, criado_por, created_at, enviado_em, mensagem_enviada')
         .eq('contato_id', contatoId)
-        .eq('status', 'pendente')
-        .order('data_agendada', { ascending: true });
+        .order('data_agendada', { ascending: false })
+        .limit(20);
 
       if (error) throw error;
       setFollowups(data || []);
@@ -56,7 +64,6 @@ export function FollowupsAgendadosSection({ contatoId }: FollowupsAgendadosSecti
   useEffect(() => {
     fetchFollowups();
 
-    // Realtime subscription
     const channel = supabase
       .channel(`followups-${contatoId}`)
       .on(
@@ -101,12 +108,16 @@ export function FollowupsAgendadosSection({ contatoId }: FollowupsAgendadosSecti
     }
   };
 
+  const pendentes = followups.filter(f => f.status === 'pendente');
+  const enviados = followups.filter(f => f.status === 'enviado');
+  const cancelados = followups.filter(f => f.status === 'cancelado');
+
   if (loading) {
     return (
       <div className="mt-4 bg-card rounded-2xl border border-border shadow-lg p-4">
         <div className="flex items-center gap-2 mb-3">
           <Calendar className="h-4 w-4 text-amber-500" />
-          <span className="text-sm font-semibold text-foreground">Follow-ups Agendados</span>
+          <span className="text-sm font-semibold text-foreground">Follow-ups</span>
         </div>
         <div className="flex items-center justify-center py-4">
           <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -115,73 +126,90 @@ export function FollowupsAgendadosSection({ contatoId }: FollowupsAgendadosSecti
     );
   }
 
-  if (followups.length === 0) {
-    return null;
-  }
-
   return (
     <>
       <div className="mt-4 bg-card rounded-2xl border border-border shadow-lg p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-amber-500" />
-            <span className="text-sm font-semibold text-foreground">Follow-ups Agendados</span>
+            <span className="text-sm font-semibold text-foreground">Follow-ups</span>
           </div>
-          <span className="px-2 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-full">
-            {followups.length} pendente{followups.length > 1 ? 's' : ''}
-          </span>
+          {followups.length > 0 && (
+            <span className="px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground rounded-full">
+              {followups.length} total
+            </span>
+          )}
         </div>
 
-        <div className="space-y-2">
-          {followups.map((followup) => {
-            const dataAgendada = new Date(followup.data_agendada);
-            const agora = new Date();
-            const isAtrasado = dataAgendada < agora;
-
-            return (
-              <div 
-                key={followup.id} 
-                className={`p-3 rounded-xl border transition-colors ${
-                  isAtrasado 
-                    ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' 
-                    : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Clock className={`h-3.5 w-3.5 ${isAtrasado ? 'text-red-500' : 'text-amber-500'}`} />
-                      <span className={`text-sm font-medium ${isAtrasado ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'}`}>
-                        {format(dataAgendada, "dd/MM 'às' HH:mm", { locale: ptBR })}
-                      </span>
-                      {isAtrasado && (
-                        <span className="px-1.5 py-0.5 text-[10px] font-medium bg-red-500/20 text-red-600 dark:text-red-400 rounded">
-                          Atrasado
-                        </span>
-                      )}
-                    </div>
-                    {followup.motivo && (
-                      <p className="text-xs text-muted-foreground line-clamp-2">
-                        {followup.motivo}
-                      </p>
-                    )}
-                    <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
-                      {followup.criado_por === 'agente_ia' ? '🤖 Criado pelo agente' : '👤 Criado manualmente'}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0 hover:bg-red-100 dark:hover:bg-red-900/30"
-                    onClick={() => setCancelarId(followup.id)}
-                  >
-                    <X className="h-4 w-4 text-red-500" />
-                  </Button>
+        {followups.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-3">
+            Nenhum follow-up agendado
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {/* Pendentes */}
+            {pendentes.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+                    Pendentes ({pendentes.length})
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {pendentes.map((followup) => (
+                    <FollowupCard 
+                      key={followup.id} 
+                      followup={followup} 
+                      onCancel={() => setCancelarId(followup.id)} 
+                    />
+                  ))}
                 </div>
               </div>
-            );
-          })}
-        </div>
+            )}
+
+            {/* Enviados */}
+            {enviados.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
+                    Enviados ({enviados.length})
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {enviados.map((followup) => (
+                    <FollowupCard key={followup.id} followup={followup} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Cancelados - Colapsado */}
+            {cancelados.length > 0 && (
+              <Collapsible open={showCancelados} onOpenChange={setShowCancelados}>
+                <CollapsibleTrigger className="flex items-center gap-1.5 w-full hover:bg-muted/50 rounded py-1 -mx-1 px-1 transition-colors">
+                  <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50" />
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                    Cancelados ({cancelados.length})
+                  </span>
+                  {showCancelados ? (
+                    <ChevronUp className="h-3 w-3 text-muted-foreground ml-auto" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3 text-muted-foreground ml-auto" />
+                  )}
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="space-y-2 mt-2">
+                    {cancelados.map((followup) => (
+                      <FollowupCard key={followup.id} followup={followup} />
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+          </div>
+        )}
       </div>
 
       <AlertDialog open={!!cancelarId} onOpenChange={(open) => !open && setCancelarId(null)}>
@@ -205,5 +233,108 @@ export function FollowupsAgendadosSection({ contatoId }: FollowupsAgendadosSecti
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+interface FollowupCardProps {
+  followup: FollowupAgendado;
+  onCancel?: () => void;
+}
+
+function FollowupCard({ followup, onCancel }: FollowupCardProps) {
+  const dataAgendada = new Date(followup.data_agendada);
+  const agora = new Date();
+  const isPendente = followup.status === 'pendente';
+  const isEnviado = followup.status === 'enviado';
+  const isCancelado = followup.status === 'cancelado';
+  const isAtrasado = isPendente && dataAgendada < agora;
+
+  const getBgClass = () => {
+    if (isCancelado) return 'bg-muted/50 border-border opacity-60';
+    if (isEnviado) return 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800';
+    if (isAtrasado) return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800';
+    return 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800';
+  };
+
+  const getIconColor = () => {
+    if (isCancelado) return 'text-muted-foreground';
+    if (isEnviado) return 'text-emerald-500';
+    if (isAtrasado) return 'text-red-500';
+    return 'text-amber-500';
+  };
+
+  const getTextColor = () => {
+    if (isCancelado) return 'text-muted-foreground';
+    if (isEnviado) return 'text-emerald-700 dark:text-emerald-300';
+    if (isAtrasado) return 'text-red-700 dark:text-red-300';
+    return 'text-amber-700 dark:text-amber-300';
+  };
+
+  return (
+    <div className={`p-3 rounded-xl border transition-colors ${getBgClass()}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            {isEnviado ? (
+              <Check className={`h-3.5 w-3.5 ${getIconColor()}`} />
+            ) : (
+              <Clock className={`h-3.5 w-3.5 ${getIconColor()}`} />
+            )}
+            <span className={`text-sm font-medium ${getTextColor()}`}>
+              {format(dataAgendada, "dd/MM 'às' HH:mm", { locale: ptBR })}
+            </span>
+            {isAtrasado && (
+              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-red-500/20 text-red-600 dark:text-red-400 rounded">
+                Atrasado
+              </span>
+            )}
+            {isEnviado && (
+              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded flex items-center gap-0.5">
+                <Send className="h-2.5 w-2.5" />
+                Enviado
+              </span>
+            )}
+            {isCancelado && (
+              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground rounded">
+                Cancelado
+              </span>
+            )}
+          </div>
+          
+          {followup.motivo && (
+            <p className="text-xs text-muted-foreground line-clamp-2">
+              {followup.motivo}
+            </p>
+          )}
+
+          {isEnviado && followup.enviado_em && (
+            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+              📤 Enviado em {format(new Date(followup.enviado_em), "dd/MM 'às' HH:mm", { locale: ptBR })}
+            </p>
+          )}
+
+          {isEnviado && followup.mensagem_enviada && (
+            <p className="text-[10px] text-muted-foreground mt-1 italic line-clamp-1">
+              "{followup.mensagem_enviada}"
+            </p>
+          )}
+          
+          <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+            {followup.criado_por === 'agente_ia' ? '🤖 Criado pelo agente' : '👤 Criado manualmente'}
+          </p>
+        </div>
+        
+        {isPendente && onCancel && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0 hover:bg-red-100 dark:hover:bg-red-900/30"
+            onClick={onCancel}
+          >
+            <X className="h-4 w-4 text-red-500" />
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
