@@ -369,7 +369,7 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
       case 'campo': {
         const campo = camposPersonalizados.find(c => c.id === campoSelecionado);
         const campoSlug = campo?.nome.toLowerCase().replace(/\s+/g, '-') || campoSelecionado;
-        return `@campo:${campoSlug}:`;
+        return `@campo:${campoSlug}:{valor-do-lead}`;
       }
       case 'obter': {
         const campo = camposPersonalizados.find(c => c.id === campoSelecionado);
@@ -813,11 +813,14 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
                     </div>
                     <div className="p-4 rounded-lg bg-purple-100 dark:bg-purple-900/30 border border-purple-300 dark:border-purple-700">
                       <p className="text-sm text-purple-700 dark:text-purple-300 mb-1">
-                        ✏️ <strong>Atualizar Campo Personalizado</strong>
+                        ✏️ <strong>Salvar Campo Personalizado</strong>
+                      </p>
+                      <p className="text-xs text-purple-600 dark:text-purple-400 mb-2">
+                        O agente irá substituir <code className="bg-purple-200 dark:bg-purple-800 px-1 rounded">{"{valor-do-lead}"}</code> pelo que o lead enviar na conversa.
                       </p>
                       <p className="text-xs text-purple-600 dark:text-purple-400">
-                        O agente irá salvar o valor informado pelo lead neste campo. 
-                        Adicione o valor após os dois pontos: <code className="bg-purple-200 dark:bg-purple-800 px-1 rounded">@campo:nome:VALOR</code>
+                        <strong>Exemplo:</strong> Se o lead enviar "João Silva", o agente executará: 
+                        <code className="bg-purple-200 dark:bg-purple-800 px-1 rounded ml-1">@campo:nome-completo:João Silva</code>
                       </p>
                     </div>
                     {camposPersonalizados.length === 0 && (
