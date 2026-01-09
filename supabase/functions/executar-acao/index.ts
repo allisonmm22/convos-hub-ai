@@ -932,16 +932,40 @@ serve(async (req) => {
         
         console.log(`Campo encontrado: "${campo.nome}" (ID: ${campo.id}, tipo: ${campo.tipo})`);
         
-        // Upsert no valor do campo na nova tabela
-        const { error } = await supabase
+        // Verificar se já existe um registro para este contato/campo
+        const { data: existente } = await supabase
           .from('contato_campos_valores')
-          .upsert({
-            contato_id: contato_id,
-            campo_id: campo.id,
-            valor: valorCampo
-          }, { onConflict: 'contato_id,campo_id' });
+          .select('id')
+          .eq('contato_id', contato_id)
+          .eq('campo_id', campo.id)
+          .maybeSingle();
+
+        let campoError;
+        if (existente) {
+          // Se existe, fazer UPDATE
+          console.log(`Atualizando registro existente (ID: ${existente.id})`);
+          const result = await supabase
+            .from('contato_campos_valores')
+            .update({ 
+              valor: valorCampo,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existente.id);
+          campoError = result.error;
+        } else {
+          // Se não existe, fazer INSERT
+          console.log(`Inserindo novo registro para campo ${campo.id}`);
+          const result = await supabase
+            .from('contato_campos_valores')
+            .insert({
+              contato_id: contato_id,
+              campo_id: campo.id,
+              valor: valorCampo
+            });
+          campoError = result.error;
+        }
         
-        if (error) throw error;
+        if (campoError) throw campoError;
         
         console.log(`✅ Campo "${campo.nome}" atualizado para "${valorCampo}"`);
         resultado = { sucesso: true, mensagem: `Campo "${campo.nome}" atualizado para "${valorCampo}"` };
