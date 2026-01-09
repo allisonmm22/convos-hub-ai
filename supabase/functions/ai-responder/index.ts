@@ -1238,22 +1238,31 @@ serve(async (req) => {
       // Adicionar lista de campos personalizados disponíveis
       if (camposPersonalizados.length > 0) {
         promptCompleto += '\n### CAMPOS PERSONALIZADOS DISPONÍVEIS\n';
-        promptCompleto += 'Você pode usar @campo para salvar dados nos seguintes campos:\n';
+        promptCompleto += 'Você pode capturar e salvar dados nos seguintes campos:\n';
         for (const campo of camposPersonalizados) {
-          promptCompleto += `- ${campo.nome} (${campo.tipo})\n`;
+          const nomeCampoFormatado = campo.nome.toLowerCase().replace(/\s+/g, '-');
+          promptCompleto += `- ${campo.nome} (${campo.tipo}) → Use: @campo:${nomeCampoFormatado}:{valor-do-lead}\n`;
         }
-        promptCompleto += '\n**⚠️ REGRA CRÍTICA PARA CAMPOS PERSONALIZADOS:**\n';
-        promptCompleto += '- Para SALVAR qualquer campo personalizado, você DEVE usar a ferramenta executar_acao com tipo="campo"\n';
-        promptCompleto += '- NUNCA responda "Campo atualizado", "Informação salva" ou similar SEM ANTES chamar a ferramenta!\n';
-        promptCompleto += '- Se você NÃO chamou a ferramenta executar_acao, o campo NÃO foi salvo - não minta para o cliente!\n';
-        promptCompleto += '- Use hífens no lugar de espaços no nome do campo (ex: "Data de Nascimento" → data-de-nascimento)\n';
-        promptCompleto += '- Formato do valor: "nome-do-campo:valor-exato-que-o-lead-enviou"\n';
-        promptCompleto += '- SEMPRE preserve o formato exato que o lead enviou, não converta datas!\n';
-        promptCompleto += '- Exemplos de chamada:\n';
-        promptCompleto += '  - Lead disse "22/02/1994" → tipo="campo", valor="data-de-nascimento:22/02/1994"\n';
-        promptCompleto += '  - Lead disse "20 de janeiro de 1992" → tipo="campo", valor="data-de-nascimento:20 de janeiro de 1992"\n';
-        promptCompleto += '  - Lead disse "meu email é joao@teste.com" → tipo="campo", valor="email:joao@teste.com"\n';
-        promptCompleto += '- Os valores dos campos já salvos aparecem na seção DADOS DO CONTATO/LEAD acima\n';
+        
+        promptCompleto += '\n**COMO SALVAR CAMPOS:**\n';
+        promptCompleto += '1. Quando o lead enviar uma informação que corresponde a um campo acima, SALVE imediatamente\n';
+        promptCompleto += '2. Use o formato: @campo:nome-do-campo:{exatamente-o-que-o-lead-enviou}\n';
+        promptCompleto += '3. Substitua espaços por hífens no nome do campo\n';
+        promptCompleto += '4. Mantenha o valor EXATAMENTE como o lead enviou\n\n';
+        
+        promptCompleto += '**EXEMPLOS PRÁTICOS:**\n';
+        promptCompleto += '- Lead diz: "meu email é teste@gmail.com"\n';
+        promptCompleto += '  → Você usa: @campo:email:teste@gmail.com\n';
+        promptCompleto += '- Lead diz: "22/02/1994"\n';
+        promptCompleto += '  → Você usa: @campo:data-de-nascimento:22/02/1994\n';
+        promptCompleto += '- Lead diz: "123.456.789-00"\n';
+        promptCompleto += '  → Você usa: @campo:cpf:123.456.789-00\n\n';
+        
+        promptCompleto += '**⚠️ REGRA CRÍTICA:**\n';
+        promptCompleto += '- Para salvar um campo, você DEVE usar a ferramenta executar_acao com tipo="campo"\n';
+        promptCompleto += '- O valor deve ser: "nome-do-campo:valor-que-o-lead-enviou"\n';
+        promptCompleto += '- NUNCA diga "informação salva" sem chamar a ferramenta primeiro!\n';
+        promptCompleto += '- Os valores já salvos aparecem na seção DADOS DO CONTATO/LEAD acima\n';
         promptCompleto += '- Use @obter:<nome-do-campo> se precisar confirmar um valor antes de usar\n';
       }
       
