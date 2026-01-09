@@ -1380,6 +1380,21 @@ serve(async (req) => {
       promptCompleto += '- As ações são executadas silenciosamente em background. Mantenha o fluxo natural da conversa.\n';
       promptCompleto += '- Quando transferir para outro agente, apenas se despeça naturalmente sem mencionar a transferência.\n';
       
+      promptCompleto += '\n## ⚠️ REGRA CRÍTICA: UMA AÇÃO POR RESPOSTA\n';
+      promptCompleto += 'Você deve executar NO MÁXIMO UMA ou DUAS ações por resposta!\n\n';
+      promptCompleto += '**PROIBIDO:**\n';
+      promptCompleto += '- Executar 5+ ações de uma vez (nome, campo, campo, campo, followup)\n';
+      promptCompleto += '- Revisar todo o histórico para executar ações já processadas anteriormente\n';
+      promptCompleto += '- Acumular ações que já deveriam ter sido executadas em turnos anteriores\n\n';
+      promptCompleto += '**CORRETO:**\n';
+      promptCompleto += '- Executar apenas a ação relevante ao contexto ATUAL da mensagem\n';
+      promptCompleto += '- Se o lead responde a uma pergunta específica, execute apenas a ação daquela pergunta\n';
+      promptCompleto += '- Informações como nome, email, CPF já foram salvas quando o lead as informou antes\n\n';
+      promptCompleto += '**REGRA DE CONTEXTO:**\n';
+      promptCompleto += '- Quando você pergunta "qual horário prefere para retorno?" e o lead responde "23:45"\n';
+      promptCompleto += '  → Execute APENAS @followup - NÃO revise a conversa para salvar outros dados!\n';
+      promptCompleto += '- A resposta do lead está relacionada à sua última pergunta, não a perguntas anteriores\n';
+      
       promptCompleto += '\n## EXECUÇÃO OBRIGATÓRIA DE AÇÕES NAS ETAPAS (CRÍTICO)\n';
       promptCompleto += 'Quando a descrição de uma etapa contém ações como @etapa:xxx, @nome, @transferir:xxx, você DEVE chamá-las usando a ferramenta executar_acao.\n';
       promptCompleto += '- NÃO espere confirmação adicional - se a condição da etapa foi atendida, execute TODAS as ações listadas\n';
@@ -1542,7 +1557,45 @@ serve(async (req) => {
     if (result.acoes && result.acoes.length > 0 && contatoId) {
       console.log('Executando', result.acoes.length, 'ações...');
       
-      for (const acao of result.acoes) {
+      // BLINDAGEM: Se há mais de 3 ações, provavelmente é um erro do agente
+      // Filtrar para executar apenas ações prioritárias
+      let acoesParaExecutar = result.acoes;
+      
+      if (result.acoes.length > 3) {
+        console.log('⚠️ [BLINDAGEM] Agente tentou executar', result.acoes.length, 'ações de uma vez!');
+        console.log('Ações detectadas:', result.acoes.map(a => `${a.tipo}:${a.valor?.substring(0, 30)}`));
+        
+        // Priorizar: followup > agenda > transferir > finalizar
+        const prioridade = ['followup', 'agenda', 'transferir', 'finalizar'];
+        const acaoPrioritaria = result.acoes.find(a => prioridade.includes(a.tipo));
+        
+        if (acaoPrioritaria) {
+          acoesParaExecutar = [acaoPrioritaria];
+          console.log('✅ [BLINDAGEM] Executando apenas ação prioritária:', acaoPrioritaria.tipo);
+        } else {
+          // Se não há ação prioritária, pegar apenas a última (mais recente)
+          acoesParaExecutar = [result.acoes[result.acoes.length - 1]];
+          console.log('✅ [BLINDAGEM] Executando apenas última ação:', acoesParaExecutar[0].tipo);
+        }
+        
+        // Logar esse comportamento problemático
+        try {
+          await supabase.from('logs_atividade').insert({
+            conta_id,
+            tipo: 'erro_ia_acoes_em_lote',
+            descricao: `Agente tentou executar ${result.acoes.length} ações de uma vez`,
+            metadata: {
+              acoes_originais: result.acoes.map(a => ({ tipo: a.tipo, valor: a.valor?.substring(0, 100) })),
+              acao_executada: { tipo: acoesParaExecutar[0].tipo, valor: acoesParaExecutar[0].valor?.substring(0, 100) },
+              mensagem_cliente: mensagem?.substring(0, 200),
+            },
+          });
+        } catch (logError) {
+          console.error('Erro ao logar ações em lote:', logError);
+        }
+      }
+      
+      for (const acao of acoesParaExecutar) {
         // Pular TODAS as ações de agenda (consultar E criar) - já foram executadas durante o tool-calling
         if (acao.tipo === 'agenda') {
           console.log('Pulando ação de agenda (já executada durante tool-calling):', acao.valor);
