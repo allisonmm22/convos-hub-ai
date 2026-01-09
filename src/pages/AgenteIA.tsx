@@ -123,6 +123,7 @@ export default function AgenteIA() {
           tipo,
           ativo: false,
           prompt_sistema: 'Você é um assistente virtual amigável e profissional.',
+          modelo: 'gpt-4o-mini',
         })
         .select('id')
         .single();
