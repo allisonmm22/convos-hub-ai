@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   X, Phone, Edit2, Save, Briefcase, Mail, Tag, Plus, 
   History, ChevronDown, ChevronUp, Check, MessageSquare,
@@ -30,6 +30,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { NegociacaoDetalheModal } from '@/components/NegociacaoDetalheModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -160,15 +166,13 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
   const [camposPersonalizados, setCamposPersonalizados] = useState<CampoPersonalizado[]>([]);
   const [gruposCampos, setGruposCampos] = useState<GrupoCampos[]>([]);
   const [camposValores, setCamposValores] = useState<Record<string, string>>({});
-  const [camposEditando, setCamposEditando] = useState(false);
-  const [salvandoCampos, setSalvandoCampos] = useState(false);
+  const saveTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   useEffect(() => {
     setNomeEdit(contato.nome);
     setTelefoneEdit(contato.telefone);
     setEmailEdit(contato.email || '');
     setEditando(false);
-    setCamposEditando(false);
     if (isOpen) {
       fetchNegociacoes();
       fetchFunis();
@@ -218,34 +222,25 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
     }
   };
 
-  const handleSalvarCampos = async () => {
-    setSalvandoCampos(true);
-    try {
-      const updates = Object.entries(camposValores)
-        .filter(([_, valor]) => valor !== undefined)
-        .map(([campo_id, valor]) => ({
-          contato_id: contato.id,
-          campo_id,
-          valor: valor || null
-        }));
-      
-      if (updates.length > 0) {
-        const { error } = await supabase
-          .from('contato_campos_valores')
-          .upsert(updates, { onConflict: 'contato_id,campo_id' });
-        
-        if (error) throw error;
-      }
-      
-      toast.success('Campos salvos com sucesso!');
-      setCamposEditando(false);
-    } catch (error) {
-      console.error('Erro ao salvar campos:', error);
-      toast.error('Erro ao salvar campos');
-    } finally {
-      setSalvandoCampos(false);
+  const debouncedSaveCampo = useCallback((campoId: string, valor: string) => {
+    if (saveTimeoutRef.current[campoId]) {
+      clearTimeout(saveTimeoutRef.current[campoId]);
     }
-  };
+    
+    saveTimeoutRef.current[campoId] = setTimeout(async () => {
+      try {
+        await supabase
+          .from('contato_campos_valores')
+          .upsert({
+            contato_id: contato.id,
+            campo_id: campoId,
+            valor: valor || null
+          }, { onConflict: 'contato_id,campo_id' });
+      } catch (error) {
+        console.error('Erro ao salvar campo:', error);
+      }
+    }, 500);
+  }, [contato.id]);
 
   const agruparCamposPorGrupo = () => {
     const grupos: Record<string, CampoPersonalizado[]> = {};
@@ -264,43 +259,21 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
   const renderCampoInput = (campo: CampoPersonalizado) => {
     const valor = camposValores[campo.id] || '';
     
-    if (!camposEditando) {
-      // Modo visualização
-      let displayValue = valor || <span className="text-muted-foreground italic text-xs">Não informado</span>;
-      
-      if (campo.tipo === 'checkbox') {
-        displayValue = valor === 'true' ? 'Sim' : valor === 'false' ? 'Não' : displayValue;
-      } else if (campo.tipo === 'data' && valor) {
-        try {
-          displayValue = format(new Date(valor), 'dd/MM/yyyy', { locale: ptBR });
-        } catch {
-          displayValue = valor;
-        }
-      }
-      
-      return (
-        <div className="flex items-center justify-between py-2">
-          <span className="text-xs text-muted-foreground">{campo.nome}</span>
-          <span className="text-xs font-medium text-foreground">{displayValue}</span>
-        </div>
-      );
-    }
-    
-    // Modo edição
     const handleChange = (novoValor: string) => {
       setCamposValores(prev => ({ ...prev, [campo.id]: novoValor }));
+      debouncedSaveCampo(campo.id, novoValor);
     };
     
     switch (campo.tipo) {
       case 'numero':
         return (
-          <div className="flex items-center gap-2 py-2">
+          <div className="flex items-center gap-2 py-1.5">
             <span className="text-xs text-muted-foreground flex-1">{campo.nome}</span>
             <Input
               type="number"
               value={valor}
               onChange={(e) => handleChange(e.target.value)}
-              className="h-8 w-32 text-xs"
+              className="h-7 w-28 text-xs"
               placeholder="0"
             />
           </div>
@@ -308,23 +281,23 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
       
       case 'data':
         return (
-          <div className="flex items-center gap-2 py-2">
+          <div className="flex items-center gap-2 py-1.5">
             <span className="text-xs text-muted-foreground flex-1">{campo.nome}</span>
             <Input
               type="date"
               value={valor}
               onChange={(e) => handleChange(e.target.value)}
-              className="h-8 w-36 text-xs"
+              className="h-7 w-32 text-xs"
             />
           </div>
         );
       
       case 'selecao':
         return (
-          <div className="flex items-center gap-2 py-2">
+          <div className="flex items-center gap-2 py-1.5">
             <span className="text-xs text-muted-foreground flex-1">{campo.nome}</span>
             <Select value={valor} onValueChange={handleChange}>
-              <SelectTrigger className="h-8 w-36 text-xs">
+              <SelectTrigger className="h-7 w-32 text-xs">
                 <SelectValue placeholder="Selecione..." />
               </SelectTrigger>
               <SelectContent>
@@ -340,7 +313,7 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
       
       case 'checkbox':
         return (
-          <div className="flex items-center gap-2 py-2">
+          <div className="flex items-center gap-2 py-1.5">
             <span className="text-xs text-muted-foreground flex-1">{campo.nome}</span>
             <Switch
               checked={valor === 'true'}
@@ -351,13 +324,13 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
       
       default: // texto
         return (
-          <div className="flex items-center gap-2 py-2">
+          <div className="flex items-center gap-2 py-1.5">
             <span className="text-xs text-muted-foreground flex-1">{campo.nome}</span>
             <Input
               type="text"
               value={valor}
               onChange={(e) => handleChange(e.target.value)}
-              className="h-8 w-36 text-xs"
+              className="h-7 w-32 text-xs"
               placeholder="..."
             />
           </div>
@@ -967,44 +940,34 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
 
           {/* Campos Personalizados */}
           {camposPersonalizados.length > 0 && (
-            <div className="mt-4 bg-card rounded-2xl border border-border shadow-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-semibold text-foreground">Campos Personalizados</span>
-                </div>
-                {!camposEditando ? (
-                  <button
-                    onClick={() => setCamposEditando(true)}
-                    className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
-                  >
-                    <Edit2 className="h-3.5 w-3.5" />
-                    Editar
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleSalvarCampos}
-                    disabled={salvandoCampos}
-                    className="flex items-center gap-1.5 text-xs text-emerald-500 hover:text-emerald-400 transition-colors disabled:opacity-50"
-                  >
-                    <Save className="h-3.5 w-3.5" />
-                    {salvandoCampos ? 'Salvando...' : 'Salvar'}
-                  </button>
-                )}
+            <div className="mt-4 bg-card rounded-2xl border border-border shadow-lg overflow-hidden">
+              <div className="flex items-center gap-2 p-4 pb-2">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-semibold text-foreground">Campos Personalizados</span>
               </div>
               
-              <div className="space-y-2 divide-y divide-border">
+              <Accordion type="multiple" className="px-4 pb-3">
                 {Object.entries(agruparCamposPorGrupo()).map(([grupoNome, campos]) => (
-                  <div key={grupoNome} className={grupoNome !== 'Sem Grupo' ? 'pt-2' : ''}>
-                    {grupoNome !== 'Sem Grupo' && (
-                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1">{grupoNome}</p>
-                    )}
-                    {campos.map(campo => (
-                      <div key={campo.id}>{renderCampoInput(campo)}</div>
-                    ))}
-                  </div>
+                  <AccordionItem 
+                    key={grupoNome} 
+                    value={grupoNome}
+                    className="border-b-0"
+                  >
+                    <AccordionTrigger className="py-2 hover:no-underline">
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        {grupoNome}
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent className="pb-2">
+                      <div className="space-y-0.5">
+                        {campos.map(campo => (
+                          <div key={campo.id}>{renderCampoInput(campo)}</div>
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
                 ))}
-              </div>
+              </Accordion>
             </div>
           )}
 
