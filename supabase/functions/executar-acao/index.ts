@@ -518,13 +518,14 @@ serve(async (req) => {
 
       case 'finalizar': {
         // Encerrar a conversa e limpar memória do agente
+        // Adiciona 5 segundos de margem para garantir que mensagens criadas durante o encerramento sejam filtradas
         const { error } = await supabase
           .from('conversas')
           .update({ 
             status: 'encerrado',
             agente_ia_ativo: false,
             etapa_ia_atual: null,
-            memoria_limpa_em: new Date().toISOString(),
+            memoria_limpa_em: new Date(Date.now() + 5000).toISOString(),
           })
           .eq('id', conversa_id);
 
