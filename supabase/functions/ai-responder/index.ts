@@ -774,13 +774,14 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { conversa_id, mensagem, conta_id: contaIdParam, mensagem_tipo, transcricao, descricao_imagem, texto_documento } = await req.json();
+    const { conversa_id, mensagem, conta_id: contaIdParam, mensagem_tipo, transcricao, descricao_imagem, texto_documento, transferencia_agente } = await req.json();
 
     console.log('=== AI RESPONDER ===');
     console.log('Conversa ID:', conversa_id);
     console.log('Conta ID (param):', contaIdParam);
     console.log('Mensagem recebida:', mensagem);
     console.log('Tipo de mensagem:', mensagem_tipo || 'texto');
+    console.log('Transferência de agente:', transferencia_agente || false);
     if (transcricao) {
       console.log('Transcrição de áudio:', transcricao.substring(0, 100));
     }
@@ -884,7 +885,8 @@ serve(async (req) => {
     console.log('Agente encontrado:', agente.nome, '(tipo:', agente.tipo + ')');
 
     // Verificar se o agente está configurado para atender 24h
-    if (!agente.atender_24h) {
+    // Se for uma transferência de agente, ignorar horário e sempre responder
+    if (!agente.atender_24h && !transferencia_agente) {
       const agora = new Date();
       const brasilOffset = -3 * 60;
       const localTime = new Date(agora.getTime() + (brasilOffset + agora.getTimezoneOffset()) * 60000);
@@ -909,6 +911,11 @@ serve(async (req) => {
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+    }
+    
+    // Log se for transferência
+    if (transferencia_agente) {
+      console.log('🔄 Esta é uma resposta após TRANSFERÊNCIA - ignorando verificação de horário');
     }
 
     // 3. Buscar etapas de atendimento
