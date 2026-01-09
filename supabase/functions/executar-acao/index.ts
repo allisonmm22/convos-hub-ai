@@ -517,17 +517,19 @@ serve(async (req) => {
       }
 
       case 'finalizar': {
-        // Encerrar a conversa
+        // Encerrar a conversa e limpar memória do agente
         const { error } = await supabase
           .from('conversas')
           .update({ 
             status: 'encerrado',
             agente_ia_ativo: false,
+            etapa_ia_atual: null,
+            memoria_limpa_em: new Date().toISOString(),
           })
           .eq('id', conversa_id);
 
         if (error) throw error;
-        resultado = { sucesso: true, mensagem: 'Conversa encerrada' };
+        resultado = { sucesso: true, mensagem: 'Conversa encerrada e memória limpa' };
         break;
       }
 
