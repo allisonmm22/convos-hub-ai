@@ -1242,9 +1242,17 @@ serve(async (req) => {
         for (const campo of camposPersonalizados) {
           promptCompleto += `- ${campo.nome} (${campo.tipo})\n`;
         }
-        promptCompleto += '\n**INSTRUÇÕES PARA CAMPOS PERSONALIZADOS:**\n';
-        promptCompleto += '- Quando o lead fornecer uma informação que corresponde a um campo personalizado, use @campo:<nome-do-campo>:<valor> para salvar\n';
-        promptCompleto += '- Use hífens no lugar de espaços no nome do campo (ex: "Data de Nascimento" → @campo:data-de-nascimento:valor)\n';
+        promptCompleto += '\n**⚠️ REGRA CRÍTICA PARA CAMPOS PERSONALIZADOS:**\n';
+        promptCompleto += '- Para SALVAR qualquer campo personalizado, você DEVE usar a ferramenta executar_acao com tipo="campo"\n';
+        promptCompleto += '- NUNCA responda "Campo atualizado", "Informação salva" ou similar SEM ANTES chamar a ferramenta!\n';
+        promptCompleto += '- Se você NÃO chamou a ferramenta executar_acao, o campo NÃO foi salvo - não minta para o cliente!\n';
+        promptCompleto += '- Use hífens no lugar de espaços no nome do campo (ex: "Data de Nascimento" → data-de-nascimento)\n';
+        promptCompleto += '- Formato do valor: "nome-do-campo:valor-exato-que-o-lead-enviou"\n';
+        promptCompleto += '- SEMPRE preserve o formato exato que o lead enviou, não converta datas!\n';
+        promptCompleto += '- Exemplos de chamada:\n';
+        promptCompleto += '  - Lead disse "22/02/1994" → tipo="campo", valor="data-de-nascimento:22/02/1994"\n';
+        promptCompleto += '  - Lead disse "20 de janeiro de 1992" → tipo="campo", valor="data-de-nascimento:20 de janeiro de 1992"\n';
+        promptCompleto += '  - Lead disse "meu email é joao@teste.com" → tipo="campo", valor="email:joao@teste.com"\n';
         promptCompleto += '- Os valores dos campos já salvos aparecem na seção DADOS DO CONTATO/LEAD acima\n';
         promptCompleto += '- Use @obter:<nome-do-campo> se precisar confirmar um valor antes de usar\n';
       }
@@ -1353,7 +1361,7 @@ serve(async (req) => {
         type: 'function',
         function: {
           name: 'executar_acao',
-          description: 'Executa uma ação automatizada como mover lead para etapa do CRM, adicionar tag, transferir conversa, alterar nome do contato, atualizar campo personalizado, obter valor de campo, consultar agenda ou criar evento.',
+          description: 'OBRIGATÓRIO: Executa uma ação automatizada. NUNCA diga que salvou dados, atualizou campos ou criou eventos sem chamar esta função primeiro. Para campo personalizado, use tipo="campo" e valor="nome-do-campo:valor-exato" preservando o formato original (ex: valor="data-de-nascimento:22/02/1994" ou valor="data-de-nascimento:20 de janeiro de 1992").',
           parameters: {
             type: 'object',
             properties: {
@@ -1364,7 +1372,7 @@ serve(async (req) => {
               },
               valor: {
                 type: 'string',
-                description: 'Valor associado à ação (ID da etapa, nome da tag, destino da transferência, novo nome do contato, para agenda use "consultar" ou "criar:titulo|data_inicio" onde data_inicio é ISO8601)',
+                description: 'Valor associado à ação. Para campo: "nome-do-campo:valor" onde valor é EXATAMENTE o que o lead disse, preservando formato (ex: "data-de-nascimento:22/02/1994", "data-de-nascimento:20 de janeiro de 1992", "email:teste@email.com"). Para nome: o nome completo. Para etapa: nome ou ID. Para agenda: "consultar" ou "criar:titulo|data_iso8601".',
               },
             },
             required: ['tipo'],
