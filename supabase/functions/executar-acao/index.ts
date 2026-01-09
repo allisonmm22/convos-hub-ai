@@ -413,6 +413,8 @@ serve(async (req) => {
             // Chamar ai-responder para gerar resposta do novo agente
             const aiResponderUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-responder`;
             try {
+              console.log('📤 Chamando ai-responder para novo agente...');
+              
               const aiResponse = await fetch(aiResponderUrl, {
                 method: 'POST',
                 headers: {
@@ -423,11 +425,24 @@ serve(async (req) => {
                   conversa_id,
                   mensagem: ultimaMensagemLead?.conteudo || 'Olá',
                   conta_id,
+                  transferencia_agente: true, // Flag para indicar transferência - força resposta
                 }),
               });
               
+              // Verificar se a chamada foi bem-sucedida
+              if (!aiResponse.ok) {
+                const errorText = await aiResponse.text();
+                console.error('❌ Erro na chamada ao ai-responder:', aiResponse.status, errorText);
+                throw new Error(`ai-responder retornou status ${aiResponse.status}`);
+              }
+              
               const aiResult = await aiResponse.json();
-              console.log('Resposta do novo agente gerada:', aiResult);
+              console.log('📥 Resposta do ai-responder:', JSON.stringify(aiResult));
+              
+              // Verificar should_respond
+              if (!aiResult.should_respond) {
+                console.warn('⚠️ ai-responder retornou should_respond=false:', aiResult.error || 'sem motivo');
+              }
               
               if (aiResult.resposta && aiResult.should_respond) {
                 // Buscar conexão e contato para enviar via WhatsApp
@@ -437,19 +452,7 @@ serve(async (req) => {
                   .eq('id', conversa_id)
                   .single();
                 
-                const { data: contato } = await supabase
-                  .from('contatos')
-                  .select('telefone')
-                  .eq('id', conversaData?.contato_id)
-                  .single();
-                
-                const { data: conexao } = await supabase
-                  .from('conexoes_whatsapp')
-                  .select('instance_name, token')
-                  .eq('id', conversaData?.conexao_id)
-                  .single();
-                
-                if (conexao && contato) {
+                if (conversaData) {
                   // Salvar mensagem no banco
                   await supabase
                     .from('mensagens')
@@ -470,25 +473,33 @@ serve(async (req) => {
                     })
                     .eq('id', conversa_id);
                   
-                  // Enviar via Evolution API
-                  const evolutionUrl = Deno.env.get('EVOLUTION_API_URL') || 'https://api.evolution.mendsolutions.com.br';
-                  await fetch(`${evolutionUrl}/message/sendText/${conexao.instance_name}`, {
+                  // Usar enviar-mensagem para garantir compatibilidade com todos os provedores
+                  const enviarMensagemUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/enviar-mensagem`;
+                  const enviarResponse = await fetch(enviarMensagemUrl, {
                     method: 'POST',
                     headers: {
-                      'apikey': conexao.token,
+                      'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
                       'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                      number: contato.telefone.replace(/\D/g, ''),
-                      text: aiResult.resposta,
+                      conexao_id: conversaData.conexao_id,
+                      conversa_id,
+                      contato_id: conversaData.contato_id,
+                      mensagem: aiResult.resposta,
+                      tipo: 'texto',
                     }),
                   });
                   
-                  console.log('Resposta do novo agente enviada via WhatsApp');
+                  if (enviarResponse.ok) {
+                    console.log('✅ Resposta do novo agente enviada com sucesso!');
+                  } else {
+                    const enviarError = await enviarResponse.text();
+                    console.error('❌ Erro ao enviar resposta:', enviarError);
+                  }
                 }
               }
             } catch (aiError) {
-              console.error('Erro ao gerar resposta do novo agente:', aiError);
+              console.error('❌ Erro ao gerar resposta do novo agente:', aiError);
             }
           } else {
             resultado = { sucesso: false, mensagem: `Agente "${agenteRefOriginal}" não encontrado` };
