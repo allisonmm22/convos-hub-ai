@@ -5,6 +5,7 @@ import {
   TrendingUp, Trophy, XCircle, Clock, ArrowRight, Eye, Megaphone,
   ExternalLink, Facebook, Instagram, Globe, Target, FileText, Calendar, Hash, ToggleLeft
 } from 'lucide-react';
+import { FollowupsAgendadosSection } from '@/components/FollowupsAgendadosSection';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -993,9 +994,12 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
                     </AccordionContent>
                   </AccordionItem>
                 ))}
-              </Accordion>
+            </Accordion>
             </div>
           )}
+
+          {/* Follow-ups Agendados */}
+          <FollowupsAgendadosSection contatoId={contato.id} />
 
           {/* Seção Origem do Lead - Sempre Visível */}
           <div className="mt-4">

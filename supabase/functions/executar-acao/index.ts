@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface Acao {
-  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda' | 'campo' | 'obter';
+  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda' | 'campo' | 'obter' | 'followup';
   valor?: string;
 }
 
@@ -50,6 +50,29 @@ function gerarMensagemSistema(tipo: string, valor: string | undefined, resultado
       return `📝 Campo "${nomeCampo}" atualizado para "${valorCampo}"`;
     case 'obter':
       return `🔍 Campo "${valor?.replace(/-/g, ' ')}" consultado`;
+    case 'followup': {
+      // Extrair data e motivo do valor
+      const partes = valor?.split(':') || [];
+      // Formato: data_iso:motivo (motivo pode conter ":")
+      if (partes.length >= 2) {
+        try {
+          // Reconstruir a data ISO (que pode ter ":" dentro)
+          const dataStr = partes.slice(0, 3).join(':'); // 2025-01-10T14:00:00
+          const motivo = partes.slice(3).join(':') || 'retorno agendado';
+          const data = new Date(dataStr);
+          const dataFormatada = data.toLocaleString('pt-BR', { 
+            day: '2-digit', 
+            month: '2-digit', 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          });
+          return `📅 Follow-up agendado para ${dataFormatada} - ${motivo}`;
+        } catch {
+          return `📅 Follow-up agendado: ${valor}`;
+        }
+      }
+      return `📅 Follow-up agendado`;
+    }
     default:
       return `⚙️ Ação executada: ${tipo}`;
   }
@@ -1131,6 +1154,112 @@ serve(async (req) => {
           sucesso: true, 
           mensagem: `Valor do campo "${campo.nome}": ${valorEncontrado}`,
           dados: { campo: campo.nome, valor: valorEncontrado }
+        };
+        break;
+      }
+
+      case 'followup': {
+        // Criar follow-up agendado para retornar ao lead
+        // Formato: data_iso8601:motivo
+        // Ex: 2025-01-10T14:00:00-03:00:lead pediu para retornar sexta
+        
+        console.log('📅 [FOLLOWUP] Criando follow-up agendado:', acaoObj.valor);
+        
+        if (!acaoObj.valor) {
+          resultado = { sucesso: false, mensagem: 'Data do follow-up não informada' };
+          break;
+        }
+        
+        // Parsear valor: tentar extrair data ISO e motivo
+        // Formato esperado: "2025-01-10T14:00:00-03:00:motivo" ou "2025-01-10T14:00:00:motivo"
+        const valorCompleto = acaoObj.valor;
+        let dataAgendada: Date;
+        let motivo: string = 'Retorno agendado pelo agente';
+        
+        // Tentar diferentes formatos de parsing
+        // Formato 1: data ISO completa com timezone (2025-01-10T14:00:00-03:00:motivo)
+        // Formato 2: data ISO sem timezone (2025-01-10T14:00:00:motivo)
+        const matchComTz = valorCompleto.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}):(.*)$/);
+        const matchSemTz = valorCompleto.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}):(.*)$/);
+        const matchDataSimples = valorCompleto.match(/^(\d{4}-\d{2}-\d{2}):(.*)$/);
+        
+        if (matchComTz) {
+          dataAgendada = new Date(matchComTz[1]);
+          motivo = matchComTz[2] || motivo;
+        } else if (matchSemTz) {
+          dataAgendada = new Date(matchSemTz[1]);
+          motivo = matchSemTz[2] || motivo;
+        } else if (matchDataSimples) {
+          // Apenas data, assumir 9h
+          dataAgendada = new Date(matchDataSimples[1] + 'T09:00:00');
+          motivo = matchDataSimples[2] || motivo;
+        } else {
+          // Tentar parsear como data direta
+          dataAgendada = new Date(valorCompleto);
+        }
+        
+        if (isNaN(dataAgendada.getTime())) {
+          console.log('❌ [FOLLOWUP] Data inválida:', valorCompleto);
+          resultado = { sucesso: false, mensagem: 'Data do follow-up inválida. Use formato: 2025-01-10T14:00:00:motivo' };
+          break;
+        }
+        
+        console.log('📅 [FOLLOWUP] Data parseada:', dataAgendada.toISOString());
+        console.log('📅 [FOLLOWUP] Motivo:', motivo);
+        
+        // Buscar contexto breve da conversa (últimas 5 mensagens)
+        const { data: mensagensRecentes } = await supabase
+          .from('mensagens')
+          .select('conteudo, direcao')
+          .eq('conversa_id', conversa_id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        
+        const contexto = mensagensRecentes
+          ?.reverse()
+          .map(m => `${m.direcao === 'entrada' ? 'Lead' : 'Agente'}: ${m.conteudo}`)
+          .join('\n')
+          .substring(0, 500) || '';
+        
+        // Buscar agente_ia_id da conversa
+        const { data: conversaData } = await supabase
+          .from('conversas')
+          .select('agente_ia_id')
+          .eq('id', conversa_id)
+          .single();
+        
+        // Inserir follow-up agendado
+        const { error: followupError } = await supabase
+          .from('followups_agendados')
+          .insert({
+            conta_id,
+            conversa_id,
+            contato_id,
+            agente_ia_id: conversaData?.agente_ia_id || null,
+            data_agendada: dataAgendada.toISOString(),
+            motivo: motivo.trim(),
+            contexto,
+            status: 'pendente',
+            criado_por: 'agente_ia'
+          });
+        
+        if (followupError) {
+          console.log('❌ [FOLLOWUP] Erro ao inserir:', followupError);
+          throw followupError;
+        }
+        
+        const dataFormatada = dataAgendada.toLocaleString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        
+        console.log(`✅ [FOLLOWUP] Follow-up agendado para ${dataFormatada}`);
+        resultado = { 
+          sucesso: true, 
+          mensagem: `Follow-up agendado para ${dataFormatada}. Motivo: ${motivo.trim()}`
         };
         break;
       }

@@ -131,3 +131,6 @@ verify_jwt = false
 
 [functions.desativar-conta]
 verify_jwt = false
+
+[functions.processar-followups-agendados]
+verify_jwt = false
