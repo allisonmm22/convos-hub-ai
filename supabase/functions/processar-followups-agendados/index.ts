@@ -7,8 +7,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const EVOLUTION_API_URL = 'https://evolution.thinksolve.com.br';
-
 interface FollowupAgendado {
   id: string;
   conta_id: string;
@@ -104,18 +102,6 @@ serve(async (req) => {
           continue;
         }
 
-        // Buscar conexão
-        const { data: conexao } = await supabase
-          .from('conexoes_whatsapp')
-          .select('instance_name, token')
-          .eq('id', conversa.conexao_id)
-          .single();
-
-        if (!conexao) {
-          console.log('⚠️ Conexão não encontrada');
-          continue;
-        }
-
         // Buscar conta para chave OpenAI
         const { data: conta } = await supabase
           .from('contas')
@@ -169,22 +155,18 @@ Gere uma mensagem curta (máximo 2 frases) e amigável para retomar a conversa. 
 
         console.log('📤 Mensagem gerada:', mensagemFollowup);
 
-        // Enviar mensagem via Evolution API
-        const evolutionResponse = await fetch(`${EVOLUTION_API_URL}/message/sendText/${conexao.instance_name}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': conexao.token,
+        // Enviar mensagem via função enviar-mensagem (roteador central)
+        const enviarResponse = await supabase.functions.invoke('enviar-mensagem', {
+          body: {
+            conexao_id: conversa.conexao_id,
+            telefone: contato.telefone,
+            mensagem: mensagemFollowup,
+            tipo: 'texto',
           },
-          body: JSON.stringify({
-            number: contato.telefone,
-            text: mensagemFollowup,
-          }),
         });
 
-        if (!evolutionResponse.ok) {
-          const errorText = await evolutionResponse.text();
-          console.error('❌ Erro ao enviar mensagem:', errorText);
+        if (enviarResponse.error) {
+          console.error('❌ Erro ao enviar mensagem:', enviarResponse.error);
           erros++;
           continue;
         }
