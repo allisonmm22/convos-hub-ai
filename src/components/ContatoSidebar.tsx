@@ -182,6 +182,32 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
     }
   }, [contato, isOpen]);
 
+  // Realtime subscription para atualizar campos quando o agente salvar
+  useEffect(() => {
+    if (!isOpen || !contato.id) return;
+
+    const channel = supabase
+      .channel(`campos-contato-${contato.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'contato_campos_valores',
+          filter: `contato_id=eq.${contato.id}`
+        },
+        (payload) => {
+          console.log('📝 Campo atualizado via realtime:', payload);
+          fetchCamposValores();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isOpen, contato.id]);
+
   const fetchCamposPersonalizados = async () => {
     try {
       const [{ data: grupos }, { data: campos }] = await Promise.all([
