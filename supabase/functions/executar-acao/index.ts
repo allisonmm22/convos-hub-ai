@@ -1160,8 +1160,9 @@ serve(async (req) => {
 
       case 'followup': {
         // Criar follow-up agendado para retornar ao lead
-        // Formato: data_iso8601:motivo
+        // Formato: data_iso8601:motivo ou apenas horário (HH:MM)
         // Ex: 2025-01-10T14:00:00-03:00:lead pediu para retornar sexta
+        // Ex: 23:45:lead pediu retorno
         
         console.log('📅 [FOLLOWUP] Criando follow-up agendado:', acaoObj.valor);
         
@@ -1170,37 +1171,79 @@ serve(async (req) => {
           break;
         }
         
-        // Parsear valor: tentar extrair data ISO e motivo
-        // Formato esperado: "2025-01-10T14:00:00-03:00:motivo" ou "2025-01-10T14:00:00:motivo"
         const valorCompleto = acaoObj.valor;
-        let dataAgendada: Date;
+        let dataAgendada: Date | null = null;
         let motivo: string = 'Retorno agendado pelo agente';
         
         // Tentar diferentes formatos de parsing
         // Formato 1: data ISO completa com timezone (2025-01-10T14:00:00-03:00:motivo)
+        const matchComTz = valorCompleto.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}):?(.*)$/);
         // Formato 2: data ISO sem timezone (2025-01-10T14:00:00:motivo)
-        const matchComTz = valorCompleto.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}):(.*)$/);
-        const matchSemTz = valorCompleto.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}):(.*)$/);
-        const matchDataSimples = valorCompleto.match(/^(\d{4}-\d{2}-\d{2}):(.*)$/);
+        const matchSemTz = valorCompleto.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}):?(.*)$/);
+        // Formato 3: apenas data (2025-01-10:motivo)
+        const matchDataSimples = valorCompleto.match(/^(\d{4}-\d{2}-\d{2}):?(.*)$/);
+        // Formato 4: apenas horário (23:45:motivo ou 23h45:motivo)
+        const matchHorario = valorCompleto.match(/^(\d{1,2})[h:](\d{2}):?(.*)$/i);
+        // Formato 5: horário simples (23:45 ou 14h)
+        const matchHorarioSimples = valorCompleto.match(/^(\d{1,2})[h:]?(\d{2})?/i);
         
         if (matchComTz) {
           dataAgendada = new Date(matchComTz[1]);
-          motivo = matchComTz[2] || motivo;
+          motivo = matchComTz[2]?.trim() || motivo;
+          console.log('📅 [FOLLOWUP] Formato ISO com TZ detectado');
         } else if (matchSemTz) {
           dataAgendada = new Date(matchSemTz[1]);
-          motivo = matchSemTz[2] || motivo;
+          motivo = matchSemTz[2]?.trim() || motivo;
+          console.log('📅 [FOLLOWUP] Formato ISO sem TZ detectado');
         } else if (matchDataSimples) {
           // Apenas data, assumir 9h
-          dataAgendada = new Date(matchDataSimples[1] + 'T09:00:00');
-          motivo = matchDataSimples[2] || motivo;
+          dataAgendada = new Date(matchDataSimples[1] + 'T09:00:00-03:00');
+          motivo = matchDataSimples[2]?.trim() || motivo;
+          console.log('📅 [FOLLOWUP] Formato data simples detectado');
+        } else if (matchHorario) {
+          // Apenas horário (HH:MM), construir data para hoje ou amanhã
+          const hora = parseInt(matchHorario[1]);
+          const minuto = parseInt(matchHorario[2] || '0');
+          motivo = matchHorario[3]?.trim() || motivo;
+          
+          const agora = new Date();
+          dataAgendada = new Date(agora);
+          dataAgendada.setHours(hora, minuto, 0, 0);
+          
+          // Se o horário já passou hoje, agendar para amanhã
+          if (dataAgendada <= agora) {
+            dataAgendada.setDate(dataAgendada.getDate() + 1);
+            console.log('📅 [FOLLOWUP] Horário passou, agendando para amanhã');
+          }
+          console.log('📅 [FOLLOWUP] Formato horário HH:MM detectado:', hora, ':', minuto);
+        } else if (matchHorarioSimples) {
+          // Formato ainda mais simples (14h ou 23)
+          const hora = parseInt(matchHorarioSimples[1]);
+          const minuto = parseInt(matchHorarioSimples[2] || '0');
+          
+          const agora = new Date();
+          dataAgendada = new Date(agora);
+          dataAgendada.setHours(hora, minuto, 0, 0);
+          
+          // Se o horário já passou hoje, agendar para amanhã
+          if (dataAgendada <= agora) {
+            dataAgendada.setDate(dataAgendada.getDate() + 1);
+          }
+          
+          // Extrair motivo do resto do valor
+          const restoValor = valorCompleto.replace(matchHorarioSimples[0], '').replace(/^:/, '').trim();
+          if (restoValor) {
+            motivo = restoValor;
+          }
+          console.log('📅 [FOLLOWUP] Formato horário simples detectado:', hora, ':', minuto);
         } else {
           // Tentar parsear como data direta
           dataAgendada = new Date(valorCompleto);
         }
         
-        if (isNaN(dataAgendada.getTime())) {
-          console.log('❌ [FOLLOWUP] Data inválida:', valorCompleto);
-          resultado = { sucesso: false, mensagem: 'Data do follow-up inválida. Use formato: 2025-01-10T14:00:00:motivo' };
+        if (!dataAgendada || isNaN(dataAgendada.getTime())) {
+          console.log('❌ [FOLLOWUP] Data inválida após todos os parsings:', valorCompleto);
+          resultado = { sucesso: false, mensagem: 'Data do follow-up inválida. Use formato: 2025-01-10T14:00:00:motivo ou HH:MM:motivo' };
           break;
         }
         
