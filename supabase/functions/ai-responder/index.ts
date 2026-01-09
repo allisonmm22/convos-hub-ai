@@ -596,6 +596,37 @@ function detectarConfirmacaoAgendamento(mensagem: string, historico: string[]): 
   return false;
 }
 
+// Função para detectar contexto de follow-up (retorno de contato, não agendamento de reunião)
+function detectarContextoFollowUp(historico: string[]): boolean {
+  // Padrões que indicam contexto de follow-up (retomar conversa, não agendar reunião)
+  const padroesFollowUp = [
+    /quando (posso|devo|prefere que eu) retom(ar|o|e)/i,
+    /qual (o )?horário.*retom/i,
+    /me avise o melhor horário/i,
+    /quando prefere que eu (retorne|retome|fale|entre em contato)/i,
+    /podemos nos falar/i,
+    /me liga depois/i,
+    /fala comigo (depois|amanhã|mais tarde)/i,
+    /retorna (depois|amanhã|mais tarde)/i,
+    /qual (melhor )?horário para (te |eu )?ligar/i,
+    /quando.*melhor para (falar|conversar|retornar)/i,
+    /posso te ligar/i,
+    /entro em contato/i,
+    /te retorno/i,
+    /vou te contactar/i,
+  ];
+  
+  const temContextoFollowUp = historico.some(msg => 
+    padroesFollowUp.some(padrao => padrao.test(msg))
+  );
+  
+  if (temContextoFollowUp) {
+    console.log('📌 [DETECÇÃO] Contexto de follow-up detectado no histórico');
+  }
+  
+  return temContextoFollowUp;
+}
+
 async function callOpenAI(
   apiKey: string,
   messages: { role: string; content: string }[],
@@ -1311,6 +1342,37 @@ serve(async (req) => {
       
       promptCompleto += '**REGRA DE OURO:** Se o cliente mencionou um horário específico APÓS você mostrar opções, é uma CONFIRMAÇÃO e você DEVE chamar a ferramenta!\n';
       
+      promptCompleto += '\n### INSTRUÇÕES DE FOLLOW-UP (LEMBRETE DE RETORNO) - CRÍTICO!\n';
+      promptCompleto += 'O follow-up é um LEMBRETE para você retomar a conversa - DIFERENTE de agendamento que marca reunião.\n\n';
+      
+      promptCompleto += '**QUANDO USAR FOLLOW-UP (NÃO use @agenda):**\n';
+      promptCompleto += '- Lead diz "me liga depois", "fala comigo amanhã", "retorna mais tarde"\n';
+      promptCompleto += '- Lead diz "podemos conversar amanhã às 10h" (retomar conversa)\n';
+      promptCompleto += '- Lead pede para ser contatado em outro horário\n';
+      promptCompleto += '- Você perguntou "quando prefere que eu retome o contato?" e lead respondeu com horário\n';
+      promptCompleto += '- Lead diz que agora não pode falar e pede para ligar depois\n\n';
+      
+      promptCompleto += '**QUANDO USAR AGENDA (NÃO use followup):**\n';
+      promptCompleto += '- Lead quer MARCAR UMA REUNIÃO/CONSULTA/ATENDIMENTO presencial ou virtual\n';
+      promptCompleto += '- Lead diz "quero agendar uma reunião"\n';
+      promptCompleto += '- Lead pergunta "vocês tem horário disponível para consulta?"\n';
+      promptCompleto += '- Lead quer um evento com link de Meet/Zoom\n\n';
+      
+      promptCompleto += '**COMO DIFERENCIAR:**\n';
+      promptCompleto += '- Follow-up = "vou te contactar nesse horário" (lembrete SEU para retomar)\n';
+      promptCompleto += '- Agenda = "vamos ter uma reunião/compromisso JUNTOS nesse horário" (evento compartilhado)\n\n';
+      
+      promptCompleto += '**FORMATO DO FOLLOW-UP:**\n';
+      promptCompleto += '- Use: @followup:data_iso8601:motivo\n';
+      promptCompleto += '- Exemplo: @followup:2025-01-09T23:40:00-03:00:lead pediu para retornar às 23:40\n';
+      promptCompleto += '- O sistema criará um lembrete e enviará mensagem automática no horário\n\n';
+      
+      promptCompleto += '**⚠️ REGRA CRÍTICA FOLLOW-UP:**\n';
+      promptCompleto += '- Se você perguntou "quando posso retomar o contato?" e o lead respondeu com horário → USE FOLLOW-UP!\n';
+      promptCompleto += '- Se o lead quer marcar reunião/consulta com link de meet → USE AGENDA\n';
+      promptCompleto += '- NUNCA consulte disponibilidade (@agenda:consultar) para follow-ups!\n';
+      promptCompleto += '- Follow-up NÃO precisa consultar calendário - é apenas um lembrete!\n';
+      
       promptCompleto += '\nQuando identificar que uma ação deve ser executada baseado no contexto da conversa, use a ferramenta executar_acao.\n';
       promptCompleto += '\n## REGRAS IMPORTANTES\n';
       promptCompleto += '- NUNCA mencione ao cliente que está executando ações internas como transferências, mudanças de etapa, tags, etc.\n';
@@ -1374,18 +1436,18 @@ serve(async (req) => {
         type: 'function',
         function: {
           name: 'executar_acao',
-          description: 'OBRIGATÓRIO: Executa uma ação automatizada. NUNCA diga que salvou dados, atualizou campos ou criou eventos sem chamar esta função primeiro. Para campo personalizado, use tipo="campo" e valor="nome-do-campo:valor-exato" preservando o formato original (ex: valor="data-de-nascimento:22/02/1994" ou valor="data-de-nascimento:20 de janeiro de 1992"). Use "followup" quando o lead pedir para falar depois, retornar em outro momento, ou agendar um lembrete de retorno.',
+          description: 'OBRIGATÓRIO: Executa uma ação automatizada. NUNCA diga que salvou dados, atualizou campos ou criou eventos sem chamar esta função primeiro. Para campo personalizado, use tipo="campo" e valor="nome-do-campo:valor-exato". IMPORTANTE: "followup" é para LEMBRETE DE RETORNO (quando o lead pede para falar depois/amanhã/outro horário). "agenda" é para MARCAR REUNIÃO (com link de meet). Se você perguntou "quando retomo o contato?" e o lead deu horário, use FOLLOW-UP (não agenda)!',
           parameters: {
             type: 'object',
             properties: {
               tipo: {
                 type: 'string',
                 enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar', 'nome', 'negociacao', 'agenda', 'campo', 'obter', 'followup'],
-                description: 'Tipo da ação a ser executada. Use "nome" para alterar o nome do contato quando ele se identificar. Use "negociacao" para criar uma nova negociação no CRM. Use "agenda" para consultar disponibilidade ou criar eventos. Use "campo" para salvar um valor em um campo personalizado (formato: nome-do-campo:valor). Use "obter" para consultar o valor de um campo personalizado. Use "followup" para criar um lembrete de retorno quando o lead pedir para falar depois (formato: data_iso8601:motivo).',
+                description: 'Tipo da ação. IMPORTANTE - DIFERENÇA ENTRE FOLLOWUP E AGENDA: Use "followup" para LEMBRETE de retorno (lead disse "me liga amanhã", "fala comigo mais tarde", etc - NÃO precisa consultar calendário!). Use "agenda" para REUNIÃO com horário marcado e link de meet (lead quer consulta/reunião - PRECISA consultar disponibilidade primeiro). Se você perguntou "quando retomo o contato" e lead deu horário, é FOLLOW-UP!',
               },
               valor: {
                 type: 'string',
-                description: 'Valor associado à ação. Para campo: "nome-do-campo:valor" onde valor é EXATAMENTE o que o lead disse, preservando formato (ex: "data-de-nascimento:22/02/1994", "data-de-nascimento:20 de janeiro de 1992", "email:teste@email.com"). Para nome: o nome completo. Para etapa: nome ou ID. Para agenda: "consultar" ou "criar:titulo|data_iso8601". Para followup: "data_iso8601:motivo" (ex: "2025-01-10T14:00:00-03:00:lead pediu para retornar sexta às 14h").',
+                description: 'Valor da ação. Para "followup": "data_iso8601:motivo" (ex: "2025-01-10T14:00:00-03:00:lead pediu retorno às 14h") - NÃO consulte calendário! Para "agenda": "consultar" primeiro, depois "criar:titulo|data_iso8601". Para "campo": "nome-do-campo:valor-exato". Para "nome": nome completo do lead.',
               },
             },
             required: ['tipo'],
@@ -1418,9 +1480,25 @@ serve(async (req) => {
     // Detectar se é uma confirmação de agendamento para forçar uso de ferramenta
     const historicoTextos = historico?.map((m: any) => m.conteudo) || [];
     const forcarFerramentaAgenda = detectarConfirmacaoAgendamento(mensagem, historicoTextos);
+    const contextoFollowUp = detectarContextoFollowUp(historicoTextos);
     
     if (forcarFerramentaAgenda) {
       console.log('🎯 [AGENDAMENTO] Forçando uso de ferramenta - confirmação detectada');
+    }
+    
+    // Se estamos em contexto de follow-up, adicionar nota especial ao prompt
+    if (contextoFollowUp) {
+      console.log('📌 [FOLLOW-UP] Contexto de follow-up detectado - adicionando instrução ao prompt');
+      const notaFollowUp = '\n\n## ⚠️ CONTEXTO DE FOLLOW-UP DETECTADO\n' +
+        'O histórico indica que você está combinando um RETORNO DE CONTATO (follow-up), NÃO uma reunião.\n' +
+        'Quando o lead informar o horário preferido:\n' +
+        '1. Use @followup:data_iso8601:motivo (NÃO use @agenda:consultar!)\n' +
+        '2. Exemplo: @followup:2025-01-10T14:00:00-03:00:lead pediu retorno às 14h\n' +
+        '3. NÃO consulte disponibilidade - follow-up é apenas um lembrete!\n' +
+        '4. Confirme que vai retomar o contato no horário indicado.\n';
+      
+      // Adicionar no início das mensagens do sistema
+      messages[0].content += notaFollowUp;
     }
 
     let result: AIResponse;
