@@ -1467,6 +1467,43 @@ serve(async (req) => {
           continue;
         }
         
+        // 🔧 BLINDAGEM: Para ações de campo, substituir {valor-do-lead} ou valor vazio pela mensagem do lead
+        let acaoCorrigida = { ...acao };
+        if (acao.tipo === 'campo' && acao.valor) {
+          const valorOriginal = acao.valor;
+          const partes = valorOriginal.split(':');
+          const nomeCampo = partes[0] || '';
+          const valorCampo = partes.slice(1).join(':').trim();
+          
+          // Detectar se é placeholder ou valor vazio
+          const ehPlaceholder = valorCampo === '{valor-do-lead}' || 
+                                valorCampo.startsWith('{') ||
+                                valorCampo === '' ||
+                                !valorCampo;
+          
+          if (ehPlaceholder) {
+            console.log(`🔧 [BLINDAGEM CAMPO] Detectado placeholder/vazio em ação campo: "${valorOriginal}"`);
+            console.log(`🔧 [BLINDAGEM CAMPO] Mensagem do lead para usar: "${mensagem}"`);
+            
+            // Usar a mensagem do lead como valor
+            let valorReal = mensagem.trim();
+            
+            // Se o campo for email, tentar extrair apenas o email da mensagem
+            if (nomeCampo.toLowerCase().includes('email')) {
+              const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+              const emailMatch = mensagem.match(emailRegex);
+              if (emailMatch) {
+                valorReal = emailMatch[0];
+                console.log(`📧 [BLINDAGEM CAMPO] Email extraído: "${valorReal}"`);
+              }
+            }
+            
+            // Atualizar a ação com o valor real
+            acaoCorrigida.valor = `${nomeCampo}:${valorReal}`;
+            console.log(`✅ [BLINDAGEM CAMPO] Valor corrigido para: "${acaoCorrigida.valor}"`);
+          }
+        }
+        
         try {
           const response = await fetch(`${supabaseUrl}/functions/v1/executar-acao`, {
             method: 'POST',
@@ -1475,7 +1512,7 @@ serve(async (req) => {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              acao,
+              acao: acaoCorrigida,
               conversa_id,
               contato_id: contatoId,
               conta_id,
@@ -1484,6 +1521,13 @@ serve(async (req) => {
           
           const resultado = await response.json();
           console.log('Resultado da ação:', resultado);
+          
+          // Log extra para ações de campo
+          if (acao.tipo === 'campo') {
+            console.log(`📝 [AUDIT CAMPO] Ação original: ${JSON.stringify(acao)}`);
+            console.log(`📝 [AUDIT CAMPO] Ação enviada: ${JSON.stringify(acaoCorrigida)}`);
+            console.log(`📝 [AUDIT CAMPO] Resposta executar-acao: ${JSON.stringify(resultado)}`);
+          }
         } catch (e) {
           console.error('Erro ao executar ação:', e);
         }
