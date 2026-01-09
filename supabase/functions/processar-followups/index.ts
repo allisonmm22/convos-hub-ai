@@ -110,6 +110,28 @@ serve(async (req) => {
       console.log(`[processar-followups] ${conversas.length} conversas elegíveis para regra: ${regra.nome}`);
 
       for (const conversa of conversas as Conversa[]) {
+        // ========== VERIFICAÇÃO DE PRIORIDADE DO AGENTE ==========
+        // Se existe follow-up do agente PENDENTE para esta conversa, NÃO enviar follow-up automático
+        const { data: followupAgentePendente, error: followupAgenteError } = await supabase
+          .from('followups_agendados')
+          .select('id, data_agendada')
+          .eq('conversa_id', conversa.id)
+          .eq('status', 'pendente')
+          .eq('criado_por', 'agente_ia')
+          .limit(1)
+          .maybeSingle();
+
+        if (followupAgenteError) {
+          console.error(`[processar-followups] Erro ao verificar follow-up do agente:`, followupAgenteError);
+          continue;
+        }
+
+        if (followupAgentePendente) {
+          console.log(`[processar-followups] Conversa ${conversa.id}: existe follow-up do agente agendado para ${followupAgentePendente.data_agendada}, pulando follow-up automático`);
+          continue;
+        }
+        // ========== FIM DA VERIFICAÇÃO ==========
+
         // Verificar a direção da última mensagem
         // Só enviar follow-up se a última mensagem foi do AGENTE (saída)
         // Se foi do lead (entrada), significa que ELE respondeu e não precisamos fazer follow-up
