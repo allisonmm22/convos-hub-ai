@@ -626,10 +626,14 @@ async function callOpenAI(
     }
   }
 
-  // Temperatura sempre aplicada (todos modelos suportam)
-  requestBody.temperature = temperatura;
-  
-  console.log(`🤖 Chamando OpenAI - Modelo: ${modelo}, Temperatura: ${temperatura}, MaxTokens: ${maxTokens}`);
+  // Modelos GPT-5, GPT-4.1, O3 e O4 NÃO suportam temperature customizada (usa default 1)
+  // Apenas aplicar temperature para modelos legados (gpt-4o, gpt-4o-mini)
+  if (!isModeloNovo) {
+    requestBody.temperature = temperatura;
+    console.log(`🤖 Chamando modelo legado: ${modelo}, Temperatura: ${temperatura}, MaxTokens: ${maxTokens}`);
+  } else {
+    console.log(`🤖 Chamando modelo novo: ${modelo}, Temperatura: default (1), MaxTokens: ${maxTokens}`);
+  }
 
   if (isModeloNovo) {
     requestBody.max_completion_tokens = maxTokens;
