@@ -813,14 +813,11 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert }: AcaoIntelige
                     </div>
                     <div className="p-4 rounded-lg bg-purple-100 dark:bg-purple-900/30 border border-purple-300 dark:border-purple-700">
                       <p className="text-sm text-purple-700 dark:text-purple-300 mb-1">
-                        ✏️ <strong>Salvar Campo Personalizado</strong>
-                      </p>
-                      <p className="text-xs text-purple-600 dark:text-purple-400 mb-2">
-                        O agente irá salvar neste campo o valor que o lead enviar na conversa.
+                        ✏️ <strong>Atualizar Campo Personalizado</strong>
                       </p>
                       <p className="text-xs text-purple-600 dark:text-purple-400">
-                        <strong>Exemplo:</strong> Se o lead enviar "teste@gmail.com", o agente usará: 
-                        <code className="bg-purple-200 dark:bg-purple-800 px-1 rounded">@campo:email:teste@gmail.com</code>
+                        O agente irá salvar o valor informado pelo lead neste campo. 
+                        Adicione o valor após os dois pontos: <code className="bg-purple-200 dark:bg-purple-800 px-1 rounded">@campo:nome:VALOR</code>
                       </p>
                     </div>
                     {camposPersonalizados.length === 0 && (
