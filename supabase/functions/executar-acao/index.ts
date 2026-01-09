@@ -905,45 +905,148 @@ serve(async (req) => {
         // Formato: @campo:nome-do-campo:valor
         // Ex: @campo:data-nascimento:15/03/1990
         
-        const partes = acaoObj.valor?.split(':') || [];
-        const nomeCampo = partes[0]?.replace(/-/g, ' ').trim();
+        console.log('📝 [CAMPO] acao.valor recebido:', JSON.stringify(acaoObj.valor));
+        
+        // Validar formato obrigatório
+        if (!acaoObj.valor || !acaoObj.valor.includes(':')) {
+          console.log('❌ [CAMPO] Formato inválido - deve ser "nome-do-campo:valor"');
+          resultado = { sucesso: false, mensagem: 'Formato inválido. Use: nome-do-campo:valor' };
+          break;
+        }
+        
+        const partes = acaoObj.valor.split(':');
+        const nomeCampoRaw = partes[0] || '';
         const valorCampo = partes.slice(1).join(':').trim(); // Para permitir ":" no valor
         
-        console.log('📝 Atualizando campo personalizado:', nomeCampo, '=', valorCampo);
+        // Normalizar nome do campo: lowercase, trocar hífens por espaços, remover pontuação
+        const nomeCampo = nomeCampoRaw
+          .toLowerCase()
+          .replace(/-/g, ' ')
+          .replace(/[.,;!?]+$/, '')
+          .trim();
+        
+        console.log('📝 [CAMPO] nomeCampoRaw:', nomeCampoRaw);
+        console.log('📝 [CAMPO] nomeCampo normalizado:', nomeCampo);
+        console.log('📝 [CAMPO] valorCampo:', valorCampo);
+        console.log('📝 [CAMPO] valorCampo.length:', valorCampo.length);
         
         if (!nomeCampo) {
+          console.log('❌ [CAMPO] Nome do campo vazio após normalização');
           resultado = { sucesso: false, mensagem: 'Nome do campo não fornecido' };
           break;
         }
         
+        // Permitir salvar valor vazio (para limpar campo) - mas avisar nos logs
+        if (!valorCampo) {
+          console.log('⚠️ [CAMPO] Valor vazio - campo será limpo');
+        }
+        
         // Buscar campo personalizado pelo nome (case insensitive)
-        const { data: campo } = await supabase
+        const { data: campo, error: campoQueryError } = await supabase
           .from('campos_personalizados')
           .select('id, nome, tipo')
           .eq('conta_id', conta_id)
           .ilike('nome', nomeCampo)
           .maybeSingle();
         
+        if (campoQueryError) {
+          console.log('❌ [CAMPO] Erro ao buscar campo:', campoQueryError);
+        }
+        
         if (!campo) {
-          console.log(`Campo "${nomeCampo}" não encontrado para conta ${conta_id}`);
-          resultado = { sucesso: false, mensagem: `Campo "${nomeCampo}" não encontrado. Crie o campo primeiro em Campos Personalizados.` };
+          // Tentar busca mais flexível (contains)
+          console.log(`🔍 [CAMPO] Busca exata falhou, tentando busca parcial...`);
+          const { data: camposParcial } = await supabase
+            .from('campos_personalizados')
+            .select('id, nome, tipo')
+            .eq('conta_id', conta_id);
+          
+          const campoEncontrado = camposParcial?.find(c => {
+            const nomeNorm = c.nome.toLowerCase().replace(/-/g, ' ').replace(/[.,;!?]+$/, '').trim();
+            return nomeNorm === nomeCampo || 
+                   nomeNorm.includes(nomeCampo) || 
+                   nomeCampo.includes(nomeNorm);
+          });
+          
+          if (!campoEncontrado) {
+            console.log(`❌ [CAMPO] Campo "${nomeCampo}" não encontrado para conta ${conta_id}`);
+            console.log(`📋 [CAMPO] Campos disponíveis:`, camposParcial?.map(c => c.nome).join(', '));
+            resultado = { sucesso: false, mensagem: `Campo "${nomeCampo}" não encontrado. Crie o campo primeiro em Campos Personalizados.` };
+            break;
+          }
+          
+          // Usar o campo encontrado na busca parcial
+          console.log(`✅ [CAMPO] Campo encontrado via busca parcial: "${campoEncontrado.nome}" (ID: ${campoEncontrado.id})`);
+          
+          // Verificar se já existe um registro para este contato/campo
+          const { data: existente } = await supabase
+            .from('contato_campos_valores')
+            .select('id, valor')
+            .eq('contato_id', contato_id)
+            .eq('campo_id', campoEncontrado.id)
+            .maybeSingle();
+
+          console.log('📝 [CAMPO] Registro existente:', existente ? `ID: ${existente.id}, valor atual: "${existente.valor}"` : 'nenhum');
+
+          let campoError;
+          if (existente) {
+            console.log(`🔄 [CAMPO] Atualizando registro existente (ID: ${existente.id})`);
+            const result = await supabase
+              .from('contato_campos_valores')
+              .update({ 
+                valor: valorCampo,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existente.id);
+            campoError = result.error;
+            console.log('📝 [CAMPO] Resultado UPDATE:', result.error ? `ERRO: ${result.error.message}` : 'OK');
+          } else {
+            console.log(`➕ [CAMPO] Inserindo novo registro para campo ${campoEncontrado.id}`);
+            const result = await supabase
+              .from('contato_campos_valores')
+              .insert({
+                contato_id: contato_id,
+                campo_id: campoEncontrado.id,
+                valor: valorCampo
+              });
+            campoError = result.error;
+            console.log('📝 [CAMPO] Resultado INSERT:', result.error ? `ERRO: ${result.error.message}` : 'OK');
+          }
+          
+          if (campoError) {
+            console.log('❌ [CAMPO] Erro ao salvar:', campoError.code, campoError.message, campoError.details);
+            throw campoError;
+          }
+          
+          // Se for campo de email, espelhar para contatos.email
+          if (campoEncontrado.nome.toLowerCase().includes('email') && valorCampo && valorCampo.includes('@')) {
+            console.log('📧 [CAMPO] Espelhando email para contatos.email');
+            await supabase
+              .from('contatos')
+              .update({ email: valorCampo })
+              .eq('id', contato_id);
+          }
+          
+          console.log(`✅ [CAMPO] Campo "${campoEncontrado.nome}" atualizado para "${valorCampo}"`);
+          resultado = { sucesso: true, mensagem: `Campo "${campoEncontrado.nome}" atualizado para "${valorCampo}"` };
           break;
         }
         
-        console.log(`Campo encontrado: "${campo.nome}" (ID: ${campo.id}, tipo: ${campo.tipo})`);
+        console.log(`✅ [CAMPO] Campo encontrado: "${campo.nome}" (ID: ${campo.id}, tipo: ${campo.tipo})`);
         
         // Verificar se já existe um registro para este contato/campo
         const { data: existente } = await supabase
           .from('contato_campos_valores')
-          .select('id')
+          .select('id, valor')
           .eq('contato_id', contato_id)
           .eq('campo_id', campo.id)
           .maybeSingle();
 
+        console.log('📝 [CAMPO] Registro existente:', existente ? `ID: ${existente.id}, valor atual: "${existente.valor}"` : 'nenhum');
+
         let campoError;
         if (existente) {
-          // Se existe, fazer UPDATE
-          console.log(`Atualizando registro existente (ID: ${existente.id})`);
+          console.log(`🔄 [CAMPO] Atualizando registro existente (ID: ${existente.id})`);
           const result = await supabase
             .from('contato_campos_valores')
             .update({ 
@@ -952,9 +1055,9 @@ serve(async (req) => {
             })
             .eq('id', existente.id);
           campoError = result.error;
+          console.log('📝 [CAMPO] Resultado UPDATE:', result.error ? `ERRO: ${result.error.message}` : 'OK');
         } else {
-          // Se não existe, fazer INSERT
-          console.log(`Inserindo novo registro para campo ${campo.id}`);
+          console.log(`➕ [CAMPO] Inserindo novo registro para campo ${campo.id}`);
           const result = await supabase
             .from('contato_campos_valores')
             .insert({
@@ -963,11 +1066,24 @@ serve(async (req) => {
               valor: valorCampo
             });
           campoError = result.error;
+          console.log('📝 [CAMPO] Resultado INSERT:', result.error ? `ERRO: ${result.error.message}` : 'OK');
         }
         
-        if (campoError) throw campoError;
+        if (campoError) {
+          console.log('❌ [CAMPO] Erro ao salvar:', campoError.code, campoError.message, campoError.details);
+          throw campoError;
+        }
         
-        console.log(`✅ Campo "${campo.nome}" atualizado para "${valorCampo}"`);
+        // Se for campo de email, espelhar para contatos.email
+        if (campo.nome.toLowerCase().includes('email') && valorCampo && valorCampo.includes('@')) {
+          console.log('📧 [CAMPO] Espelhando email para contatos.email');
+          await supabase
+            .from('contatos')
+            .update({ email: valorCampo })
+            .eq('id', contato_id);
+        }
+        
+        console.log(`✅ [CAMPO] Campo "${campo.nome}" atualizado para "${valorCampo}"`);
         resultado = { sucesso: true, mensagem: `Campo "${campo.nome}" atualizado para "${valorCampo}"` };
         break;
       }
