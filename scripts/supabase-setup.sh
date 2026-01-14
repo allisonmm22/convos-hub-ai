@@ -28,7 +28,17 @@ echo ""
 # ===========================================
 if ! command -v supabase &> /dev/null; then
     echo -e "${BLUE}[INFO] Instalando Supabase CLI...${NC}"
-    npm install -g supabase
+    
+    # Instalar via script oficial (não requer npm)
+    curl -fsSL https://raw.githubusercontent.com/supabase/cli/main/install.sh | sh
+    
+    # Adicionar ao PATH se necessário
+    if [ -f "/usr/local/bin/supabase" ]; then
+        export PATH=$PATH:/usr/local/bin
+    elif [ -f "$HOME/.supabase/bin/supabase" ]; then
+        export PATH=$PATH:$HOME/.supabase/bin
+    fi
+    
     echo -e "${GREEN}[OK] Supabase CLI instalado${NC}"
 else
     echo -e "${GREEN}[OK] Supabase CLI já instalado: $(supabase --version)${NC}"
