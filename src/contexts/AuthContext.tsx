@@ -67,14 +67,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUsuario = async (userId: string) => {
     try {
-      // Primeiro, verificar se é super_admin
+      // Primeiro, verificar especificamente se é super_admin
+      const { data: superAdminRole } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .eq('role', 'super_admin')
+        .maybeSingle();
+
+      const isSuperAdmin = !!superAdminRole;
+
+      // Buscar role principal para usuários normais (admin ou atendente)
       const { data: roleData } = await supabase
         .from('user_roles')
         .select('role')
         .eq('user_id', userId)
+        .neq('role', 'super_admin')
         .maybeSingle();
-
-      const isSuperAdmin = (roleData?.role as string) === 'super_admin';
 
       // Se for super_admin, não precisa de registro na tabela usuarios
       if (isSuperAdmin) {
