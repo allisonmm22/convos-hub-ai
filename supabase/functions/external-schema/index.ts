@@ -14,14 +14,43 @@ const SCHEMA_SQL = `-- ============================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================
--- ENUMS
+-- ENUMS (com tratamento para execução múltipla)
 -- ============================================
-CREATE TYPE app_role AS ENUM ('admin', 'atendente', 'super_admin');
-CREATE TYPE direcao_mensagem AS ENUM ('entrada', 'saida');
-CREATE TYPE status_conexao AS ENUM ('conectado', 'desconectado', 'aguardando');
-CREATE TYPE status_conversa AS ENUM ('em_atendimento', 'aguardando_cliente', 'encerrado');
-CREATE TYPE status_negociacao AS ENUM ('aberto', 'ganho', 'perdido');
-CREATE TYPE tipo_mensagem AS ENUM ('texto', 'imagem', 'audio', 'video', 'documento', 'sticker', 'sistema');
+DO $$ BEGIN
+  CREATE TYPE app_role AS ENUM ('admin', 'atendente', 'super_admin');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE direcao_mensagem AS ENUM ('entrada', 'saida');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE status_conexao AS ENUM ('conectado', 'desconectado', 'aguardando');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE status_conversa AS ENUM ('em_atendimento', 'aguardando_cliente', 'encerrado');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE status_negociacao AS ENUM ('aberto', 'ganho', 'perdido');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE tipo_mensagem AS ENUM ('texto', 'imagem', 'audio', 'video', 'documento', 'sticker', 'sistema');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
 
 -- ============================================
 -- FUNÇÃO AUXILIAR - updated_at

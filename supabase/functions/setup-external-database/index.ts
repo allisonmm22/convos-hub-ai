@@ -736,7 +736,27 @@ serve(async (req) => {
       .limit(1);
 
     let schemasExists = false;
-    if (!checkError) {
+    let errorDetails = '';
+    
+    if (checkError) {
+      // Log detalhado do erro para diagnóstico
+      console.log('❌ Erro ao verificar tabela planos:');
+      console.log('   Código:', checkError.code);
+      console.log('   Mensagem:', checkError.message);
+      console.log('   Detalhes:', checkError.details);
+      console.log('   Hint:', checkError.hint);
+      
+      // Identificar tipo de erro
+      if (checkError.code === '42501') {
+        errorDetails = 'Erro de permissão (RLS). Verifique se está usando a service_role key (não a anon key).';
+      } else if (checkError.code === '42P01') {
+        errorDetails = 'Tabela não existe. Execute o SQL primeiro.';
+      } else if (checkError.code === 'PGRST301') {
+        errorDetails = 'Tabela não encontrada via API. Execute o SQL primeiro.';
+      } else {
+        errorDetails = `Erro: ${checkError.code} - ${checkError.message}`;
+      }
+    } else {
       schemasExists = true;
       console.log('✅ Tabelas já existem no banco externo');
     }
@@ -747,17 +767,23 @@ serve(async (req) => {
 
     if (!schemasExists) {
       console.log('⚠️ Tabelas não encontradas. O SQL precisa ser executado manualmente.');
+      console.log('   Motivo:', errorDetails);
       
       return new Response(
         JSON.stringify({
           success: false,
-          message: 'Tabelas não encontradas no banco externo. Por favor, execute o SQL manualmente no Supabase Dashboard.',
+          message: errorDetails || 'Tabelas não encontradas no banco externo. Por favor, execute o SQL manualmente no Supabase Dashboard.',
+          errorCode: checkError?.code,
           sql: SCHEMA_SQL,
           instructions: [
             '1. Acesse o Supabase Dashboard do seu projeto externo',
             '2. Vá em SQL Editor',
             '3. Cole e execute o SQL fornecido',
-            '4. Execute esta função novamente para verificar'
+            '4. Execute esta função novamente para verificar',
+            '',
+            '⚠️ IMPORTANTE: Certifique-se de que:',
+            '- A chave configurada é a SERVICE_ROLE KEY (não anon key)',
+            '- O SQL foi executado completamente até o final'
           ]
         }),
         { 
