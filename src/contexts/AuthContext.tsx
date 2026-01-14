@@ -282,29 +282,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  if (initError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <div className="text-center max-w-md">
-          <div className="text-destructive text-xl mb-4">⚠️ Erro de Conexão</div>
-          <p className="text-muted-foreground mb-4">{initError}</p>
-          <p className="text-sm text-muted-foreground">
-            Verifique se a URL do banco de dados está correta e acessível.
-          </p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-          >
-            Tentar novamente
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <AuthContext.Provider value={{ user, session, usuario, loading, signUp, signIn, signOut, refreshUsuario }}>
-      {children}
+      {initError ? (
+        <div className="min-h-screen flex items-center justify-center bg-background p-4">
+          <div className="text-center max-w-md">
+            <div className="text-destructive text-xl mb-4">⚠️ Erro de Conexão</div>
+            <p className="text-muted-foreground mb-4">{initError}</p>
+            <p className="text-sm text-muted-foreground">
+              Verifique se a URL do banco de dados está correta e acessível.
+            </p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        </div>
+      ) : (
+        children
+      )}
     </AuthContext.Provider>
   );
 }
