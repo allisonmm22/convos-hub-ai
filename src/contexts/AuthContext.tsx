@@ -34,35 +34,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initError, setInitError] = useState<string | null>(null);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+    let subscription: { unsubscribe: () => void } | null = null;
+
+    const initAuth = async () => {
+      try {
+        const { data } = supabase.auth.onAuthStateChange(
+          (event, session) => {
+            setSession(session);
+            setUser(session?.user ?? null);
+            
+            if (session?.user) {
+              setTimeout(() => {
+                fetchUsuario(session.user.id);
+              }, 0);
+            } else {
+              setUsuario(null);
+              setLoading(false);
+            }
+          }
+        );
+        subscription = data.subscription;
+
+        const { data: sessionData, error } = await supabase.auth.getSession();
         
-        if (session?.user) {
-          setTimeout(() => {
-            fetchUsuario(session.user.id);
-          }, 0);
+        if (error) {
+          console.error('Erro ao obter sessão:', error);
+          setInitError(`Erro de conexão: ${error.message}`);
+          setLoading(false);
+          return;
+        }
+
+        setSession(sessionData.session);
+        setUser(sessionData.session?.user ?? null);
+        
+        if (sessionData.session?.user) {
+          await fetchUsuario(sessionData.session.user.id);
         } else {
-          setUsuario(null);
           setLoading(false);
         }
-      }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUsuario(session.user.id);
-      } else {
+      } catch (error) {
+        console.error('Erro ao inicializar autenticação:', error);
+        setInitError(`Erro de conexão com o servidor: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
         setLoading(false);
       }
-    });
+    };
 
-    return () => subscription.unsubscribe();
+    initAuth();
+
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
   }, []);
 
   const fetchUsuario = async (userId: string) => {
@@ -255,6 +281,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await fetchUsuario(user.id);
     }
   };
+
+  if (initError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="text-center max-w-md">
+          <div className="text-destructive text-xl mb-4">⚠️ Erro de Conexão</div>
+          <p className="text-muted-foreground mb-4">{initError}</p>
+          <p className="text-sm text-muted-foreground">
+            Verifique se a URL do banco de dados está correta e acessível.
+          </p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={{ user, session, usuario, loading, signUp, signIn, signOut, refreshUsuario }}>
