@@ -111,6 +111,14 @@ function AppRoutes() {
           <AdminPagamentos />
         } 
       />
+      <Route 
+        path="/admin/migracao-externa" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          !usuario?.isSuperAdmin ? <Navigate to="/dashboard" replace /> :
+          <MigracaoExterna />
+        } 
+      />
       
       {/* Rotas CRM */}
       <Route 
