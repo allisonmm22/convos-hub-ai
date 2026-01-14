@@ -171,78 +171,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = async (email: string, password: string, nome: string, whatsapp?: string, cpf?: string, planoId?: string) => {
     try {
-      const redirectUrl = `${window.location.origin}/`;
-      
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl
-        }
-      });
-
-      if (error) throw error;
-
-      let contaId: string | undefined;
-
-      if (data.user) {
-        // Criar conta com whatsapp, cpf e plano
-        const { data: contaData, error: contaError } = await supabase
-          .from('contas')
-          .insert({ 
-            nome: `Conta de ${nome}`,
-            whatsapp: whatsapp || null,
-            cpf: cpf || null,
-            plano_id: planoId || null,
-          })
-          .select()
-          .single();
-
-        if (contaError) throw contaError;
-        contaId = contaData.id;
-
-        // Criar usuário
-        const { error: usuarioError } = await supabase
-          .from('usuarios')
-          .insert({
-            user_id: data.user.id,
-            conta_id: contaData.id,
-            nome,
+      // Usar edge function para criar usuário (bypassa RLS com service_role_key)
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup-usuario`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
             email,
-            is_admin: true
-          });
-
-        if (usuarioError) throw usuarioError;
-
-        // Criar role de admin
-        await supabase.from('user_roles').insert({
-          user_id: data.user.id,
-          role: 'admin'
-        });
-
-        // Criar configuração padrão do Agente IA
-        await supabase.from('agent_ia').insert({ conta_id: contaData.id });
-
-        // Criar funil padrão
-        const { data: funilData } = await supabase
-          .from('funis')
-          .insert({ conta_id: contaData.id, nome: 'Vendas', ordem: 0 })
-          .select()
-          .single();
-
-        if (funilData) {
-          await supabase.from('estagios').insert([
-            { funil_id: funilData.id, nome: 'Novo Lead', ordem: 0, cor: '#3b82f6' },
-            { funil_id: funilData.id, nome: 'Em Contato', ordem: 1, cor: '#f59e0b' },
-            { funil_id: funilData.id, nome: 'Proposta Enviada', ordem: 2, cor: '#8b5cf6' },
-            { funil_id: funilData.id, nome: 'Negociação', ordem: 3, cor: '#ec4899' },
-            { funil_id: funilData.id, nome: 'Fechado', ordem: 4, cor: '#10b981' },
-          ]);
+            password,
+            nome,
+            whatsapp,
+            cpf,
+            planoId,
+          }),
         }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || result.error) {
+        throw new Error(result.error || 'Erro ao criar usuário');
       }
 
-      return { error: null, contaId };
+      // Fazer login automático após cadastro
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        console.warn('Login automático falhou, usuário pode fazer login manualmente:', signInError);
+      }
+
+      return { error: null, contaId: result.contaId };
     } catch (error) {
+      console.error('Erro no signup:', error);
       return { error: error as Error };
     }
   };
