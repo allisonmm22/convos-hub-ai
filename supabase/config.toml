@@ -134,3 +134,6 @@ verify_jwt = false
 
 [functions.processar-followups-agendados]
 verify_jwt = false
+
+[functions.setup-primeiro-admin]
+verify_jwt = false
