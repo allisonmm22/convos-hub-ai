@@ -728,6 +728,102 @@ ALTER TABLE uso_tokens ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Qualquer um pode ver planos ativos" ON planos FOR SELECT USING (ativo = true);
 
 -- ============================================
+-- RLS POLICIES - FLUXO DE SIGNUP
+-- Permite que usuários recém-autenticados criem seus dados iniciais
+-- ============================================
+
+-- CONTAS: Permitir criar e ver própria conta
+CREATE POLICY "Usuarios autenticados podem criar conta" ON contas 
+FOR INSERT TO authenticated 
+WITH CHECK (true);
+
+CREATE POLICY "Usuarios podem ver sua propria conta" ON contas 
+FOR SELECT TO authenticated 
+USING (id IN (SELECT conta_id FROM usuarios WHERE user_id = auth.uid()));
+
+CREATE POLICY "Usuarios podem atualizar sua propria conta" ON contas 
+FOR UPDATE TO authenticated 
+USING (id IN (SELECT conta_id FROM usuarios WHERE user_id = auth.uid()));
+
+-- USUARIOS: Permitir criar e ver próprio registro
+CREATE POLICY "Usuarios autenticados podem criar usuario" ON usuarios 
+FOR INSERT TO authenticated 
+WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Usuarios podem ver seu proprio perfil" ON usuarios 
+FOR SELECT TO authenticated 
+USING (user_id = auth.uid());
+
+CREATE POLICY "Usuarios podem atualizar seu proprio perfil" ON usuarios 
+FOR UPDATE TO authenticated 
+USING (user_id = auth.uid());
+
+-- Permitir ver outros usuários da mesma conta
+CREATE POLICY "Usuarios podem ver colegas da conta" ON usuarios 
+FOR SELECT TO authenticated 
+USING (conta_id IN (SELECT conta_id FROM usuarios WHERE user_id = auth.uid()));
+
+-- USER_ROLES: Permitir criar e ver próprias roles
+CREATE POLICY "Usuarios autenticados podem criar role" ON user_roles 
+FOR INSERT TO authenticated 
+WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Usuarios podem ver suas roles" ON user_roles 
+FOR SELECT TO authenticated 
+USING (user_id = auth.uid());
+
+-- AGENT_IA: Permitir CRUD para conta do usuário
+CREATE POLICY "Usuarios podem criar agent_ia para sua conta" ON agent_ia 
+FOR INSERT TO authenticated 
+WITH CHECK (conta_id IN (SELECT conta_id FROM usuarios WHERE user_id = auth.uid()));
+
+CREATE POLICY "Usuarios podem ver agents da conta" ON agent_ia 
+FOR SELECT TO authenticated 
+USING (conta_id IN (SELECT conta_id FROM usuarios WHERE user_id = auth.uid()));
+
+CREATE POLICY "Usuarios podem atualizar agents da conta" ON agent_ia 
+FOR UPDATE TO authenticated 
+USING (conta_id IN (SELECT conta_id FROM usuarios WHERE user_id = auth.uid()));
+
+CREATE POLICY "Usuarios podem deletar agents da conta" ON agent_ia 
+FOR DELETE TO authenticated 
+USING (conta_id IN (SELECT conta_id FROM usuarios WHERE user_id = auth.uid()));
+
+-- FUNIS: Permitir CRUD para conta do usuário
+CREATE POLICY "Usuarios podem criar funis para sua conta" ON funis 
+FOR INSERT TO authenticated 
+WITH CHECK (conta_id IN (SELECT conta_id FROM usuarios WHERE user_id = auth.uid()));
+
+CREATE POLICY "Usuarios podem ver funis da conta" ON funis 
+FOR SELECT TO authenticated 
+USING (conta_id IN (SELECT conta_id FROM usuarios WHERE user_id = auth.uid()));
+
+CREATE POLICY "Usuarios podem atualizar funis da conta" ON funis 
+FOR UPDATE TO authenticated 
+USING (conta_id IN (SELECT conta_id FROM usuarios WHERE user_id = auth.uid()));
+
+CREATE POLICY "Usuarios podem deletar funis da conta" ON funis 
+FOR DELETE TO authenticated 
+USING (conta_id IN (SELECT conta_id FROM usuarios WHERE user_id = auth.uid()));
+
+-- ESTAGIOS: Permitir CRUD para funis da conta
+CREATE POLICY "Usuarios podem criar estagios para sua conta" ON estagios 
+FOR INSERT TO authenticated 
+WITH CHECK (funil_id IN (SELECT f.id FROM funis f INNER JOIN usuarios u ON f.conta_id = u.conta_id WHERE u.user_id = auth.uid()));
+
+CREATE POLICY "Usuarios podem ver estagios da conta" ON estagios 
+FOR SELECT TO authenticated 
+USING (funil_id IN (SELECT f.id FROM funis f INNER JOIN usuarios u ON f.conta_id = u.conta_id WHERE u.user_id = auth.uid()));
+
+CREATE POLICY "Usuarios podem atualizar estagios da conta" ON estagios 
+FOR UPDATE TO authenticated 
+USING (funil_id IN (SELECT f.id FROM funis f INNER JOIN usuarios u ON f.conta_id = u.conta_id WHERE u.user_id = auth.uid()));
+
+CREATE POLICY "Usuarios podem deletar estagios da conta" ON estagios 
+FOR DELETE TO authenticated 
+USING (funil_id IN (SELECT f.id FROM funis f INNER JOIN usuarios u ON f.conta_id = u.conta_id WHERE u.user_id = auth.uid()));
+
+-- ============================================
 -- RLS POLICIES - BYPASS PARA SERVICE ROLE
 -- A service_role key precisa ter acesso total
 -- ============================================
