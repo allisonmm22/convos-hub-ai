@@ -1219,24 +1219,17 @@ serve(async (req) => {
         console.log('Mensagem do dispositivo externo - pausando agente IA automaticamente');
       }
 
-      const updateResponse = await fetch(
-        `${supabaseUrl}/rest/v1/conversas?id=eq.${conversa!.id}`,
-        {
-          method: 'PATCH',
-          headers: {
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${supabaseKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(updateData),
-        }
-      );
+      // Atualizar conversa usando cliente Supabase (mais confiável que fetch direto)
+      const { error: updateError } = await supabase
+        .from('conversas')
+        .update(updateData)
+        .eq('id', conversa!.id);
 
-      if (!updateResponse.ok) {
-        console.error('Erro ao atualizar conversa:', await updateResponse.text());
+      if (updateError) {
+        console.error('Erro ao atualizar conversa:', updateError);
+      } else {
+        console.log('Conversa atualizada - ultima_mensagem:', updateData.ultima_mensagem);
       }
-
-      console.log('Conversa atualizada com sucesso');
 
       // Sistema de debounce: agendar resposta com tempo_espera_segundos
       // IMPORTANTE: Nunca agendar resposta IA para grupos
