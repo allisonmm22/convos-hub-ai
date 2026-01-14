@@ -734,6 +734,47 @@ serve(async (req) => {
     let schemasExists = false;
     let errorDetails = '';
     let checkError: any = null;
+    let errorType: 'permission' | 'not_found' | 'schema_cache' | 'unknown' = 'unknown';
+
+    // SQL de GRANTs para resolver erro de permissão
+    const GRANT_SQL = `-- =============================================
+-- SQL PARA CORRIGIR PERMISSÕES (Execute no banco externo)
+-- =============================================
+
+-- 1) Garantir que os papéis existam
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    CREATE ROLE anon NOINHERIT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    CREATE ROLE authenticated NOINHERIT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    CREATE ROLE service_role NOINHERIT BYPASSRLS;
+  END IF;
+END $$;
+
+-- 2) Permissões no schema
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+
+-- 3) Permissões nas tabelas existentes
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO service_role;
+
+-- 4) Permissões para tabelas futuras
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO service_role;
+
+-- 5) Forçar reload do schema do PostgREST
+NOTIFY pgrst, 'reload schema';
+
+-- =============================================
+-- Após executar, reinicie o PostgREST no Portainer
+-- =============================================`;
 
     if (!restResponse.ok) {
       const errorBody = await restResponse.text();
@@ -754,59 +795,60 @@ serve(async (req) => {
         };
       }
       
-      // Identificar tipo de erro
-      if (checkError.code === '42501') {
-        errorDetails = 'Erro de permissão (RLS). Verifique se está usando a service_role key (não a anon key).';
+      // Identificar tipo de erro com precisão
+      if (checkError.code === '42501' || restResponse.status === 403) {
+        errorType = 'permission';
+        errorDetails = 'ERRO DE PERMISSÃO: As tabelas existem, mas o service_role não tem acesso. Execute o SQL de GRANTs abaixo.';
       } else if (checkError.code === '42P01' || checkError.code === 'PGRST204') {
-        errorDetails = 'Tabela não existe. Execute o SQL primeiro.';
+        errorType = 'not_found';
+        errorDetails = 'Tabelas não existem. Execute o SQL de criação primeiro.';
       } else if (checkError.code === 'PGRST205' || checkError.code === 'PGRST301') {
-        // PGRST205 = schema cache não atualizado, vamos tentar forçar
-        console.log('⚠️ Schema cache não atualizado. Tentando verificar via information_schema...');
-        
-        // Criar cliente para tentar RPC
-        const externalSupabase = createClient(externalUrl, externalServiceKey, {
-          auth: { autoRefreshToken: false, persistSession: false }
-        });
-        
-        // Tentar via RPC se existir uma função de verificação
-        // Se não, vamos assumir que precisamos executar o SQL
-        errorDetails = 'Schema cache do PostgREST não atualizado. Por favor, reinicie o PostgREST ou execute: NOTIFY pgrst, \'reload schema\';';
+        errorType = 'schema_cache';
+        errorDetails = 'Schema cache do PostgREST desatualizado. Reinicie o PostgREST ou execute: NOTIFY pgrst, \'reload schema\';';
       } else {
+        errorType = 'unknown';
         errorDetails = `Erro: ${checkError.code} - ${checkError.message}`;
       }
     } else {
       schemasExists = true;
-      console.log('✅ Tabelas já existem no banco externo');
+      console.log('✅ Tabela planos encontrada via REST API');
     }
 
-    // Se as tabelas não existem, precisamos executar o SQL
-    // Como não temos acesso direto ao SQL, vamos usar uma abordagem diferente
-    // Vamos retornar o SQL para o usuário executar manualmente
-
     if (!schemasExists) {
-      console.log('⚠️ Tabelas não encontradas. O SQL precisa ser executado manualmente.');
-      console.log('   Motivo:', errorDetails);
+      console.log('❌ Schema não encontrado ou erro de acesso. Tipo:', errorType);
+      
+      // Retornar SQL apropriado baseado no tipo de erro
+      const sqlToReturn = errorType === 'permission' ? GRANT_SQL : SCHEMA_SQL;
+      const instructionsForError = errorType === 'permission' 
+        ? [
+            '1. Acesse o SQL Editor do seu Supabase externo',
+            '2. Cole e execute o SQL de PERMISSÕES abaixo',
+            '3. Reinicie o PostgREST (container rest no Portainer)',
+            '4. Clique em "Testar conexão" novamente'
+          ]
+        : [
+            '1. Acesse o SQL Editor do seu Supabase externo',
+            '2. Cole e execute o SQL de CRIAÇÃO DE TABELAS',
+            '3. Depois execute o SQL de PERMISSÕES abaixo',
+            '4. Reinicie o PostgREST (container rest no Portainer)',
+            '5. Clique em "Testar conexão" novamente'
+          ];
       
       return new Response(
         JSON.stringify({
           success: false,
-          message: errorDetails || 'Tabelas não encontradas no banco externo. Por favor, execute o SQL manualmente no Supabase Dashboard.',
+          schemaExists: false,
+          error: errorDetails,
           errorCode: checkError?.code,
-          sql: SCHEMA_SQL,
-          instructions: [
-            '1. Acesse o Supabase Dashboard do seu projeto externo',
-            '2. Vá em SQL Editor',
-            '3. Cole e execute o SQL fornecido',
-            '4. Execute esta função novamente para verificar',
-            '',
-            '⚠️ IMPORTANTE: Certifique-se de que:',
-            '- A chave configurada é a SERVICE_ROLE KEY (não anon key)',
-            '- O SQL foi executado completamente até o final'
-          ]
+          errorType: errorType,
+          sql: sqlToReturn,
+          grantSql: GRANT_SQL,
+          schemaSql: SCHEMA_SQL,
+          instructions: instructionsForError
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200 
+          status: 200
         }
       );
     }
