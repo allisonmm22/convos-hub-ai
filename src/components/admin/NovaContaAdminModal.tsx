@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
+import { supabaseExternal as supabase, supabaseFunctions } from '@/integrations/supabase/externalClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -47,7 +47,7 @@ export default function NovaContaAdminModal({ open, onClose, onSuccess }: NovaCo
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('criar-conta-admin', {
+      const { data, error } = await supabaseFunctions.functions.invoke('criar-conta-admin', {
         body: {
           nomeEmpresa: formData.nomeEmpresa.trim(),
           nomeUsuario: formData.nomeUsuario.trim(),

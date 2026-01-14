@@ -45,7 +45,7 @@ import {
   Instagram,
   Megaphone,
 } from 'lucide-react';
-import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
+import { supabaseExternal as supabase, supabaseFunctions } from '@/integrations/supabase/externalClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -367,7 +367,7 @@ export default function Conversas() {
       // Poll em paralelo para todas as conexões
       await Promise.all(
         conexoesEvolutionConectadas.map(async (con) => {
-          const { data, error } = await supabase.functions.invoke('evolution-fetch-messages', {
+          const { data, error } = await supabaseFunctions.functions.invoke('evolution-fetch-messages', {
             body: { conexao_id: con.id },
           });
 
@@ -663,7 +663,7 @@ export default function Conversas() {
     
     setLoadingTemplates(true);
     try {
-      const { data, error } = await supabase.functions.invoke('meta-get-templates', {
+      const { data, error } = await supabaseFunctions.functions.invoke('meta-get-templates', {
         body: { conexao_id: conexaoDaConversa.id },
       });
       
@@ -711,7 +711,7 @@ export default function Conversas() {
 
     setEnviando(true);
     try {
-      const { error } = await supabase.functions.invoke('meta-send-message', {
+      const { error } = await supabaseFunctions.functions.invoke('meta-send-message', {
         body: {
           conexao_id: conversaSelecionada.conexao_id,
           telefone: conversaSelecionada.contatos.telefone,
@@ -855,7 +855,7 @@ export default function Conversas() {
       const conexaoIdToUse = conversaSelecionada.conexao_id || conexaoDaConversa?.id;
       
       if (conexaoIdToUse && conexaoDaConversa?.status === 'conectado') {
-        const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
+        const { error: envioError } = await supabaseFunctions.functions.invoke('enviar-mensagem', {
           body: {
             conexao_id: conexaoIdToUse,
             telefone: conversaSelecionada.contatos.telefone,
@@ -966,7 +966,7 @@ export default function Conversas() {
 
     try {
       // Chamar edge function que faz rastreamento e resposta automática
-      const { data, error } = await supabase.functions.invoke('transferir-atendimento', {
+      const { data, error } = await supabaseFunctions.functions.invoke('transferir-atendimento', {
         body: {
           conversa_id: conversaSelecionada.id,
           de_usuario_id: usuario?.id,
@@ -1090,7 +1090,7 @@ export default function Conversas() {
         const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
         const conexaoIdToUse = conversaSelecionada.conexao_id || conexaoDaConversa?.id;
         if (conexaoIdToUse && conexaoDaConversa?.status === 'conectado') {
-          const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
+          const { error: envioError } = await supabaseFunctions.functions.invoke('enviar-mensagem', {
             body: {
               conexao_id: conexaoIdToUse,
               telefone: conversaSelecionada.contatos.telefone,
@@ -1197,7 +1197,7 @@ export default function Conversas() {
       const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
       const conexaoIdToUse = conversaSelecionada.conexao_id || conexaoDaConversa?.id;
       if (conexaoIdToUse && conexaoDaConversa?.status === 'conectado') {
-        const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
+        const { error: envioError } = await supabaseFunctions.functions.invoke('enviar-mensagem', {
           body: {
             conexao_id: conexaoIdToUse,
             telefone: conversaSelecionada.contatos.telefone,
@@ -1303,7 +1303,7 @@ export default function Conversas() {
     if (!mensagemParaDeletar || !usuario) return;
     
     try {
-      const { data, error } = await supabase.functions.invoke('deletar-mensagem', {
+      const { data, error } = await supabaseFunctions.functions.invoke('deletar-mensagem', {
         body: { 
           mensagem_id: mensagemParaDeletar,
           usuario_id: usuario.id,

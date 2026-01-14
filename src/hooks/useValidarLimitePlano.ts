@@ -1,4 +1,4 @@
-import { supabaseExternal as supabase } from "@/integrations/supabase/externalClient";
+import { supabaseExternal as supabase, supabaseFunctions } from "@/integrations/supabase/externalClient";
 import { toast } from "sonner";
 
 export type ResourceType = 'usuarios' | 'agentes' | 'funis' | 'conexoes' | 'conexoes_evolution' | 'conexoes_meta' | 'instagram' | 'mensagens';
@@ -16,7 +16,8 @@ export async function validarLimitePlano(
   resourceType: ResourceType
 ): Promise<ValidationResult> {
   try {
-    const { data, error } = await supabase.functions.invoke('validar-limite-plano', {
+    // Usar supabaseFunctions para chamar Edge Functions (hospedadas no Lovable Cloud)
+    const { data, error } = await supabaseFunctions.functions.invoke('validar-limite-plano', {
       body: {
         conta_id: contaId,
         resource_type: resourceType

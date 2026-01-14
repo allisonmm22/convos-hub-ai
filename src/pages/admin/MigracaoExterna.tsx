@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { supabaseExternal as supabase } from "@/integrations/supabase/externalClient";
+import { supabaseExternal as supabase, supabaseFunctions } from "@/integrations/supabase/externalClient";
 import { Copy, Check, Play, Database, ArrowRight, Loader2, Download, RefreshCw } from "lucide-react";
 import AdminLayout from "@/components/admin/AdminLayout";
 
@@ -15,7 +15,7 @@ export default function MigracaoExterna() {
   const [migrationResult, setMigrationResult] = useState<any>(null);
 
   const getSchemaSQL = async () => {
-    const { data, error } = await supabase.functions.invoke('external-schema');
+    const { data, error } = await supabaseFunctions.functions.invoke('external-schema');
     if (error) throw error;
     return data;
   };
@@ -59,7 +59,7 @@ export default function MigracaoExterna() {
     setSqlToShow(null);
     setErrorType(null);
     try {
-      const { data, error } = await supabase.functions.invoke('setup-external-database');
+      const { data, error } = await supabaseFunctions.functions.invoke('setup-external-database');
       
       if (error) throw error;
       
@@ -119,7 +119,7 @@ export default function MigracaoExterna() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min
       
-      const { data, error } = await supabase.functions.invoke('migrate-to-external', {
+      const { data, error } = await supabaseFunctions.functions.invoke('migrate-to-external', {
         body: {}
       });
       

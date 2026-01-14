@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabaseExternal as supabase } from "@/integrations/supabase/externalClient";
+import { supabaseExternal as supabase, supabaseFunctions } from "@/integrations/supabase/externalClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -109,7 +109,7 @@ export default function Upgrade() {
     setCheckoutLoading(plano.id);
 
     try {
-      const { data, error } = await supabase.functions.invoke('stripe-checkout', {
+      const { data, error } = await supabaseFunctions.functions.invoke('stripe-checkout', {
         body: {
           plano_id: plano.id,
           conta_id: usuario.conta_id,
