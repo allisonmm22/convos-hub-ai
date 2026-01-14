@@ -477,6 +477,18 @@ export default function Conversas() {
     }
   }, [conversaSelecionada]);
 
+  // Polling para buscar novas mensagens do banco externo a cada 5 segundos
+  useEffect(() => {
+    if (!conversaSelecionada) return;
+    
+    const intervalId = setInterval(() => {
+      console.log('Polling: buscando novas mensagens...');
+      fetchMensagens(conversaSelecionada.id);
+    }, 5000);
+    
+    return () => clearInterval(intervalId);
+  }, [conversaSelecionada?.id]);
+
   useEffect(() => {
     scrollToBottom();
   }, [mensagens]);
@@ -762,16 +774,33 @@ export default function Conversas() {
 
   const fetchMensagens = async (conversaId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('mensagens')
-        .select('*, usuario_deletou:deletada_por(nome)')
-        .eq('conversa_id', conversaId)
-        .order('created_at', { ascending: true });
+      console.log('Buscando mensagens da conversa (banco externo):', conversaId);
+      
+      // Buscar mensagens do banco EXTERNO via edge function
+      const { data, error } = await supabaseFunctions.functions.invoke('buscar-mensagens', {
+        body: { conversa_id: conversaId, limit: 500 }
+      });
 
-      if (error) throw error;
-      setMensagens((data || []) as unknown as Mensagem[]);
+      if (error) {
+        console.error('Erro ao buscar mensagens do banco externo:', error);
+        throw error;
+      }
+      
+      console.log('Mensagens recebidas:', data?.mensagens?.length || 0);
+      setMensagens((data?.mensagens || []) as unknown as Mensagem[]);
     } catch (error) {
       console.error('Erro ao buscar mensagens:', error);
+      // Fallback: tentar buscar do Lovable Cloud local
+      try {
+        const { data: localData } = await supabase
+          .from('mensagens')
+          .select('*, usuario_deletou:deletada_por(nome)')
+          .eq('conversa_id', conversaId)
+          .order('created_at', { ascending: true });
+        setMensagens((localData || []) as unknown as Mensagem[]);
+      } catch (fallbackError) {
+        console.error('Erro no fallback:', fallbackError);
+      }
     }
   };
 
