@@ -566,22 +566,27 @@ export default function Conversas() {
 
   const fetchConversas = async () => {
     try {
-      const { data, error } = await supabase
-        .from('conversas')
-        .select(`
-          *, 
-          contatos(*), 
-          agent_ia:agente_ia_id(id, nome, ativo, tipo), 
-          etapa_ia:etapa_ia_atual(id, nome, numero)
-        `)
-        .eq('conta_id', usuario!.conta_id)
-        .eq('arquivada', false)
-        .order('ultima_mensagem_at', { ascending: false });
-
-      if (error) throw error;
+      console.log('Buscando conversas do banco externo...');
       
-      // Buscar negociações para verificar se são clientes
-      const contatoIds = data?.map(c => c.contato_id).filter(Boolean) || [];
+      // Buscar conversas do banco EXTERNO via edge function
+      const { data: responseData, error: fetchError } = await supabaseFunctions.functions.invoke('buscar-conversas', {
+        body: { 
+          conta_id: usuario!.conta_id,
+          arquivadas: false,
+          limit: 100
+        }
+      });
+
+      if (fetchError) {
+        console.error('Erro ao buscar conversas do banco externo:', fetchError);
+        throw fetchError;
+      }
+      
+      const data = responseData?.conversas || [];
+      console.log('Conversas encontradas no banco externo:', data.length);
+      
+      // Buscar negociações para verificar se são clientes (ainda do Lovable Cloud)
+      const contatoIds = data?.map((c: Conversa) => c.contato_id).filter(Boolean) || [];
       
       if (contatoIds.length > 0) {
         const { data: negociacoes } = await supabase
@@ -599,7 +604,7 @@ export default function Conversas() {
         });
         
         // Adicionar negociações às conversas
-        const conversasComNegociacoes = data?.map(conversa => ({
+        const conversasComNegociacoes = data?.map((conversa: Conversa) => ({
           ...conversa,
           negociacoes: negociacoesPorContato.get(conversa.contato_id) || []
         })) || [];
@@ -610,6 +615,24 @@ export default function Conversas() {
       }
     } catch (error) {
       console.error('Erro ao buscar conversas:', error);
+      // Fallback: tentar buscar do Lovable Cloud
+      try {
+        console.log('Fallback: buscando do Lovable Cloud...');
+        const { data: localData } = await supabase
+          .from('conversas')
+          .select(`
+            *, 
+            contatos(*), 
+            agent_ia:agente_ia_id(id, nome, ativo, tipo), 
+            etapa_ia:etapa_ia_atual(id, nome, numero)
+          `)
+          .eq('conta_id', usuario!.conta_id)
+          .eq('arquivada', false)
+          .order('ultima_mensagem_at', { ascending: false });
+        setConversas(localData || []);
+      } catch (fallbackError) {
+        console.error('Erro no fallback:', fallbackError);
+      }
     } finally {
       setLoading(false);
     }
@@ -891,12 +914,27 @@ export default function Conversas() {
         m.id === tempId ? { ...m, id: novaMensagemData.id } : m
       ));
 
-      // Atualizar conversa - desativar IA e atribuir atendente humano
+      // Atualizar conversa no banco EXTERNO via edge function
+      const timestampAtual = new Date().toISOString();
+      await supabaseFunctions.functions.invoke('atualizar-conversa', {
+        body: {
+          conversa_id: conversaSelecionada.id,
+          updates: {
+            ultima_mensagem: mensagemFinal,
+            ultima_mensagem_at: timestampAtual,
+            status: 'aguardando_cliente',
+            agente_ia_ativo: false,
+            atendente_id: usuario!.id,
+          }
+        }
+      });
+      
+      // Também atualizar no Lovable Cloud para manter sincronizado
       await supabase
         .from('conversas')
         .update({
           ultima_mensagem: mensagemFinal,
-          ultima_mensagem_at: new Date().toISOString(),
+          ultima_mensagem_at: timestampAtual,
           status: 'aguardando_cliente',
           agente_ia_ativo: false,
           atendente_id: usuario!.id,
