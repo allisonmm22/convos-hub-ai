@@ -35,68 +35,6 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- ============================================
--- FUNÇÕES DE SEGURANÇA
--- ============================================
-CREATE OR REPLACE FUNCTION get_user_conta_id()
-RETURNS uuid
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT conta_id FROM public.usuarios WHERE user_id = auth.uid() LIMIT 1
-$$;
-
-CREATE OR REPLACE FUNCTION get_current_usuario_id()
-RETURNS uuid
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT id FROM public.usuarios WHERE user_id = auth.uid() LIMIT 1
-$$;
-
-CREATE OR REPLACE FUNCTION has_role(_user_id uuid, _role app_role)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.user_roles
-    WHERE user_id = _user_id AND role = _role
-  )
-$$;
-
-CREATE OR REPLACE FUNCTION is_super_admin()
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.user_roles
-    WHERE user_id = auth.uid() AND role::text = 'super_admin'
-  )
-$$;
-
-CREATE OR REPLACE FUNCTION atendente_ver_todas(_usuario_id uuid)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT COALESCE(
-    (SELECT ver_todas_conversas FROM public.atendente_config WHERE usuario_id = _usuario_id),
-    false
-  )
-$$;
-
--- ============================================
 -- NÍVEL 0: Tabelas independentes
 -- ============================================
 
@@ -609,6 +547,69 @@ CREATE TABLE uso_tokens (
   custo_estimado NUMERIC,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- ============================================
+-- FUNÇÕES DE SEGURANÇA
+-- (Criadas após as tabelas que elas referenciam)
+-- ============================================
+CREATE OR REPLACE FUNCTION get_user_conta_id()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT conta_id FROM public.usuarios WHERE user_id = auth.uid() LIMIT 1
+$$;
+
+CREATE OR REPLACE FUNCTION get_current_usuario_id()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT id FROM public.usuarios WHERE user_id = auth.uid() LIMIT 1
+$$;
+
+CREATE OR REPLACE FUNCTION has_role(_user_id uuid, _role app_role)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = _user_id AND role = _role
+  )
+$$;
+
+CREATE OR REPLACE FUNCTION is_super_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = auth.uid() AND role::text = 'super_admin'
+  )
+$$;
+
+CREATE OR REPLACE FUNCTION atendente_ver_todas(_usuario_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COALESCE(
+    (SELECT ver_todas_conversas FROM public.atendente_config WHERE usuario_id = _usuario_id),
+    false
+  )
+$$;
 
 -- ============================================
 -- ÍNDICES
