@@ -99,15 +99,17 @@ serve(async (req) => {
       extension = 'doc';
     }
 
-    // Passo 3: Upload para Supabase Storage
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Passo 3: Upload para Supabase Storage EXTERNO
+    const externalStorageUrl = Deno.env.get('EXTERNAL_STORAGE_URL')!;
+    const externalStorageKey = Deno.env.get('EXTERNAL_STORAGE_KEY')!;
+    const externalSupabase = createClient(externalStorageUrl, externalStorageKey);
+    
+    console.log('Using external storage:', externalStorageUrl);
 
     const fileName = `meta_${media_id}_${Date.now()}.${extension}`;
     const filePath = `${conta_id || 'unknown'}/${fileName}`;
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { data: uploadData, error: uploadError } = await externalSupabase.storage
       .from('whatsapp-media')
       .upload(filePath, fileBytes, {
         contentType: mimeType,
@@ -129,8 +131,8 @@ serve(async (req) => {
       );
     }
 
-    // Obter URL pública
-    const { data: publicUrlData } = supabase.storage
+    // Obter URL pública do storage externo
+    const { data: publicUrlData } = externalSupabase.storage
       .from('whatsapp-media')
       .getPublicUrl(filePath);
 
