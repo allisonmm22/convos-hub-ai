@@ -110,12 +110,35 @@ export default function MigracaoExterna() {
 
   const runMigration = async () => {
     setMigrating(true);
+    setMigrationResult(null);
+    
+    toast.info("Migração iniciada. Isso pode levar alguns minutos...");
+    
     try {
+      // Usar AbortController com timeout maior (5 minutos)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min
+      
       const { data, error } = await supabase.functions.invoke('migrate-to-external', {
         body: {}
       });
       
-      if (error) throw error;
+      clearTimeout(timeoutId);
+      
+      if (error) {
+        // Verificar se é erro de timeout/network
+        if (error.message?.includes('Failed to fetch') || error.message?.includes('abort')) {
+          setMigrationResult({
+            success: false,
+            error: 'Timeout na conexão. A migração pode estar rodando em background. Verifique os logs ou tente novamente em alguns minutos.',
+            hint: 'background'
+          });
+          toast.warning("Timeout na conexão. Verifique os logs do Edge Function.");
+        } else {
+          throw error;
+        }
+        return;
+      }
       
       setMigrationResult(data);
       if (data.success) {
@@ -125,6 +148,7 @@ export default function MigracaoExterna() {
         toast.error("Migração concluída com erros. Verifique os detalhes.");
       }
     } catch (error: any) {
+      console.error('Erro na migração:', error);
       toast.error("Erro na migração: " + error.message);
       setMigrationResult({ success: false, error: error.message });
     } finally {
@@ -327,15 +351,24 @@ export default function MigracaoExterna() {
                 {migrationResult.error && (
                   <p className="text-sm text-red-600">{migrationResult.error}</p>
                 )}
+                {migrationResult.hint === 'background' && (
+                  <div className="mt-2 p-3 bg-yellow-500/10 rounded text-sm">
+                    <p className="font-medium text-yellow-700">💡 Dica:</p>
+                    <p className="text-yellow-600">
+                      Verifique os logs do Edge Function "migrate-to-external" para ver o progresso.
+                      Se a migração completou, clique em "Testar Conexão" no passo 1 e depois tente novamente.
+                    </p>
+                  </div>
+                )}
                 {migrationResult.results && (
                   <details className="mt-2">
                     <summary className="cursor-pointer text-sm text-muted-foreground">
                       Ver detalhes por tabela
                     </summary>
-                    <div className="mt-2 space-y-1 text-xs">
+                    <div className="mt-2 space-y-1 text-xs max-h-64 overflow-auto">
                       {migrationResult.results.map((r: any, i: number) => (
                         <div key={i} className={`p-2 rounded ${r.success ? 'bg-green-500/5' : 'bg-red-500/5'}`}>
-                          <strong>{r.table}:</strong> {r.success ? `${r.count} registros` : r.error}
+                          <strong>{r.table}:</strong> {r.success ? `${r.migrated} registros` : r.error}
                         </div>
                       ))}
                     </div>
