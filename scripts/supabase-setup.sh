@@ -119,6 +119,7 @@ FUNCTIONS=(
     "registrar-log"
     "reset-user-password"
     "resumir-conversa"
+    "setup-primeiro-admin"
     "stripe-checkout"
     "stripe-customer-portal"
     "stripe-test-connection"
