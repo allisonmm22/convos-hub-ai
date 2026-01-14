@@ -46,7 +46,10 @@ echo ""
 
 read -p "🌐 Digite seu domínio (ex: app.seusite.com): " DOMAIN
 read -p "📧 Digite seu email (para SSL e alertas): " EMAIL
-read -p "📦 URL do repositório GitHub: " GITHUB_REPO
+
+# Repositório fixo
+GITHUB_REPO="https://github.com/allisonmm22/convos-hub-ai.git"
+log_info "Repositório: $GITHUB_REPO"
 
 echo ""
 log_info "Configuração do Supabase..."
@@ -64,7 +67,6 @@ echo -e "${YELLOW}════════════════════�
 echo ""
 echo "  Domínio: $DOMAIN"
 echo "  Email: $EMAIL"
-echo "  Repositório: $GITHUB_REPO"
 echo "  Supabase URL: $VITE_SUPABASE_URL"
 echo "  Supabase Project ID: $VITE_SUPABASE_PROJECT_ID"
 echo ""
