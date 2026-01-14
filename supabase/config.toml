@@ -146,3 +146,6 @@ verify_jwt = false
 
 [functions.migrate-to-external]
 verify_jwt = false
+
+[functions.external-schema]
+verify_jwt = false
