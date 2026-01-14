@@ -140,3 +140,9 @@ verify_jwt = false
 
 [functions.sync-to-external]
 verify_jwt = false
+
+[functions.setup-external-database]
+verify_jwt = false
+
+[functions.migrate-to-external]
+verify_jwt = false

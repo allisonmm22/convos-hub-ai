@@ -30,6 +30,7 @@ import AdminContas from "./pages/admin/AdminContas";
 import AdminContaDetalhe from "./pages/admin/AdminContaDetalhe";
 import AdminPlanos from "./pages/admin/AdminPlanos";
 import AdminPagamentos from "./pages/admin/AdminPagamentos";
+import MigracaoExterna from "./pages/admin/MigracaoExterna";
 import Upgrade from "./pages/Upgrade";
 import MinhaAssinatura from "./pages/MinhaAssinatura";
 import Perfil from "./pages/Perfil";
