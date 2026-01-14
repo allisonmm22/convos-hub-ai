@@ -112,6 +112,7 @@ export default function Auth() {
 
   const fetchPlanos = async () => {
     setLoadingPlanos(true);
+    console.log('🔍 Auth: Buscando planos ativos...');
     try {
       const { data, error } = await supabase
         .from("planos")
@@ -119,7 +120,18 @@ export default function Auth() {
         .eq("ativo", true)
         .order("preco_mensal", { ascending: true });
       
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Auth: Erro ao buscar planos:', {
+          message: error.message,
+          code: error.code,
+          hint: error.hint,
+          details: error.details
+        });
+        toast.error(`Erro ao carregar planos: ${error.message}`);
+        throw error;
+      }
+      
+      console.log('✅ Auth: Planos encontrados:', data?.length || 0);
       setPlanos(data || []);
     } catch (error) {
       console.error("Erro ao buscar planos:", error);
