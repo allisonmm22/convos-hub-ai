@@ -149,3 +149,6 @@ verify_jwt = false
 
 [functions.external-schema]
 verify_jwt = false
+
+[functions.signup-usuario]
+verify_jwt = false
