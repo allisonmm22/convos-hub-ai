@@ -17,24 +17,33 @@ RUN npm ci --only=production=false
 # Copiar código fonte
 COPY . .
 
-# Variáveis de ambiente para build
+# Variáveis de ambiente para build (OBRIGATÓRIAS)
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_PUBLISHABLE_KEY
 ARG VITE_SUPABASE_PROJECT_ID
 
-# CRIAR .env dinâmico (sobrescreve o do repositório)
-RUN echo "VITE_SUPABASE_URL=$VITE_SUPABASE_URL" > .env && \
-    echo "VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY" >> .env && \
-    echo "VITE_SUPABASE_PROJECT_ID=$VITE_SUPABASE_PROJECT_ID" >> .env
+# IMPORTANTE: Remover .env do repositório e criar novo com variáveis de build
+# Isso garante que as variáveis passadas via --build-arg sejam usadas
+RUN rm -f .env .env.local .env.production && \
+    echo "=== Criando .env com variáveis de build ===" && \
+    echo "VITE_SUPABASE_URL=${VITE_SUPABASE_URL}" > .env && \
+    echo "VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY}" >> .env && \
+    echo "VITE_SUPABASE_PROJECT_ID=${VITE_SUPABASE_PROJECT_ID}" >> .env && \
+    echo "=== Conteúdo do .env ===" && \
+    cat .env && \
+    echo "========================"
 
 # Build de produção
 RUN npm run build
 
+# Verificar se o build foi criado corretamente
+RUN ls -la dist/ && \
+    echo "=== Verificando URLs no bundle ===" && \
+    (grep -r --text "VITE_SUPABASE" dist/assets/*.js 2>/dev/null | head -3 || true) && \
+    echo "=== Build concluído ==="
+
 # Stage 2: Produção com Nginx
 FROM nginx:alpine
-
-# Instalar certbot para SSL
-RUN apk add --no-cache certbot certbot-nginx
 
 # Copiar build do stage anterior
 COPY --from=builder /app/dist /usr/share/nginx/html
