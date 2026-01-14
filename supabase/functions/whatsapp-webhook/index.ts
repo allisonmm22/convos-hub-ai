@@ -93,7 +93,7 @@ async function fetchGroupInfo(
 }
 
 // Função para processar webhook da Meta API
-async function processarWebhookMeta(payload: any, supabase: any, supabaseUrl: string, supabaseKey: string): Promise<Response> {
+async function processarWebhookMeta(payload: any, supabase: any, supabaseUrl: string, supabaseKey: string, localSupabaseUrl: string, localSupabaseKey: string): Promise<Response> {
   console.log('=== PROCESSANDO WEBHOOK META API ===');
   
   try {
@@ -334,9 +334,9 @@ async function processarWebhookMeta(payload: any, supabase: any, supabaseUrl: st
             new Promise<void>((resolve) => {
               setTimeout(async () => {
                 try {
-                  await fetch(`${supabaseUrl}/functions/v1/processar-resposta-agora`, {
+                  await fetch(`${localSupabaseUrl}/functions/v1/processar-resposta-agora`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localSupabaseKey}` },
                     body: JSON.stringify({ conversa_id: conversa.id }),
                   });
                 } catch (err) {
@@ -373,6 +373,11 @@ serve(async (req) => {
   const supabaseKey = Deno.env.get('EXTERNAL_SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, supabaseKey);
   console.log('📦 Usando banco:', supabaseUrl.substring(0, 30) + '...');
+
+  // URLs para Edge Functions LOCAIS (sempre usar Supabase local, não externo)
+  const localSupabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const localSupabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  console.log('🔗 Edge functions URL:', localSupabaseUrl.substring(0, 30) + '...');
 
   // ===== VERIFICAÇÃO GET WEBHOOK META API =====
   if (req.method === 'GET') {
@@ -419,7 +424,7 @@ serve(async (req) => {
     // Meta API envia com campo "object" = "whatsapp_business_account"
     if (payload.object === 'whatsapp_business_account') {
       console.log('=== WEBHOOK META API DETECTADO ===');
-      return await processarWebhookMeta(payload, supabase, supabaseUrl, supabaseKey);
+      return await processarWebhookMeta(payload, supabase, supabaseUrl, supabaseKey, localSupabaseUrl, localSupabaseKey);
     }
 
     // ===== CÓDIGO EVOLUTION (100% ORIGINAL ABAIXO) =====
@@ -1300,12 +1305,12 @@ serve(async (req) => {
                       console.log('Executando processamento agendado para conversa:', conversaId);
                       
                       await fetch(
-                        `${supabaseUrl}/functions/v1/processar-resposta-agora`,
+                        `${localSupabaseUrl}/functions/v1/processar-resposta-agora`,
                         {
                           method: 'POST',
                           headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${supabaseKey}`,
+                            'Authorization': `Bearer ${localSupabaseKey}`,
                           },
                           body: JSON.stringify({ conversa_id: conversaId }),
                         }
@@ -1322,12 +1327,12 @@ serve(async (req) => {
               // Fallback: chamar imediatamente (sem delay)
               console.log('EdgeRuntime.waitUntil não disponível, chamando imediatamente');
               fetch(
-                `${supabaseUrl}/functions/v1/processar-resposta-agora`,
+                `${localSupabaseUrl}/functions/v1/processar-resposta-agora`,
                 {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${supabaseKey}`,
+                    'Authorization': `Bearer ${localSupabaseKey}`,
                   },
                   body: JSON.stringify({ conversa_id: conversaId }),
                 }
