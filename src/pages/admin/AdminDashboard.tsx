@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Building2, Users, MessageSquare, TrendingUp } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 

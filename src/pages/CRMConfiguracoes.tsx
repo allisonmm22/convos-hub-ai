@@ -5,7 +5,7 @@ import {
   Settings, Tag, Bell, BellOff, ChevronUp, ChevronDown,
   Layers, ArrowRight, X, Copy, Trophy, XCircle, Zap, UserCheck
 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Shield, MessageSquare, Eye, EyeOff, Pencil, Trash2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';

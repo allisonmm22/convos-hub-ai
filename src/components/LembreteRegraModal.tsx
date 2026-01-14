@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, MessageSquare, Bot, Loader2, Bell, Calendar, Link as LinkIcon } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 

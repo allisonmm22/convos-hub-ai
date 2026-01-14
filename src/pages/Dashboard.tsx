@@ -16,7 +16,7 @@ import {
   Bot,
   Clock,
 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useOnboarding } from '@/contexts/OnboardingContext';

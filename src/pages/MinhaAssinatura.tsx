@@ -18,7 +18,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { supabase } from '@/integrations/supabase/client';
+import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
