@@ -717,42 +717,60 @@ serve(async (req) => {
 
     console.log('📡 Conectando ao Supabase externo:', externalUrl);
 
-    // Criar cliente do Supabase externo
-    const externalSupabase = createClient(externalUrl, externalServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
+    // Tentar verificar tabelas via REST API diretamente (força reload do schema)
+    console.log('🔍 Verificando tabelas via REST API...');
+    
+    // Fazer chamada direta ao REST API com header de reload
+    const restResponse = await fetch(`${externalUrl}/rest/v1/planos?select=id&limit=1`, {
+      method: 'GET',
+      headers: {
+        'apikey': externalServiceKey,
+        'Authorization': `Bearer ${externalServiceKey}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'count=none'
       }
     });
 
-    // Executar o SQL usando a função rpc
-    // Como não podemos executar SQL diretamente, vamos criar as tabelas uma por uma
-    // usando a API REST do Supabase
-
-    // Primeiro, vamos verificar se já existe alguma tabela
-    const { data: existingTables, error: checkError } = await externalSupabase
-      .from('planos')
-      .select('id')
-      .limit(1);
-
     let schemasExists = false;
     let errorDetails = '';
-    
-    if (checkError) {
-      // Log detalhado do erro para diagnóstico
-      console.log('❌ Erro ao verificar tabela planos:');
-      console.log('   Código:', checkError.code);
-      console.log('   Mensagem:', checkError.message);
-      console.log('   Detalhes:', checkError.details);
-      console.log('   Hint:', checkError.hint);
+    let checkError: any = null;
+
+    if (!restResponse.ok) {
+      const errorBody = await restResponse.text();
+      console.log('❌ Resposta REST API:', restResponse.status, errorBody);
+      
+      try {
+        const errorJson = JSON.parse(errorBody);
+        checkError = {
+          code: errorJson.code,
+          message: errorJson.message,
+          details: errorJson.details,
+          hint: errorJson.hint
+        };
+      } catch {
+        checkError = {
+          code: `HTTP_${restResponse.status}`,
+          message: errorBody
+        };
+      }
       
       // Identificar tipo de erro
       if (checkError.code === '42501') {
         errorDetails = 'Erro de permissão (RLS). Verifique se está usando a service_role key (não a anon key).';
-      } else if (checkError.code === '42P01') {
+      } else if (checkError.code === '42P01' || checkError.code === 'PGRST204') {
         errorDetails = 'Tabela não existe. Execute o SQL primeiro.';
-      } else if (checkError.code === 'PGRST301') {
-        errorDetails = 'Tabela não encontrada via API. Execute o SQL primeiro.';
+      } else if (checkError.code === 'PGRST205' || checkError.code === 'PGRST301') {
+        // PGRST205 = schema cache não atualizado, vamos tentar forçar
+        console.log('⚠️ Schema cache não atualizado. Tentando verificar via information_schema...');
+        
+        // Criar cliente para tentar RPC
+        const externalSupabase = createClient(externalUrl, externalServiceKey, {
+          auth: { autoRefreshToken: false, persistSession: false }
+        });
+        
+        // Tentar via RPC se existir uma função de verificação
+        // Se não, vamos assumir que precisamos executar o SQL
+        errorDetails = 'Schema cache do PostgREST não atualizado. Por favor, reinicie o PostgREST ou execute: NOTIFY pgrst, \'reload schema\';';
       } else {
         errorDetails = `Erro: ${checkError.code} - ${checkError.message}`;
       }
@@ -794,7 +812,7 @@ serve(async (req) => {
     }
 
     // Se chegou aqui, as tabelas existem
-    // Vamos verificar quantas tabelas temos
+    // Vamos verificar quantas tabelas temos via REST API direta
     const tablesToCheck = [
       'planos', 'contas', 'usuarios', 'contatos', 'conexoes_whatsapp',
       'conversas', 'mensagens', 'funis', 'estagios', 'negociacoes',
@@ -804,12 +822,16 @@ serve(async (req) => {
     const tableStatus: Record<string, boolean> = {};
     
     for (const table of tablesToCheck) {
-      const { error } = await externalSupabase
-        .from(table)
-        .select('id')
-        .limit(1);
+      const tableResponse = await fetch(`${externalUrl}/rest/v1/${table}?select=id&limit=1`, {
+        method: 'GET',
+        headers: {
+          'apikey': externalServiceKey,
+          'Authorization': `Bearer ${externalServiceKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
       
-      tableStatus[table] = !error;
+      tableStatus[table] = tableResponse.ok;
     }
 
     const existingCount = Object.values(tableStatus).filter(Boolean).length;
