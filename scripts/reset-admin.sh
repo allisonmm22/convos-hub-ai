@@ -103,7 +103,7 @@ delete_auth_user() {
         -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}"
 }
 
-# Inserir registro via REST API
+# Inserir registro via REST API (bypass RLS com service_role)
 insert_record() {
     local table=$1
     local data=$2
@@ -114,10 +114,11 @@ insert_record() {
         -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
         -H "Content-Type: application/json" \
         -H "Prefer: return=representation" \
+        -H "X-Client-Info: service_role" \
         -d "$data"
 }
 
-# Deletar registros via REST API
+# Deletar registros via REST API (bypass RLS com service_role)
 delete_records() {
     local table=$1
     local filter=$2
@@ -125,10 +126,11 @@ delete_records() {
     curl -s -X DELETE \
         "${VITE_SUPABASE_URL}/rest/v1/${table}?${filter}" \
         -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-        -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}"
+        -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+        -H "X-Client-Info: service_role"
 }
 
-# Buscar registros via REST API
+# Buscar registros via REST API (bypass RLS com service_role)
 select_records() {
     local table=$1
     local filter=$2
@@ -136,7 +138,8 @@ select_records() {
     curl -s -X GET \
         "${VITE_SUPABASE_URL}/rest/v1/${table}?${filter}" \
         -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-        -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}"
+        -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+        -H "X-Client-Info: service_role"
 }
 
 # ===========================================
@@ -240,6 +243,7 @@ recreate_admin() {
     
     if [ -z "$new_conta_id" ]; then
         log_error "Falha ao criar conta"
+        log_error "Resposta da API: $conta_response"
         return 1
     fi
     
