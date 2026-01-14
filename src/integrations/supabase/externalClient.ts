@@ -2,29 +2,23 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-// Configuração do Supabase externo via variáveis de ambiente
-const EXTERNAL_URL = import.meta.env.VITE_EXTERNAL_SUPABASE_URL || '';
-const EXTERNAL_ANON_KEY = import.meta.env.VITE_EXTERNAL_SUPABASE_ANON_KEY || '';
+// Configuração DIRETA do Supabase externo (anon key é pública e segura)
+const EXTERNAL_URL = 'https://supabase.cognityx.com.br';
+const EXTERNAL_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.rzXGMZV1deeDvX3bpWEg9ywInunFWop5m0u5S1VW6cw';
 
 // Configuração do Lovable Cloud (para Edge Functions)
 const LOVABLE_URL = import.meta.env.VITE_SUPABASE_URL;
 const LOVABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-// Flag para indicar se está usando banco externo
-export const isUsingExternalDatabase = Boolean(EXTERNAL_URL && EXTERNAL_ANON_KEY);
+// Flag - sempre true pois estamos usando banco externo
+export const isUsingExternalDatabase = true;
 
-// Log de debug para identificar qual banco está sendo usado
-if (isUsingExternalDatabase) {
-  console.log('🟢 SUPABASE: Usando banco EXTERNO:', EXTERNAL_URL);
-} else {
-  console.warn('🟡 SUPABASE: Variáveis externas não configuradas. Usando Lovable Cloud como fallback.');
-  console.warn('   Configure VITE_EXTERNAL_SUPABASE_URL e VITE_EXTERNAL_SUPABASE_ANON_KEY no ambiente de deploy.');
-}
+console.log('🟢 SUPABASE: Usando banco EXTERNO:', EXTERNAL_URL);
 
-// Cliente principal para operações de banco de dados (externo ou fallback)
+// Cliente principal para operações de banco de dados (externo)
 export const supabaseExternal = createClient<Database>(
-  EXTERNAL_URL || LOVABLE_URL,
-  EXTERNAL_ANON_KEY || LOVABLE_KEY,
+  EXTERNAL_URL,
+  EXTERNAL_ANON_KEY,
   {
     auth: {
       storage: localStorage,
@@ -35,7 +29,6 @@ export const supabaseExternal = createClient<Database>(
 );
 
 // Cliente do Lovable Cloud APENAS para chamar Edge Functions
-// (As Edge Functions estão hospedadas no Lovable Cloud, não no Supabase externo)
 export const supabaseFunctions = createClient<Database>(
   LOVABLE_URL,
   LOVABLE_KEY,
