@@ -137,3 +137,6 @@ verify_jwt = false
 
 [functions.setup-primeiro-admin]
 verify_jwt = false
+
+[functions.sync-to-external]
+verify_jwt = false
