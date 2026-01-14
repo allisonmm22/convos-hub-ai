@@ -7,55 +7,56 @@ const corsHeaders = {
 };
 
 // Ordem de migração respeitando dependências
+// hasCreatedAt indica se a tabela tem coluna created_at para ordenação
 const MIGRATION_ORDER = [
   // Nível 0 - Sem dependências
-  { table: 'planos', hasUpdatedAt: true },
-  { table: 'configuracoes_plataforma', hasUpdatedAt: true },
+  { table: 'planos', hasCreatedAt: true },
+  { table: 'configuracoes_plataforma', hasCreatedAt: true },
   
   // Nível 1 - Depende do nível 0
-  { table: 'contas', hasUpdatedAt: true },
+  { table: 'contas', hasCreatedAt: true },
   
   // Nível 2 - Depende do nível 1
-  { table: 'usuarios', hasUpdatedAt: true },
-  { table: 'contatos', hasUpdatedAt: true },
-  { table: 'conexoes_whatsapp', hasUpdatedAt: true },
-  { table: 'funis', hasUpdatedAt: true },
-  { table: 'agent_ia', hasUpdatedAt: true },
-  { table: 'tags', hasUpdatedAt: true },
-  { table: 'calendarios_google', hasUpdatedAt: true },
-  { table: 'campos_personalizados_grupos', hasUpdatedAt: true },
-  { table: 'followup_regras', hasUpdatedAt: true },
-  { table: 'lembrete_regras', hasUpdatedAt: true },
+  { table: 'usuarios', hasCreatedAt: true },
+  { table: 'contatos', hasCreatedAt: true },
+  { table: 'conexoes_whatsapp', hasCreatedAt: true },
+  { table: 'funis', hasCreatedAt: true },
+  { table: 'agent_ia', hasCreatedAt: true },
+  { table: 'tags', hasCreatedAt: true },
+  { table: 'calendarios_google', hasCreatedAt: true },
+  { table: 'campos_personalizados_grupos', hasCreatedAt: true },
+  { table: 'followup_regras', hasCreatedAt: true },
+  { table: 'lembrete_regras', hasCreatedAt: true },
   
   // Nível 3 - Depende do nível 2
-  { table: 'user_roles', hasUpdatedAt: false },
-  { table: 'atendente_config', hasUpdatedAt: true },
-  { table: 'estagios', hasUpdatedAt: true },
-  { table: 'agent_ia_etapas', hasUpdatedAt: true },
-  { table: 'agent_ia_perguntas', hasUpdatedAt: true },
-  { table: 'agent_ia_agendamento_config', hasUpdatedAt: true },
-  { table: 'campos_personalizados', hasUpdatedAt: true },
+  { table: 'user_roles', hasCreatedAt: true },
+  { table: 'atendente_config', hasCreatedAt: true },
+  { table: 'estagios', hasCreatedAt: true },
+  { table: 'agent_ia_etapas', hasCreatedAt: true },
+  { table: 'agent_ia_perguntas', hasCreatedAt: true },
+  { table: 'agent_ia_agendamento_config', hasCreatedAt: true },
+  { table: 'campos_personalizados', hasCreatedAt: true },
   
   // Nível 4 - Depende do nível 3
-  { table: 'agent_ia_agendamento_horarios', hasUpdatedAt: false },
-  { table: 'conversas', hasUpdatedAt: true },
-  { table: 'negociacoes', hasUpdatedAt: true },
-  { table: 'agendamentos', hasUpdatedAt: true },
-  { table: 'contato_campos_valores', hasUpdatedAt: true },
+  { table: 'agent_ia_agendamento_horarios', hasCreatedAt: true },
+  { table: 'conversas', hasCreatedAt: true },
+  { table: 'negociacoes', hasCreatedAt: true },
+  { table: 'agendamentos', hasCreatedAt: true },
+  { table: 'contato_campos_valores', hasCreatedAt: true },
   
   // Nível 5 - Depende do nível 4
-  { table: 'mensagens', hasUpdatedAt: false },
-  { table: 'mensagens_processadas', hasUpdatedAt: false },
-  { table: 'respostas_pendentes', hasUpdatedAt: false },
-  { table: 'followup_enviados', hasUpdatedAt: false },
-  { table: 'followups_agendados', hasUpdatedAt: false },
-  { table: 'negociacao_historico', hasUpdatedAt: false },
-  { table: 'negociacao_notas', hasUpdatedAt: true },
-  { table: 'lembrete_enviados', hasUpdatedAt: false },
-  { table: 'transferencias_atendimento', hasUpdatedAt: false },
-  { table: 'notificacoes', hasUpdatedAt: false },
-  { table: 'logs_atividade', hasUpdatedAt: false },
-  { table: 'uso_tokens', hasUpdatedAt: false },
+  { table: 'mensagens', hasCreatedAt: true },
+  { table: 'mensagens_processadas', hasCreatedAt: true },
+  { table: 'respostas_pendentes', hasCreatedAt: true },
+  { table: 'followup_enviados', hasCreatedAt: false }, // Não tem created_at
+  { table: 'followups_agendados', hasCreatedAt: true },
+  { table: 'negociacao_historico', hasCreatedAt: true },
+  { table: 'negociacao_notas', hasCreatedAt: true },
+  { table: 'lembrete_enviados', hasCreatedAt: false }, // Não tem created_at
+  { table: 'transferencias_atendimento', hasCreatedAt: true },
+  { table: 'notificacoes', hasCreatedAt: true },
+  { table: 'logs_atividade', hasCreatedAt: true },
+  { table: 'uso_tokens', hasCreatedAt: true },
 ];
 
 interface MigrationResult {
@@ -107,15 +108,21 @@ serve(async (req) => {
       ? MIGRATION_ORDER.filter(t => t.table === specificTable)
       : MIGRATION_ORDER;
 
-    for (const { table, hasUpdatedAt } of tablesToMigrate) {
+    for (const { table, hasCreatedAt } of tablesToMigrate) {
       console.log(`\n📦 Migrando tabela: ${table}`);
       
       try {
         // Buscar todos os dados da origem
-        const { data: sourceData, error: fetchError } = await sourceSupabase
-          .from(table)
-          .select('*')
-          .order('created_at', { ascending: true });
+        // Usar created_at para ordenação se disponível, senão usar id
+        let query = sourceSupabase.from(table).select('*');
+        
+        if (hasCreatedAt) {
+          query = query.order('created_at', { ascending: true });
+        } else {
+          query = query.order('id', { ascending: true });
+        }
+        
+        const { data: sourceData, error: fetchError } = await query;
 
         if (fetchError) {
           console.error(`❌ Erro ao buscar ${table}:`, fetchError.message);
