@@ -58,6 +58,7 @@ echo ""
 read -p "🔗 VITE_SUPABASE_URL (ex: https://xxx.supabase.co): " VITE_SUPABASE_URL
 read -p "🔑 VITE_SUPABASE_PUBLISHABLE_KEY (anon key): " VITE_SUPABASE_PUBLISHABLE_KEY
 read -p "📋 VITE_SUPABASE_PROJECT_ID (project ref): " VITE_SUPABASE_PROJECT_ID
+read -p "🔐 SUPABASE_SERVICE_ROLE_KEY (service_role key): " SUPABASE_SERVICE_ROLE_KEY
 
 # Confirmar dados
 echo ""
@@ -68,6 +69,7 @@ echo ""
 echo "  Domínio: $DOMAIN"
 echo "  Email: $EMAIL"
 echo "  Supabase URL: $VITE_SUPABASE_URL"
+echo "  Service Role Key: ${SUPABASE_SERVICE_ROLE_KEY:0:20}..."
 echo "  Supabase Project ID: $VITE_SUPABASE_PROJECT_ID"
 echo ""
 
@@ -219,6 +221,7 @@ cat > $PROJECT_DIR/.env << EOF
 VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY
 VITE_SUPABASE_PROJECT_ID=$VITE_SUPABASE_PROJECT_ID
+SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY
 EOF
 
 chmod 600 $PROJECT_DIR/.env
@@ -375,6 +378,158 @@ docker compose build --no-cache
 docker compose up -d
 
 log_success "Containers iniciados"
+
+# ===========================================
+# 11.1 CRIAR SUPER ADMIN AUTOMATICAMENTE
+# ===========================================
+log_info "Criando Super Admin no Supabase..."
+
+# Credenciais padrão do super admin
+ADMIN_EMAIL="admin@admin.com"
+ADMIN_PASSWORD="123456"
+EMPRESA_NOME="Empresa Principal"
+ADMIN_NOME="Administrador"
+
+# 1. Criar usuário via Supabase Auth Admin API
+log_info "Criando usuário de autenticação..."
+USER_RESPONSE=$(curl -s -X POST \
+  "${VITE_SUPABASE_URL}/auth/v1/admin/users" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"email\": \"${ADMIN_EMAIL}\",
+    \"password\": \"${ADMIN_PASSWORD}\",
+    \"email_confirm\": true
+  }")
+
+# Extrair user_id da resposta
+USER_ID=$(echo $USER_RESPONSE | grep -oP '"id"\s*:\s*"\K[^"]+' | head -1)
+
+# Se não conseguiu criar, tentar buscar existente
+if [ -z "$USER_ID" ]; then
+    log_warning "Usuário pode já existir, tentando buscar..."
+    USERS_LIST=$(curl -s -X GET \
+      "${VITE_SUPABASE_URL}/auth/v1/admin/users" \
+      -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+      -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}")
+    
+    USER_ID=$(echo $USERS_LIST | grep -oP "\"id\":\s*\"[^\"]+\",\s*\"[^\"]*\":\s*[^,]*,\s*\"email\":\s*\"${ADMIN_EMAIL}\"" | grep -oP '"id"\s*:\s*"\K[^"]+' | head -1)
+    
+    if [ -z "$USER_ID" ]; then
+        # Tentar extrair de forma mais simples
+        USER_ID=$(echo $USER_RESPONSE | sed 's/.*"id":"\([^"]*\)".*/\1/' | head -c 36)
+    fi
+fi
+
+if [ -n "$USER_ID" ] && [ ${#USER_ID} -eq 36 ]; then
+    log_success "User ID obtido: $USER_ID"
+    
+    # 2. Verificar se já existe configuração
+    log_info "Verificando se admin já está configurado..."
+    CHECK_ROLE=$(curl -s -X GET \
+      "${VITE_SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${USER_ID}" \
+      -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+      -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}")
+    
+    if echo "$CHECK_ROLE" | grep -q "super_admin"; then
+        log_warning "Super Admin já configurado, pulando..."
+    else
+        log_info "Configurando tabelas do sistema..."
+        
+        # 3. Criar conta (empresa)
+        log_info "Criando conta/empresa..."
+        CONTA_RESPONSE=$(curl -s -X POST \
+          "${VITE_SUPABASE_URL}/rest/v1/contas" \
+          -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+          -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+          -H "Content-Type: application/json" \
+          -H "Prefer: return=representation" \
+          -d "{\"nome\": \"${EMPRESA_NOME}\", \"ativo\": true}")
+        
+        CONTA_ID=$(echo $CONTA_RESPONSE | grep -oP '"id"\s*:\s*"\K[^"]+' | head -1)
+        
+        if [ -n "$CONTA_ID" ]; then
+            log_success "Conta criada: $CONTA_ID"
+            
+            # 4. Criar usuário na tabela usuarios
+            log_info "Criando registro de usuário..."
+            curl -s -X POST \
+              "${VITE_SUPABASE_URL}/rest/v1/usuarios" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"user_id\": \"${USER_ID}\", \"conta_id\": \"${CONTA_ID}\", \"nome\": \"${ADMIN_NOME}\", \"email\": \"${ADMIN_EMAIL}\", \"is_admin\": true}" > /dev/null
+            
+            # 5. Criar role super_admin
+            log_info "Atribuindo role super_admin..."
+            curl -s -X POST \
+              "${VITE_SUPABASE_URL}/rest/v1/user_roles" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"user_id\": \"${USER_ID}\", \"role\": \"super_admin\"}" > /dev/null
+            
+            # 6. Criar agente IA padrão
+            log_info "Criando agente IA padrão..."
+            curl -s -X POST \
+              "${VITE_SUPABASE_URL}/rest/v1/agent_ia" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"conta_id\": \"${CONTA_ID}\", \"nome\": \"Agente Padrão\", \"descricao\": \"Agente de IA configurado automaticamente\", \"ativo\": false}" > /dev/null
+            
+            # 7. Criar funil padrão
+            log_info "Criando funil padrão..."
+            FUNIL_RESPONSE=$(curl -s -X POST \
+              "${VITE_SUPABASE_URL}/rest/v1/funis" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Content-Type: application/json" \
+              -H "Prefer: return=representation" \
+              -d "{\"conta_id\": \"${CONTA_ID}\", \"nome\": \"Funil Principal\", \"descricao\": \"Funil de vendas padrão\"}")
+            
+            FUNIL_ID=$(echo $FUNIL_RESPONSE | grep -oP '"id"\s*:\s*"\K[^"]+' | head -1)
+            
+            if [ -n "$FUNIL_ID" ]; then
+                log_success "Funil criado: $FUNIL_ID"
+                
+                # 8. Criar estágios padrão
+                log_info "Criando estágios do funil..."
+                curl -s -X POST \
+                  "${VITE_SUPABASE_URL}/rest/v1/estagios" \
+                  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+                  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+                  -H "Content-Type: application/json" \
+                  -d "[
+                    {\"funil_id\": \"${FUNIL_ID}\", \"nome\": \"Novo Lead\", \"ordem\": 1, \"cor\": \"#3B82F6\", \"tipo\": \"novo\"},
+                    {\"funil_id\": \"${FUNIL_ID}\", \"nome\": \"Qualificação\", \"ordem\": 2, \"cor\": \"#F59E0B\", \"tipo\": \"normal\"},
+                    {\"funil_id\": \"${FUNIL_ID}\", \"nome\": \"Proposta\", \"ordem\": 3, \"cor\": \"#8B5CF6\", \"tipo\": \"normal\"},
+                    {\"funil_id\": \"${FUNIL_ID}\", \"nome\": \"Negociação\", \"ordem\": 4, \"cor\": \"#EC4899\", \"tipo\": \"normal\"},
+                    {\"funil_id\": \"${FUNIL_ID}\", \"nome\": \"Ganho\", \"ordem\": 5, \"cor\": \"#10B981\", \"tipo\": \"ganho\"},
+                    {\"funil_id\": \"${FUNIL_ID}\", \"nome\": \"Perdido\", \"ordem\": 6, \"cor\": \"#EF4444\", \"tipo\": \"perdido\"}
+                  ]" > /dev/null
+                
+                log_success "Estágios criados"
+            fi
+            
+            echo ""
+            log_success "╔═══════════════════════════════════════════════════════════╗"
+            log_success "║           🎉 SUPER ADMIN CRIADO COM SUCESSO!              ║"
+            log_success "╠═══════════════════════════════════════════════════════════╣"
+            log_success "║  📧 Email: admin@admin.com                                ║"
+            log_success "║  🔑 Senha: 123456                                         ║"
+            log_success "║  👤 Role:  super_admin                                    ║"
+            log_success "╚═══════════════════════════════════════════════════════════╝"
+            echo ""
+        else
+            log_error "Erro ao criar conta. Verifique os logs."
+        fi
+    fi
+else
+    log_error "Não foi possível obter User ID. Verifique as credenciais do Supabase."
+    log_warning "Você pode criar o admin manualmente pelo Supabase Dashboard."
+fi
 
 # ===========================================
 # 12. CONFIGURAR RENOVAÇÃO AUTOMÁTICA SSL
