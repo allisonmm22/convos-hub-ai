@@ -338,9 +338,11 @@ serve(async (req) => {
 
     console.log('Enviando mensagem:', { conexao_id, telefone, tipo, hasBase64: !!media_base64, grupo_jid, mensagem_id });
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    // Usar banco de dados EXTERNO como principal
+    const supabaseUrl = Deno.env.get('EXTERNAL_SUPABASE_URL') || Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('EXTERNAL_SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+    console.log('📦 Usando banco:', supabaseUrl.substring(0, 30) + '...');
 
     // Buscar conexão
     const { data: conexao, error } = await supabase

@@ -809,9 +809,11 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    // Usar banco de dados EXTERNO como principal
+    const supabaseUrl = Deno.env.get('EXTERNAL_SUPABASE_URL') || Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('EXTERNAL_SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+    console.log('📦 Usando banco:', supabaseUrl.substring(0, 30) + '...');
 
     const { conversa_id, mensagem, conta_id: contaIdParam, mensagem_tipo, transcricao, descricao_imagem, texto_documento, transferencia_agente } = await req.json();
 
@@ -1736,8 +1738,9 @@ serve(async (req) => {
     
     // Logar erro no sistema
     try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      // Usar banco de dados EXTERNO como principal
+      const supabaseUrl = Deno.env.get('EXTERNAL_SUPABASE_URL') || Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('EXTERNAL_SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabase = createClient(supabaseUrl, supabaseKey);
       
       // Tentar obter conta_id do body se disponível

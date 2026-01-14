@@ -12,8 +12,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    // Usar banco de dados EXTERNO como principal
+    const supabaseUrl = Deno.env.get('EXTERNAL_SUPABASE_URL') || Deno.env.get('SUPABASE_URL')!
+    const serviceRoleKey = Deno.env.get('EXTERNAL_SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    console.log('📦 Usando banco:', supabaseUrl.substring(0, 30) + '...')
     
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
