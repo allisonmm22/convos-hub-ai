@@ -1157,18 +1157,22 @@ serve(async (req) => {
 
       // Verificar se conversa estava encerrada e está sendo reaberta pelo lead
       const conversaEstaReabrindo = conversa?.status === 'encerrado' && !fromMe && !isGrupo;
+      
+      // Verificar se IA está pausada mas conversa tem agente configurado (lead enviando msg em conversa pausada)
+      const iaEstaPausadaMasTemAgente = !conversa?.agente_ia_ativo && conversa?.agente_ia_id && !fromMe && !isGrupo;
+      
       let agenteIaAtivoFinal = conversa?.agente_ia_ativo || false;
       let agenteIaIdFinal = conversa?.agente_ia_id;
 
+      // Buscar configuração da conta (uma única vez para ambos os cenários)
+      const { data: contaConfig } = await supabase
+        .from('contas')
+        .select('reabrir_com_ia, reativar_ia_auto')
+        .eq('id', conexao.conta_id)
+        .single();
+
       if (conversaEstaReabrindo) {
         console.log('=== CONVERSA ENCERRADA RECEBENDO NOVA MENSAGEM ===');
-        
-        // Buscar configuração da conta para saber como reabrir
-        const { data: contaConfig } = await supabase
-          .from('contas')
-          .select('reabrir_com_ia')
-          .eq('id', conexao.conta_id)
-          .single();
         
         const reabrirComIA = contaConfig?.reabrir_com_ia ?? true;
         console.log('Configuração reabrir_com_ia:', reabrirComIA);
@@ -1194,6 +1198,12 @@ serve(async (req) => {
           console.log('Configuração define reabertura com atendimento humano');
           agenteIaAtivoFinal = false;
         }
+      } else if (iaEstaPausadaMasTemAgente && contaConfig?.reativar_ia_auto) {
+        // NOVO: Reativar IA automaticamente quando lead envia mensagem em conversa com IA pausada
+        console.log('=== REATIVAÇÃO AUTOMÁTICA DA IA ===');
+        console.log('IA estava pausada, reativando automaticamente (reativar_ia_auto = true)');
+        agenteIaAtivoFinal = true;
+        // Manter o agente_ia_id que já estava configurado
       }
 
       // Atualizar conversa usando fetch direto
@@ -1211,6 +1221,10 @@ serve(async (req) => {
         updateData.etapa_ia_atual = null; // Começar do início
         updateData.memoria_limpa_em = new Date().toISOString(); // Limpar memória anterior
         console.log('Dados de reabertura:', { agente_ia_ativo: agenteIaAtivoFinal, agente_ia_id: agenteIaIdFinal });
+      } else if (iaEstaPausadaMasTemAgente && contaConfig?.reativar_ia_auto) {
+        // NOVO: Atualizar agente_ia_ativo para true quando reativando automaticamente
+        updateData.agente_ia_ativo = true;
+        console.log('IA reativada automaticamente para conversa pausada');
       }
 
       // Se mensagem veio do dispositivo externo, pausar o agente IA automaticamente
