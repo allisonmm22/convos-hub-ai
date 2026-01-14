@@ -722,6 +722,12 @@ ALTER TABLE lembrete_enviados ENABLE ROW LEVEL SECURITY;
 ALTER TABLE uso_tokens ENABLE ROW LEVEL SECURITY;
 
 -- ============================================
+-- RLS POLICIES - LEITURA PÚBLICA DE PLANOS ATIVOS
+-- Permite que qualquer pessoa veja planos (para tela de cadastro)
+-- ============================================
+CREATE POLICY "Qualquer um pode ver planos ativos" ON planos FOR SELECT USING (ativo = true);
+
+-- ============================================
 -- RLS POLICIES - BYPASS PARA SERVICE ROLE
 -- A service_role key precisa ter acesso total
 -- ============================================
