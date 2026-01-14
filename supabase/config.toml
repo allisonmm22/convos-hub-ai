@@ -152,3 +152,12 @@ verify_jwt = false
 
 [functions.signup-usuario]
 verify_jwt = false
+
+[functions.buscar-conversas]
+verify_jwt = false
+
+[functions.buscar-mensagens]
+verify_jwt = false
+
+[functions.atualizar-conversa]
+verify_jwt = false
