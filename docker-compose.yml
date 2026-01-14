@@ -1,0 +1,66 @@
+# ===========================================
+# DOCKER COMPOSE - ZapCRM
+# Orquestração de containers
+# ===========================================
+
+version: '3.8'
+
+services:
+  # ===========================================
+  # Frontend + Nginx
+  # ===========================================
+  zapcrm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+        - VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY}
+        - VITE_SUPABASE_PROJECT_ID=${VITE_SUPABASE_PROJECT_ID}
+    container_name: zapcrm-frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Certificados SSL (montados do host)
+      - ./ssl:/etc/nginx/ssl:ro
+      # Configuração Nginx customizada
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Logs
+      - ./logs/nginx:/var/log/nginx
+    environment:
+      - TZ=America/Sao_Paulo
+    restart: unless-stopped
+    networks:
+      - zapcrm-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ===========================================
+  # Watchtower - Auto-update de containers
+  # ===========================================
+  watchtower:
+    image: containrrr/watchtower
+    container_name: zapcrm-watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_INCLUDE_STOPPED=false
+      - TZ=America/Sao_Paulo
+    restart: unless-stopped
+    networks:
+      - zapcrm-network
+
+networks:
+  zapcrm-network:
+    driver: bridge
+
+volumes:
+  ssl:
+  logs:
