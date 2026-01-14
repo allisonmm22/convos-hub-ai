@@ -188,16 +188,21 @@ log_success "Fail2ban configurado (proteção SSH e Nginx)"
 # ===========================================
 # 6. CLONAR REPOSITÓRIO
 # ===========================================
+log_info "Preparando diretório de instalação..."
+
+# Remover diretório completamente se existir (incluindo arquivos ocultos como .git)
+if [ -d "$PROJECT_DIR" ]; then
+    log_warning "Diretório $PROJECT_DIR já existe. Removendo para instalação limpa..."
+    rm -rf "$PROJECT_DIR"
+fi
+
+# Criar diretório pai se não existir
+mkdir -p "$(dirname $PROJECT_DIR)"
+
 log_info "Clonando repositório..."
+git clone $GITHUB_REPO $PROJECT_DIR
 
-mkdir -p $PROJECT_DIR
 cd $PROJECT_DIR
-
-# Limpar diretório se existir conteúdo
-rm -rf $PROJECT_DIR/*
-
-git clone $GITHUB_REPO .
-
 log_success "Repositório clonado em $PROJECT_DIR"
 
 # ===========================================
