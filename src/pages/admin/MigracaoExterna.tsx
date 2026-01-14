@@ -50,24 +50,42 @@ export default function MigracaoExterna() {
     }
   };
 
+  const [sqlToShow, setSqlToShow] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<string | null>(null);
+
   const testConnection = async () => {
     setTesting(true);
     setTestResult(null);
+    setSqlToShow(null);
+    setErrorType(null);
     try {
       const { data, error } = await supabase.functions.invoke('setup-external-database');
       
       if (error) throw error;
       
-      if (data.tablesExist) {
+      if (data.success) {
         setTestResult({
           success: true,
-          message: `Conexão OK! ${data.tablesFound?.length || 0} tabelas encontradas.`
+          message: data.message || `Conexão OK! Tabelas encontradas.`
         });
         toast.success("Conexão com banco externo verificada!");
       } else {
+        // Identificar tipo de erro e mostrar SQL apropriado
+        setErrorType(data.errorType || 'unknown');
+        setSqlToShow(data.sql || null);
+        
+        let message = data.error || "Erro na conexão";
+        if (data.errorType === 'permission') {
+          message = "⚠️ ERRO DE PERMISSÃO: As tabelas existem, mas faltam GRANTs. Execute o SQL abaixo.";
+        } else if (data.errorType === 'not_found') {
+          message = "❌ Tabelas não encontradas. Execute o SQL de criação primeiro.";
+        } else if (data.errorType === 'schema_cache') {
+          message = "🔄 Cache do PostgREST desatualizado. Reinicie o container 'rest' no Portainer.";
+        }
+        
         setTestResult({
           success: false,
-          message: "Tabelas não encontradas. Execute o SQL primeiro."
+          message: message
         });
       }
     } catch (error: any) {
@@ -78,6 +96,15 @@ export default function MigracaoExterna() {
       toast.error("Erro ao testar conexão: " + error.message);
     } finally {
       setTesting(false);
+    }
+  };
+
+  const copySqlToClipboard = async (sql: string) => {
+    try {
+      await navigator.clipboard.writeText(sql);
+      toast.success("SQL copiado para a área de transferência!");
+    } catch (error: any) {
+      toast.error("Erro ao copiar: " + error.message);
     }
   };
 
@@ -198,9 +225,37 @@ export default function MigracaoExterna() {
                 <div className={`mt-2 p-3 rounded-lg text-sm ${
                   testResult.success 
                     ? 'bg-green-500/10 text-green-600 border border-green-500/20' 
+                    : errorType === 'permission'
+                    ? 'bg-yellow-500/10 text-yellow-700 border border-yellow-500/20'
                     : 'bg-red-500/10 text-red-600 border border-red-500/20'
                 }`}>
-                  {testResult.success ? '✅' : '❌'} {testResult.message}
+                  {testResult.message}
+                </div>
+              )}
+
+              {/* Mostrar SQL quando houver erro */}
+              {sqlToShow && !testResult?.success && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold text-sm">
+                      {errorType === 'permission' ? '📋 SQL de Permissões (GRANTs):' : '📋 SQL para executar:'}
+                    </h4>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => copySqlToClipboard(sqlToShow)}
+                    >
+                      <Copy className="w-3 h-3 mr-1" />
+                      Copiar
+                    </Button>
+                  </div>
+                  <pre className="bg-muted p-3 rounded-lg text-xs overflow-auto max-h-48 whitespace-pre-wrap">
+                    {sqlToShow}
+                  </pre>
+                  <p className="text-xs text-muted-foreground">
+                    Cole este SQL no SQL Editor do seu Supabase externo e execute. 
+                    Depois reinicie o PostgREST no Portainer.
+                  </p>
                 </div>
               )}
             </div>
