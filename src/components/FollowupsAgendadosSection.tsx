@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Clock, X, RefreshCw, Check, ChevronDown, ChevronUp, Send } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';

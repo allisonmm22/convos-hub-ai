@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
 
 export type TipoLog = 
   | 'erro_etapa'           // Erro ao mover negociação de etapa

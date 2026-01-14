@@ -45,7 +45,7 @@ import {
   Instagram,
   Megaphone,
 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';

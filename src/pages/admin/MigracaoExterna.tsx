@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { supabaseExternal as supabase } from "@/integrations/supabase/externalClient";
 import { Copy, Check, Play, Database, ArrowRight, Loader2, Download, RefreshCw } from "lucide-react";
 import AdminLayout from "@/components/admin/AdminLayout";
 

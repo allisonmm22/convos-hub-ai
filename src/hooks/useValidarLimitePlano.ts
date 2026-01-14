@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabaseExternal as supabase } from "@/integrations/supabase/externalClient";
 import { toast } from "sonner";
 
 export type ResourceType = 'usuarios' | 'agentes' | 'funis' | 'conexoes' | 'conexoes_evolution' | 'conexoes_meta' | 'instagram' | 'mensagens';
