@@ -18,7 +18,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
+import { supabaseExternal as supabase, supabaseFunctions } from '@/integrations/supabase/externalClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
@@ -173,7 +173,7 @@ export default function MinhaAssinatura() {
 
     setLoadingPortal(true);
     try {
-      const response = await supabase.functions.invoke('stripe-customer-portal', {
+      const response = await supabaseFunctions.functions.invoke('stripe-customer-portal', {
         body: { return_url: window.location.href },
       });
 
@@ -204,7 +204,7 @@ export default function MinhaAssinatura() {
 
     setLoadingCheckout(true);
     try {
-      const response = await supabase.functions.invoke('stripe-checkout', {
+      const response = await supabaseFunctions.functions.invoke('stripe-checkout', {
         body: { 
           plano_id: assinatura.plano.id,
           conta_id: usuario.conta_id,

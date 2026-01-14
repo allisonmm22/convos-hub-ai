@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { supabaseExternal as supabase } from "@/integrations/supabase/externalClient";
+import { supabaseExternal as supabase, supabaseFunctions } from "@/integrations/supabase/externalClient";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface CalendarioGoogle {
@@ -85,7 +85,7 @@ export default function IntegracaoGoogleCalendar() {
 
     setConnecting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
+      const { data, error } = await supabaseFunctions.functions.invoke('google-calendar-auth', {
         body: {
           conta_id: usuario.conta_id,
           redirect_url: window.location.href,
@@ -136,7 +136,7 @@ export default function IntegracaoGoogleCalendar() {
 
   async function handleTestConnection(calendario: CalendarioGoogle) {
     try {
-      const { data, error } = await supabase.functions.invoke('google-calendar-actions', {
+      const { data, error } = await supabaseFunctions.functions.invoke('google-calendar-actions', {
         body: {
           operacao: 'consultar',
           calendario_id: calendario.id,
@@ -164,7 +164,7 @@ export default function IntegracaoGoogleCalendar() {
     // Carregar lista de calendários do Google
     setLoadingCalendars(true);
     try {
-      const { data, error } = await supabase.functions.invoke('google-calendar-actions', {
+      const { data, error } = await supabaseFunctions.functions.invoke('google-calendar-actions', {
         body: {
           operacao: 'listar_calendarios',
           calendario_id: calendario.id,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Plug, PlugZap, RefreshCw, Check, Loader2, QrCode, Power, Plus, Smartphone, Trash2, Globe, Zap, Info, ExternalLink, Copy, CheckCircle2, Instagram, Settings, X } from 'lucide-react';
-import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
+import { supabaseExternal as supabase, supabaseFunctions } from '@/integrations/supabase/externalClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { toast } from 'sonner';
@@ -143,7 +143,7 @@ export default function Conexao() {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('evolution-create-instance', {
+      const { data, error } = await supabaseFunctions.functions.invoke('evolution-create-instance', {
         body: {
           nome: instanceName.trim(),
           conta_id: usuario!.conta_id,
@@ -274,7 +274,7 @@ export default function Conexao() {
   const handleConnectInstagram = async (conexao: Conexao) => {
     setConnectingInstagram(true);
     try {
-      const { data, error } = await supabase.functions.invoke('instagram-connect', {
+      const { data, error } = await supabaseFunctions.functions.invoke('instagram-connect', {
         body: { conexao_id: conexao.id },
       });
 
@@ -395,7 +395,7 @@ export default function Conexao() {
     setConexaoSelecionada(conexao);
     
     try {
-      const { data, error } = await supabase.functions.invoke('evolution-connect', {
+      const { data, error } = await supabaseFunctions.functions.invoke('evolution-connect', {
         body: { conexao_id: conexao.id },
       });
 
@@ -423,7 +423,7 @@ export default function Conexao() {
   const handleDisconnect = async (conexao: Conexao) => {
     setDisconnecting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('evolution-disconnect', {
+      const { data, error } = await supabaseFunctions.functions.invoke('evolution-disconnect', {
         body: { conexao_id: conexao.id },
       });
 
@@ -449,7 +449,7 @@ export default function Conexao() {
   const handleCheckStatus = async (conexao: Conexao, silent = false) => {
     setCheckingStatus(true);
     try {
-      const { data, error } = await supabase.functions.invoke('evolution-connection-status', {
+      const { data, error } = await supabaseFunctions.functions.invoke('evolution-connection-status', {
         body: { conexao_id: conexao.id },
       });
 
@@ -472,7 +472,7 @@ export default function Conexao() {
   const handleReconfigureWebhook = async (conexao: Conexao) => {
     setReconfiguringWebhook(true);
     try {
-      const { data, error } = await supabase.functions.invoke('evolution-set-webhook', {
+      const { data, error } = await supabaseFunctions.functions.invoke('evolution-set-webhook', {
         body: { conexao_id: conexao.id },
       });
 
@@ -503,7 +503,7 @@ export default function Conexao() {
 
         if (error) throw error;
       } else {
-        const { data, error } = await supabase.functions.invoke('evolution-delete-instance', {
+        const { data, error } = await supabaseFunctions.functions.invoke('evolution-delete-instance', {
           body: { conexao_id: conexao.id }
         });
 

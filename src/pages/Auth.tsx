@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabaseExternal as supabase } from "@/integrations/supabase/externalClient";
+import { supabaseExternal as supabase, supabaseFunctions } from "@/integrations/supabase/externalClient";
 import { toast } from "sonner";
 import { 
   Mail, Lock, User, Phone, CreditCard, MessageSquare, 
@@ -87,7 +87,7 @@ export default function Auth() {
   useEffect(() => {
     const checkSetup = async () => {
       try {
-        const { data, error } = await supabase.functions.invoke('setup-primeiro-admin', {
+        const { data, error } = await supabaseFunctions.functions.invoke('setup-primeiro-admin', {
           method: 'GET'
         });
         
@@ -179,7 +179,7 @@ export default function Auth() {
           if (plano && plano.preco_mensal && plano.preco_mensal > 0 && contaId) {
             toast.success('Conta criada! Redirecionando para pagamento...');
             
-            const response = await supabase.functions.invoke('stripe-checkout', {
+            const response = await supabaseFunctions.functions.invoke('stripe-checkout', {
               body: { 
                 plano_id: planoSelecionado,
                 conta_id: contaId,
