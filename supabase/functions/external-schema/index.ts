@@ -652,6 +652,89 @@ CREATE TRIGGER update_tags_updated_at BEFORE UPDATE ON tags FOR EACH ROW EXECUTE
 CREATE TRIGGER update_planos_updated_at BEFORE UPDATE ON planos FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================
+-- RLS - HABILITAR EM TODAS AS TABELAS
+-- ============================================
+ALTER TABLE planos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE configuracoes_plataforma ENABLE ROW LEVEL SECURITY;
+ALTER TABLE contas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE atendente_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE conexoes_whatsapp ENABLE ROW LEVEL SECURITY;
+ALTER TABLE contatos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE funis ENABLE ROW LEVEL SECURITY;
+ALTER TABLE estagios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_ia ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_ia_perguntas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_ia_etapas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_ia_agendamento_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_ia_agendamento_horarios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE calendarios_google ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campos_personalizados_grupos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campos_personalizados ENABLE ROW LEVEL SECURITY;
+ALTER TABLE contato_campos_valores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lembrete_regras ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_regras ENABLE ROW LEVEL SECURITY;
+ALTER TABLE conversas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mensagens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE respostas_pendentes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE negociacoes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE negociacao_historico ENABLE ROW LEVEL SECURITY;
+ALTER TABLE negociacao_notas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agendamentos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transferencias_atendimento ENABLE ROW LEVEL SECURITY;
+ALTER TABLE logs_atividade ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notificacoes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mensagens_processadas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followup_enviados ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followups_agendados ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lembrete_enviados ENABLE ROW LEVEL SECURITY;
+ALTER TABLE uso_tokens ENABLE ROW LEVEL SECURITY;
+
+-- ============================================
+-- RLS POLICIES - BYPASS PARA SERVICE ROLE
+-- A service_role key precisa ter acesso total
+-- ============================================
+CREATE POLICY "Service role bypass planos" ON planos FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass configuracoes_plataforma" ON configuracoes_plataforma FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass contas" ON contas FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass usuarios" ON usuarios FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass user_roles" ON user_roles FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass atendente_config" ON atendente_config FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass conexoes_whatsapp" ON conexoes_whatsapp FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass contatos" ON contatos FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass funis" ON funis FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass estagios" ON estagios FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass agent_ia" ON agent_ia FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass agent_ia_perguntas" ON agent_ia_perguntas FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass agent_ia_etapas" ON agent_ia_etapas FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass agent_ia_agendamento_config" ON agent_ia_agendamento_config FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass agent_ia_agendamento_horarios" ON agent_ia_agendamento_horarios FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass tags" ON tags FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass calendarios_google" ON calendarios_google FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass campos_personalizados_grupos" ON campos_personalizados_grupos FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass campos_personalizados" ON campos_personalizados FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass contato_campos_valores" ON contato_campos_valores FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass lembrete_regras" ON lembrete_regras FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass followup_regras" ON followup_regras FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass conversas" ON conversas FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass mensagens" ON mensagens FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass respostas_pendentes" ON respostas_pendentes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass negociacoes" ON negociacoes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass negociacao_historico" ON negociacao_historico FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass negociacao_notas" ON negociacao_notas FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass agendamentos" ON agendamentos FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass transferencias_atendimento" ON transferencias_atendimento FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass logs_atividade" ON logs_atividade FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass notificacoes" ON notificacoes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass mensagens_processadas" ON mensagens_processadas FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass followup_enviados" ON followup_enviados FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass followups_agendados" ON followups_agendados FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass lembrete_enviados" ON lembrete_enviados FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role bypass uso_tokens" ON uso_tokens FOR ALL USING (true) WITH CHECK (true);
+
+-- ============================================
 -- REALTIME
 -- ============================================
 ALTER PUBLICATION supabase_realtime ADD TABLE mensagens;
