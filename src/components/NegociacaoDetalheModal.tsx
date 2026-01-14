@@ -28,7 +28,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
-import { supabaseExternal as supabase, supabaseFunctions } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { 
@@ -391,7 +391,7 @@ export function NegociacaoDetalheModal({
 
     setGerandoResumo(true);
     try {
-      const { data, error } = await supabaseFunctions.functions.invoke('resumir-conversa', {
+      const { data, error } = await supabase.functions.invoke('resumir-conversa', {
         body: { 
           conversa_id: conversaId,
           negociacao_id: negociacao.id

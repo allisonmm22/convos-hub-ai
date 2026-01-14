@@ -26,30 +26,10 @@ echo ""
 # ===========================================
 # 1. VERIFICAR/INSTALAR SUPABASE CLI
 # ===========================================
-# Adicionar paths possíveis do Supabase CLI ao PATH
-export PATH="$HOME/.supabase/bin:/usr/local/bin:$PATH"
-
 if ! command -v supabase &> /dev/null; then
     echo -e "${BLUE}[INFO] Instalando Supabase CLI...${NC}"
-    
-    # Instalar via script oficial (não requer npm)
-    curl -fsSL https://raw.githubusercontent.com/supabase/cli/main/install.sh | sh
-    
-    # Atualizar PATH após instalação
-    export PATH="$HOME/.supabase/bin:/usr/local/bin:$PATH"
-    
-    # Verificar se instalou corretamente
-    if ! command -v supabase &> /dev/null; then
-        echo -e "${RED}[ERRO] Supabase CLI não foi instalado corretamente${NC}"
-        echo ""
-        echo "Tente instalar manualmente:"
-        echo "  curl -fsSL https://raw.githubusercontent.com/supabase/cli/main/install.sh | sh"
-        echo "  echo 'export PATH=\"\$HOME/.supabase/bin:\$PATH\"' >> ~/.bashrc"
-        echo "  source ~/.bashrc"
-        exit 1
-    fi
-    
-    echo -e "${GREEN}[OK] Supabase CLI instalado: $(supabase --version)${NC}"
+    npm install -g supabase
+    echo -e "${GREEN}[OK] Supabase CLI instalado${NC}"
 else
     echo -e "${GREEN}[OK] Supabase CLI já instalado: $(supabase --version)${NC}"
 fi
@@ -139,7 +119,6 @@ FUNCTIONS=(
     "registrar-log"
     "reset-user-password"
     "resumir-conversa"
-    "setup-primeiro-admin"
     "stripe-checkout"
     "stripe-customer-portal"
     "stripe-test-connection"

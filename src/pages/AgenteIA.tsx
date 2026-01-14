@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Bot, Search, Plus, Loader2, Pencil, Clock, Users, Key, Save, Eye, EyeOff, Trash2, Play, MessageSquare, RefreshCw, User, Sparkles, Crown, Zap, Power, PowerOff, Bell, ListChecks } from 'lucide-react';
-import { supabaseExternal as supabase, supabaseFunctions } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { toast } from 'sonner';
@@ -683,7 +683,7 @@ function FollowUpPage() {
   const executarFollowups = async () => {
     setExecutando(true);
     try {
-      const { data, error } = await supabaseFunctions.functions.invoke('processar-followups');
+      const { data, error } = await supabase.functions.invoke('processar-followups');
       
       if (error) throw error;
       

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Bell, Check, X } from 'lucide-react';
-import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

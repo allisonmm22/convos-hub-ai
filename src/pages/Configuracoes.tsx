@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Building, Save, Loader2, Bell, Volume2, Bot } from 'lucide-react';
-import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
+import { Building, Save, Loader2, Bell, Volume2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useNotificationPreferences } from '@/hooks/useNotificationPreferences';
@@ -14,7 +14,6 @@ export default function Configuracoes() {
   const [loading, setLoading] = useState(false);
   const [contaData, setContaData] = useState({
     nome: '',
-    reativar_ia_auto: false,
   });
 
   const { 
@@ -33,15 +32,12 @@ export default function Configuracoes() {
   const fetchConta = async () => {
     const { data } = await supabase
       .from('contas')
-      .select('nome, reativar_ia_auto')
+      .select('nome')
       .eq('id', usuario!.conta_id)
       .single();
 
     if (data) {
-      setContaData({ 
-        nome: data.nome,
-        reativar_ia_auto: data.reativar_ia_auto ?? false,
-      });
+      setContaData({ nome: data.nome });
     }
   };
 
@@ -50,10 +46,7 @@ export default function Configuracoes() {
     try {
       const { error } = await supabase
         .from('contas')
-        .update({ 
-          nome: contaData.nome,
-          reativar_ia_auto: contaData.reativar_ia_auto,
-        })
+        .update({ nome: contaData.nome })
         .eq('id', usuario!.conta_id);
 
       if (error) throw error;
@@ -63,10 +56,6 @@ export default function Configuracoes() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleReativarIaToggle = (enabled: boolean) => {
-    setContaData({ ...contaData, reativar_ia_auto: enabled });
   };
 
   const handleBrowserNotificationToggle = async (enabled: boolean) => {
@@ -158,48 +147,6 @@ export default function Configuracoes() {
 
           <p className="text-xs text-muted-foreground">
             As notificações são enviadas apenas para conversas atendidas por humanos.
-          </p>
-        </div>
-
-        {/* Agente de IA */}
-        <div className="p-4 md:p-6 rounded-xl bg-card border border-border space-y-4 md:space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/20 flex-shrink-0">
-              <Bot className="h-5 w-5 text-purple-500" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">Agente de IA</h2>
-              <p className="text-sm text-muted-foreground">Configure o comportamento da IA</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {/* Reativar IA automaticamente */}
-            <div className="flex items-center justify-between gap-3 p-3 md:p-4 rounded-lg bg-muted/50 border border-border">
-              <div className="flex items-center gap-3 min-w-0">
-                <Bot className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="font-medium text-foreground text-sm md:text-base">Reativar IA Automaticamente</p>
-                  <p className="text-xs md:text-sm text-muted-foreground">Quando lead enviar mensagem em conversa pausada, reativar a IA</p>
-                </div>
-              </div>
-              <button
-                onClick={() => handleReativarIaToggle(!contaData.reativar_ia_auto)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
-                  contaData.reativar_ia_auto ? 'bg-primary' : 'bg-muted-foreground/30'
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    contaData.reativar_ia_auto ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
-              </button>
-            </div>
-          </div>
-
-          <p className="text-xs text-muted-foreground">
-            Quando ativado, a IA será reativada automaticamente quando o lead enviar uma nova mensagem, mesmo que a IA tenha sido pausada por um atendente humano.
           </p>
         </div>
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Shield, MessageSquare, Eye } from 'lucide-react';
-import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Dialog,

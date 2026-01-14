@@ -13,11 +13,10 @@ serve(async (req) => {
   }
 
   try {
-    // Usar banco de dados EXTERNO como principal
-    const supabaseUrl = Deno.env.get('EXTERNAL_SUPABASE_URL') || Deno.env.get('SUPABASE_URL') || '';
-    const supabaseKey = Deno.env.get('EXTERNAL_SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    const supabaseClient = createClient(supabaseUrl, supabaseKey);
-    console.log('📦 Usando banco:', supabaseUrl.substring(0, 30) + '...');
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
 
     // Buscar Stripe key da tabela de configurações (onde o admin salva a chave live)
     const { data: configData, error: configError } = await supabaseClient

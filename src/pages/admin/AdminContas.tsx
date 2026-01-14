@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Search, Plus, Building2, Users, MessageSquare, MoreVertical, Eye, Power, Calendar, AlertTriangle, CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import AdminLayout from '@/components/admin/AdminLayout';
 import NovaContaAdminModal from '@/components/admin/NovaContaAdminModal';
 import { Button } from '@/components/ui/button';

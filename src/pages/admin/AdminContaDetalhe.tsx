@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Building2, Users, MessageSquare, TrendingUp, Phone, Power, Save, KeyRound, Coins, AlertTriangle, Calendar, Bot, GitBranch, Smartphone, CreditCard, Instagram, Check, X } from 'lucide-react';
-import { supabaseExternal as supabase, supabaseFunctions } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -380,7 +380,7 @@ export default function AdminContaDetalhe() {
     try {
       if (conta.ativo) {
         // Desativando → chamar edge function que desconecta integrações
-        const { error } = await supabaseFunctions.functions.invoke('desativar-conta', {
+        const { error } = await supabase.functions.invoke('desativar-conta', {
           body: { conta_id: conta.id }
         });
         if (error) throw error;
@@ -410,7 +410,7 @@ export default function AdminContaDetalhe() {
 
     setResettingPassword(true);
     try {
-      const { error } = await supabaseFunctions.functions.invoke('reset-user-password', {
+      const { error } = await supabase.functions.invoke('reset-user-password', {
         body: { userId: resetPasswordModal.user_id, newPassword },
       });
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   Megaphone, TrendingUp, Users, Trophy, XCircle, 
   BarChart3, ArrowRight, ExternalLink, Calendar

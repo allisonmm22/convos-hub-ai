@@ -1,4 +1,4 @@
-import { supabaseFunctions } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 
 export type TipoLog = 
   | 'erro_etapa'           // Erro ao mover negociação de etapa
@@ -20,8 +20,7 @@ export async function registrarLog(options: LogOptions): Promise<void> {
   const { contaId, usuarioId, tipo, descricao, metadata } = options;
   
   try {
-    // Usar supabaseFunctions para chamar Edge Functions (hospedadas no Lovable Cloud)
-    await supabaseFunctions.functions.invoke('registrar-log', {
+    await supabase.functions.invoke('registrar-log', {
       body: {
         conta_id: contaId,
         usuario_id: usuarioId,

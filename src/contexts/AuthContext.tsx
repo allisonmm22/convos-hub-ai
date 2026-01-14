@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Usuario {
   id: string;
@@ -34,82 +34,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initError, setInitError] = useState<string | null>(null);
 
   useEffect(() => {
-    let subscription: { unsubscribe: () => void } | null = null;
-
-    const initAuth = async () => {
-      try {
-        const { data } = supabase.auth.onAuthStateChange(
-          (event, session) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            
-            if (session?.user) {
-              setTimeout(() => {
-                fetchUsuario(session.user.id);
-              }, 0);
-            } else {
-              setUsuario(null);
-              setLoading(false);
-            }
-          }
-        );
-        subscription = data.subscription;
-
-        const { data: sessionData, error } = await supabase.auth.getSession();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
         
-        if (error) {
-          console.error('Erro ao obter sessão:', error);
-          setInitError(`Erro de conexão: ${error.message}`);
-          setLoading(false);
-          return;
-        }
-
-        setSession(sessionData.session);
-        setUser(sessionData.session?.user ?? null);
-        
-        if (sessionData.session?.user) {
-          await fetchUsuario(sessionData.session.user.id);
+        if (session?.user) {
+          setTimeout(() => {
+            fetchUsuario(session.user.id);
+          }, 0);
         } else {
+          setUsuario(null);
           setLoading(false);
         }
-      } catch (error) {
-        console.error('Erro ao inicializar autenticação:', error);
-        setInitError(`Erro de conexão com o servidor: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+      }
+    );
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUsuario(session.user.id);
+      } else {
         setLoading(false);
       }
-    };
+    });
 
-    initAuth();
-
-    return () => {
-      if (subscription) {
-        subscription.unsubscribe();
-      }
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const fetchUsuario = async (userId: string) => {
     try {
-      // Primeiro, verificar especificamente se é super_admin
-      const { data: superAdminRole } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .eq('role', 'super_admin')
-        .maybeSingle();
-
-      const isSuperAdmin = !!superAdminRole;
-
-      // Buscar role principal para usuários normais (admin ou atendente)
+      // Primeiro, verificar se é super_admin
       const { data: roleData } = await supabase
         .from('user_roles')
         .select('role')
         .eq('user_id', userId)
-        .neq('role', 'super_admin')
         .maybeSingle();
+
+      const isSuperAdmin = (roleData?.role as string) === 'super_admin';
 
       // Se for super_admin, não precisa de registro na tabela usuarios
       if (isSuperAdmin) {
@@ -171,45 +136,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = async (email: string, password: string, nome: string, whatsapp?: string, cpf?: string, planoId?: string) => {
     try {
-      // Usar edge function para criar usuário (bypassa RLS com service_role_key)
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup-usuario`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({
-            email,
-            password,
-            nome,
-            whatsapp,
-            cpf,
-            planoId,
-          }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok || result.error) {
-        throw new Error(result.error || 'Erro ao criar usuário');
-      }
-
-      // Fazer login automático após cadastro
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const redirectUrl = `${window.location.origin}/`;
+      
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: redirectUrl
+        }
       });
 
-      if (signInError) {
-        console.warn('Login automático falhou, usuário pode fazer login manualmente:', signInError);
+      if (error) throw error;
+
+      let contaId: string | undefined;
+
+      if (data.user) {
+        // Criar conta com whatsapp, cpf e plano
+        const { data: contaData, error: contaError } = await supabase
+          .from('contas')
+          .insert({ 
+            nome: `Conta de ${nome}`,
+            whatsapp: whatsapp || null,
+            cpf: cpf || null,
+            plano_id: planoId || null,
+          })
+          .select()
+          .single();
+
+        if (contaError) throw contaError;
+        contaId = contaData.id;
+
+        // Criar usuário
+        const { error: usuarioError } = await supabase
+          .from('usuarios')
+          .insert({
+            user_id: data.user.id,
+            conta_id: contaData.id,
+            nome,
+            email,
+            is_admin: true
+          });
+
+        if (usuarioError) throw usuarioError;
+
+        // Criar role de admin
+        await supabase.from('user_roles').insert({
+          user_id: data.user.id,
+          role: 'admin'
+        });
+
+        // Criar configuração padrão do Agente IA
+        await supabase.from('agent_ia').insert({ conta_id: contaData.id });
+
+        // Criar funil padrão
+        const { data: funilData } = await supabase
+          .from('funis')
+          .insert({ conta_id: contaData.id, nome: 'Vendas', ordem: 0 })
+          .select()
+          .single();
+
+        if (funilData) {
+          await supabase.from('estagios').insert([
+            { funil_id: funilData.id, nome: 'Novo Lead', ordem: 0, cor: '#3b82f6' },
+            { funil_id: funilData.id, nome: 'Em Contato', ordem: 1, cor: '#f59e0b' },
+            { funil_id: funilData.id, nome: 'Proposta Enviada', ordem: 2, cor: '#8b5cf6' },
+            { funil_id: funilData.id, nome: 'Negociação', ordem: 3, cor: '#ec4899' },
+            { funil_id: funilData.id, nome: 'Fechado', ordem: 4, cor: '#10b981' },
+          ]);
+        }
       }
 
-      return { error: null, contaId: result.contaId };
+      return { error: null, contaId };
     } catch (error) {
-      console.error('Erro no signup:', error);
       return { error: error as Error };
     }
   };
@@ -251,25 +249,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{ user, session, usuario, loading, signUp, signIn, signOut, refreshUsuario }}>
-      {initError ? (
-        <div className="min-h-screen flex items-center justify-center bg-background p-4">
-          <div className="text-center max-w-md">
-            <div className="text-destructive text-xl mb-4">⚠️ Erro de Conexão</div>
-            <p className="text-muted-foreground mb-4">{initError}</p>
-            <p className="text-sm text-muted-foreground">
-              Verifique se a URL do banco de dados está correta e acessível.
-            </p>
-            <button 
-              onClick={() => window.location.reload()} 
-              className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-            >
-              Tentar novamente
-            </button>
-          </div>
-        </div>
-      ) : (
-        children
-      )}
+      {children}
     </AuthContext.Provider>
   );
 }

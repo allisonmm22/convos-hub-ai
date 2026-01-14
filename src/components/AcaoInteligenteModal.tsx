@@ -4,7 +4,7 @@ import {
   Check, AlertCircle, Loader2, UserPen, Handshake, CalendarSearch, CalendarPlus,
   FileEdit, FileSearch
 } from 'lucide-react';
-import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Dialog,

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MessageSquare, Brain, Calendar, Mail, Webhook, Zap, Eye, EyeOff, CheckCircle, XCircle, Loader2 } from "lucide-react";
-import { supabaseExternal as supabase } from "@/integrations/supabase/externalClient";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import { toast } from "sonner";

@@ -21,7 +21,7 @@ import {
   ExternalLink,
   CheckCheck
 } from 'lucide-react';
-import { supabaseExternal as supabase, supabaseFunctions } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 
@@ -140,7 +140,7 @@ export default function AdminPagamentos() {
 
     setTesting(true);
     try {
-      const { data, error } = await supabaseFunctions.functions.invoke('stripe-test-connection', {
+      const { data, error } = await supabase.functions.invoke('stripe-test-connection', {
         body: { secret_key: secretKey }
       });
 

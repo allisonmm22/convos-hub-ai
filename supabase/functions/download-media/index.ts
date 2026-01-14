@@ -21,14 +21,11 @@ serve(async (req) => {
     console.log('Message ID:', message_id);
     console.log('Type:', message_type);
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY')!;
     
-    // Usar storage externo para upload de mídias
-    const externalStorageUrl = Deno.env.get('EXTERNAL_STORAGE_URL')!;
-    const externalStorageKey = Deno.env.get('EXTERNAL_STORAGE_KEY')!;
-    const externalSupabase = createClient(externalStorageUrl, externalStorageKey);
-    
-    console.log('Using external storage:', externalStorageUrl);
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Buscar mídia em base64 da Evolution API
     const mediaResponse = await fetch(
@@ -84,8 +81,8 @@ serve(async (req) => {
     const extension = getExtension(mimeType, message_type);
     const fileName = `${Date.now()}-${message_id}.${extension}`;
 
-    // Upload para o Storage externo
-    const { data: uploadData, error: uploadError } = await externalSupabase.storage
+    // Upload para o Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
       .from('whatsapp-media')
       .upload(fileName, bytes, {
         contentType: mimeType,
@@ -102,8 +99,8 @@ serve(async (req) => {
 
     console.log('Upload realizado:', uploadData.path);
 
-    // Obter URL pública do storage externo
-    const { data: urlData } = externalSupabase.storage
+    // Obter URL pública
+    const { data: urlData } = supabase.storage
       .from('whatsapp-media')
       .getPublicUrl(fileName);
 

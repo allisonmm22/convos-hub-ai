@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabaseExternal as supabase, supabaseFunctions } from "@/integrations/supabase/externalClient";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { 
   Mail, Lock, User, Phone, CreditCard, MessageSquare, 
@@ -66,14 +66,6 @@ export default function Auth() {
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [planoSelecionado, setPlanoSelecionado] = useState<string | null>(null);
   const [loadingPlanos, setLoadingPlanos] = useState(false);
-  
-  // First admin setup states
-  const [showSetupAdmin, setShowSetupAdmin] = useState(false);
-  const [needsSetup, setNeedsSetup] = useState(false);
-  const [checkingSetup, setCheckingSetup] = useState(true);
-  const [nomeEmpresa, setNomeEmpresa] = useState("");
-  const [setupLoading, setSetupLoading] = useState(false);
-  
   const navigate = useNavigate();
   const { signIn, signUp, session } = useAuth();
 
@@ -83,27 +75,6 @@ export default function Auth() {
     }
   }, [session, navigate]);
 
-  // Check if first admin setup is needed
-  useEffect(() => {
-    const checkSetup = async () => {
-      try {
-        const { data, error } = await supabaseFunctions.functions.invoke('setup-primeiro-admin', {
-          method: 'GET'
-        });
-        
-        if (!error && data) {
-          setNeedsSetup(data.needsSetup === true);
-        }
-      } catch (err) {
-        console.error('Error checking setup:', err);
-      } finally {
-        setCheckingSetup(false);
-      }
-    };
-    
-    checkSetup();
-  }, []);
-
   useEffect(() => {
     if (!isLogin) {
       fetchPlanos();
@@ -112,7 +83,6 @@ export default function Auth() {
 
   const fetchPlanos = async () => {
     setLoadingPlanos(true);
-    console.log('🔍 Auth: Buscando planos ativos...');
     try {
       const { data, error } = await supabase
         .from("planos")
@@ -120,18 +90,7 @@ export default function Auth() {
         .eq("ativo", true)
         .order("preco_mensal", { ascending: true });
       
-      if (error) {
-        console.error('❌ Auth: Erro ao buscar planos:', {
-          message: error.message,
-          code: error.code,
-          hint: error.hint,
-          details: error.details
-        });
-        toast.error(`Erro ao carregar planos: ${error.message}`);
-        throw error;
-      }
-      
-      console.log('✅ Auth: Planos encontrados:', data?.length || 0);
+      if (error) throw error;
       setPlanos(data || []);
     } catch (error) {
       console.error("Erro ao buscar planos:", error);
@@ -191,7 +150,7 @@ export default function Auth() {
           if (plano && plano.preco_mensal && plano.preco_mensal > 0 && contaId) {
             toast.success('Conta criada! Redirecionando para pagamento...');
             
-            const response = await supabaseFunctions.functions.invoke('stripe-checkout', {
+            const response = await supabase.functions.invoke('stripe-checkout', {
               body: { 
                 plano_id: planoSelecionado,
                 conta_id: contaId,
@@ -228,45 +187,6 @@ export default function Auth() {
     if (nome === "Pro") return "Mais Popular";
     if (nome === "Business") return "Melhor Custo-Benefício";
     return null;
-  };
-
-  const handleSetupFirstAdmin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSetupLoading(true);
-
-    try {
-      const { data, error } = await supabase.functions.invoke('setup-primeiro-admin', {
-        body: {
-          nomeEmpresa,
-          nomeUsuario: nome,
-          email,
-          senha: password
-        }
-      });
-
-      if (error) {
-        toast.error(error.message || 'Erro ao criar administrador');
-        return;
-      }
-
-      if (data?.error) {
-        toast.error(data.error);
-        return;
-      }
-
-      toast.success('Administrador criado com sucesso! Faça login para continuar.');
-      setShowSetupAdmin(false);
-      setNeedsSetup(false);
-      setNomeEmpresa("");
-      setNome("");
-      setEmail("");
-      setPassword("");
-    } catch (err) {
-      console.error('Error setting up first admin:', err);
-      toast.error('Erro ao criar administrador');
-    } finally {
-      setSetupLoading(false);
-    }
   };
 
   return (
@@ -393,7 +313,7 @@ export default function Auth() {
                 </Button>
               </form>
 
-              <div className="text-center space-y-3">
+              <div className="text-center">
                 <p className="text-muted-foreground">
                   Não tem uma conta?{" "}
                   <button
@@ -406,131 +326,6 @@ export default function Auth() {
                     Criar conta
                   </button>
                 </p>
-                
-                {/* First Admin Setup Button */}
-                {!checkingSetup && needsSetup && (
-                  <div className="pt-4 border-t border-border">
-                    <p className="text-sm text-muted-foreground mb-2">Primeira vez configurando o sistema?</p>
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowSetupAdmin(true)}
-                      className="w-full gap-2"
-                    >
-                      <Building className="w-4 h-4" />
-                      Configurar primeiro administrador
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : showSetupAdmin ? (
-            /* First Admin Setup Form */
-            <div className="space-y-6">
-              <div className="text-center mb-8">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-amber-500/20 to-orange-500/20 rounded-2xl flex items-center justify-center">
-                  <Crown className="w-8 h-8 text-amber-400" />
-                </div>
-                <h2 className="text-3xl font-bold text-foreground">Configuração Inicial</h2>
-                <p className="text-muted-foreground mt-2">Configure o primeiro administrador do sistema</p>
-              </div>
-
-              <form onSubmit={handleSetupFirstAdmin} className="space-y-5">
-                <div className="space-y-2">
-                  <Label htmlFor="nomeEmpresa" className="text-foreground">Nome da Empresa</Label>
-                  <div className="relative">
-                    <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
-                      id="nomeEmpresa"
-                      type="text"
-                      placeholder="Nome da sua empresa"
-                      value={nomeEmpresa}
-                      onChange={(e) => setNomeEmpresa(e.target.value)}
-                      className="pl-11 h-12 bg-card border-border"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="nomeAdmin" className="text-foreground">Seu Nome</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
-                      id="nomeAdmin"
-                      type="text"
-                      placeholder="Seu nome completo"
-                      value={nome}
-                      onChange={(e) => setNome(e.target.value)}
-                      className="pl-11 h-12 bg-card border-border"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="emailAdmin" className="text-foreground">E-mail</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
-                      id="emailAdmin"
-                      type="email"
-                      placeholder="seu@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-11 h-12 bg-card border-border"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="senhaAdmin" className="text-foreground">Senha</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
-                      id="senhaAdmin"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Mínimo 6 caracteres"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-11 pr-11 h-12 bg-card border-border"
-                      required
-                      minLength={6}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full h-12 text-base font-semibold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-500/90 hover:to-orange-500/90 shadow-lg shadow-amber-500/25"
-                  disabled={setupLoading || !nomeEmpresa.trim() || !nome.trim() || !email.trim() || password.length < 6}
-                >
-                  {setupLoading ? (
-                    <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <Crown className="w-5 h-5 mr-2" />
-                      Criar Administrador
-                    </>
-                  )}
-                </Button>
-              </form>
-
-              <div className="text-center">
-                <button
-                  onClick={() => setShowSetupAdmin(false)}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4 inline mr-1" />
-                  Voltar ao login
-                </button>
               </div>
             </div>
           ) : (

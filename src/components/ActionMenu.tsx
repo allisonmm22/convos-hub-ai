@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   ArrowRight, Tag, UserRound, Bell, XCircle, Layers, Search, UserPen
 } from 'lucide-react';
-import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Estagio {

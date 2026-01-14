@@ -3,8 +3,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { OnboardingProvider } from "@/contexts/OnboardingContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { OnboardingProvider } from "./contexts/OnboardingContext";
 import { OnboardingComplete } from "./components/onboarding/OnboardingComplete";
 import { ContaDesativadaOverlay } from "./components/ContaDesativadaOverlay";
 import Auth from "./pages/Auth";
@@ -30,7 +30,6 @@ import AdminContas from "./pages/admin/AdminContas";
 import AdminContaDetalhe from "./pages/admin/AdminContaDetalhe";
 import AdminPlanos from "./pages/admin/AdminPlanos";
 import AdminPagamentos from "./pages/admin/AdminPagamentos";
-import MigracaoExterna from "./pages/admin/MigracaoExterna";
 import Upgrade from "./pages/Upgrade";
 import MinhaAssinatura from "./pages/MinhaAssinatura";
 import Perfil from "./pages/Perfil";
@@ -109,14 +108,6 @@ function AppRoutes() {
           !user ? <Navigate to="/auth" replace /> :
           !usuario?.isSuperAdmin ? <Navigate to="/dashboard" replace /> :
           <AdminPagamentos />
-        } 
-      />
-      <Route 
-        path="/admin/migracao-externa" 
-        element={
-          !user ? <Navigate to="/auth" replace /> :
-          !usuario?.isSuperAdmin ? <Navigate to="/dashboard" replace /> :
-          <MigracaoExterna />
         } 
       />
       

@@ -643,7 +643,6 @@ export type Database = {
           permitir_multiplas_negociacoes: boolean | null
           plano_id: string | null
           reabrir_com_ia: boolean | null
-          reativar_ia_auto: boolean | null
           stripe_cancel_at_period_end: boolean | null
           stripe_current_period_end: string | null
           stripe_current_period_start: string | null
@@ -663,7 +662,6 @@ export type Database = {
           permitir_multiplas_negociacoes?: boolean | null
           plano_id?: string | null
           reabrir_com_ia?: boolean | null
-          reativar_ia_auto?: boolean | null
           stripe_cancel_at_period_end?: boolean | null
           stripe_current_period_end?: string | null
           stripe_current_period_start?: string | null
@@ -683,7 +681,6 @@ export type Database = {
           permitir_multiplas_negociacoes?: boolean | null
           plano_id?: string | null
           reabrir_com_ia?: boolean | null
-          reativar_ia_auto?: boolean | null
           stripe_cancel_at_period_end?: boolean | null
           stripe_current_period_end?: string | null
           stripe_current_period_start?: string | null

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Shield, MessageSquare, Eye, Lock } from 'lucide-react';
-import { supabaseExternal as supabase, supabaseFunctions } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Dialog,
@@ -146,7 +146,7 @@ export function EditarUsuarioModal({ user, onClose, onSuccess }: EditarUsuarioMo
 
     setLoadingPassword(true);
     try {
-      const { data, error } = await supabaseFunctions.functions.invoke('reset-user-password', {
+      const { data, error } = await supabase.functions.invoke('reset-user-password', {
         body: {
           user_id: user.user_id,
           new_password: novaSenha

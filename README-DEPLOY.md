@@ -29,7 +29,7 @@ Este documento explica como fazer deploy do ZapCRM em uma VPS Linux usando Docke
 ssh root@SEU_IP
 
 # Baixar e executar o instalador
-curl -sSL https://raw.githubusercontent.com/allisonmm22/convos-hub-ai/main/scripts/install.sh -o install.sh
+curl -sSL https://raw.githubusercontent.com/SEU-USUARIO/SEU-REPO/main/scripts/install.sh -o install.sh
 chmod +x install.sh
 ./install.sh
 ```
@@ -38,7 +38,7 @@ chmod +x install.sh
 
 ```bash
 # 1. Clonar repositório
-git clone https://github.com/allisonmm22/convos-hub-ai.git /var/www/zapcrm
+git clone https://github.com/SEU-USUARIO/SEU-REPO.git /var/www/zapcrm
 cd /var/www/zapcrm
 
 # 2. Copiar e editar .env

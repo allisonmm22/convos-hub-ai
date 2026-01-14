@@ -4,7 +4,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { Calendar, Plus, Clock, Check, Loader2, ChevronLeft, ChevronRight, X, Pencil, Trash2, Video, MessageSquare, Bell, CheckCircle, AlertCircle, XCircle, RefreshCw, User } from 'lucide-react';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { supabaseExternal as supabase, supabaseFunctions } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -198,7 +198,7 @@ export default function Agendamentos() {
       const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
 
       // Consultar eventos do Google Calendar
-      const { data: googleResult, error: googleError } = await supabaseFunctions.functions.invoke('google-calendar-actions', {
+      const { data: googleResult, error: googleError } = await supabase.functions.invoke('google-calendar-actions', {
         body: {
           operacao: 'consultar',
           calendario_id: calendarios[0].id,
@@ -486,7 +486,7 @@ export default function Agendamentos() {
             .limit(1);
 
           if (calendarios && calendarios.length > 0) {
-            await supabaseFunctions.functions.invoke('google-calendar-actions', {
+            await supabase.functions.invoke('google-calendar-actions', {
               body: {
                 operacao: 'deletar',
                 calendario_id: calendarios[0].id,

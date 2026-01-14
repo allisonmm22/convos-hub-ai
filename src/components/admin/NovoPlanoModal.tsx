@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
   DialogContent,

@@ -7,7 +7,7 @@ import {
   Settings2, CheckCircle2, Circle, AlertCircle, Power, Brain,
   Timer, SplitSquareHorizontal, CalendarCheck
 } from 'lucide-react';
-import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { AcaoInteligenteModal } from '@/components/AcaoInteligenteModal';

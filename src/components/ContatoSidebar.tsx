@@ -6,7 +6,7 @@ import {
   ExternalLink, Facebook, Instagram, Globe, Target, FileText, Calendar, Hash, ToggleLeft
 } from 'lucide-react';
 import { FollowupsAgendadosSection } from '@/components/FollowupsAgendadosSection';
-import { supabaseExternal as supabase } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';

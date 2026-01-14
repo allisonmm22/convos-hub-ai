@@ -134,30 +134,3 @@ verify_jwt = false
 
 [functions.processar-followups-agendados]
 verify_jwt = false
-
-[functions.setup-primeiro-admin]
-verify_jwt = false
-
-[functions.sync-to-external]
-verify_jwt = false
-
-[functions.setup-external-database]
-verify_jwt = false
-
-[functions.migrate-to-external]
-verify_jwt = false
-
-[functions.external-schema]
-verify_jwt = false
-
-[functions.signup-usuario]
-verify_jwt = false
-
-[functions.buscar-conversas]
-verify_jwt = false
-
-[functions.buscar-mensagens]
-verify_jwt = false
-
-[functions.atualizar-conversa]
-verify_jwt = false

@@ -93,7 +93,7 @@ async function fetchGroupInfo(
 }
 
 // Função para processar webhook da Meta API
-async function processarWebhookMeta(payload: any, supabase: any, supabaseUrl: string, supabaseKey: string, localSupabaseUrl: string, localSupabaseKey: string): Promise<Response> {
+async function processarWebhookMeta(payload: any, supabase: any, supabaseUrl: string, supabaseKey: string): Promise<Response> {
   console.log('=== PROCESSANDO WEBHOOK META API ===');
   
   try {
@@ -334,9 +334,9 @@ async function processarWebhookMeta(payload: any, supabase: any, supabaseUrl: st
             new Promise<void>((resolve) => {
               setTimeout(async () => {
                 try {
-                  await fetch(`${localSupabaseUrl}/functions/v1/processar-resposta-agora`, {
+                  await fetch(`${supabaseUrl}/functions/v1/processar-resposta-agora`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localSupabaseKey}` },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
                     body: JSON.stringify({ conversa_id: conversa.id }),
                   });
                 } catch (err) {
@@ -368,16 +368,9 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Usar banco de dados EXTERNO como principal
-  const supabaseUrl = Deno.env.get('EXTERNAL_SUPABASE_URL') || Deno.env.get('SUPABASE_URL')!;
-  const supabaseKey = Deno.env.get('EXTERNAL_SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, supabaseKey);
-  console.log('📦 Usando banco:', supabaseUrl.substring(0, 30) + '...');
-
-  // URLs para Edge Functions LOCAIS (sempre usar Supabase local, não externo)
-  const localSupabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const localSupabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  console.log('🔗 Edge functions URL:', localSupabaseUrl.substring(0, 30) + '...');
 
   // ===== VERIFICAÇÃO GET WEBHOOK META API =====
   if (req.method === 'GET') {
@@ -424,7 +417,7 @@ serve(async (req) => {
     // Meta API envia com campo "object" = "whatsapp_business_account"
     if (payload.object === 'whatsapp_business_account') {
       console.log('=== WEBHOOK META API DETECTADO ===');
-      return await processarWebhookMeta(payload, supabase, supabaseUrl, supabaseKey, localSupabaseUrl, localSupabaseKey);
+      return await processarWebhookMeta(payload, supabase, supabaseUrl, supabaseKey);
     }
 
     // ===== CÓDIGO EVOLUTION (100% ORIGINAL ABAIXO) =====
@@ -1162,22 +1155,18 @@ serve(async (req) => {
 
       // Verificar se conversa estava encerrada e está sendo reaberta pelo lead
       const conversaEstaReabrindo = conversa?.status === 'encerrado' && !fromMe && !isGrupo;
-      
-      // Verificar se IA está pausada mas conversa tem agente configurado (lead enviando msg em conversa pausada)
-      const iaEstaPausadaMasTemAgente = !conversa?.agente_ia_ativo && conversa?.agente_ia_id && !fromMe && !isGrupo;
-      
       let agenteIaAtivoFinal = conversa?.agente_ia_ativo || false;
       let agenteIaIdFinal = conversa?.agente_ia_id;
 
-      // Buscar configuração da conta (uma única vez para ambos os cenários)
-      const { data: contaConfig } = await supabase
-        .from('contas')
-        .select('reabrir_com_ia, reativar_ia_auto')
-        .eq('id', conexao.conta_id)
-        .single();
-
       if (conversaEstaReabrindo) {
         console.log('=== CONVERSA ENCERRADA RECEBENDO NOVA MENSAGEM ===');
+        
+        // Buscar configuração da conta para saber como reabrir
+        const { data: contaConfig } = await supabase
+          .from('contas')
+          .select('reabrir_com_ia')
+          .eq('id', conexao.conta_id)
+          .single();
         
         const reabrirComIA = contaConfig?.reabrir_com_ia ?? true;
         console.log('Configuração reabrir_com_ia:', reabrirComIA);
@@ -1203,12 +1192,6 @@ serve(async (req) => {
           console.log('Configuração define reabertura com atendimento humano');
           agenteIaAtivoFinal = false;
         }
-      } else if (iaEstaPausadaMasTemAgente && contaConfig?.reativar_ia_auto) {
-        // NOVO: Reativar IA automaticamente quando lead envia mensagem em conversa com IA pausada
-        console.log('=== REATIVAÇÃO AUTOMÁTICA DA IA ===');
-        console.log('IA estava pausada, reativando automaticamente (reativar_ia_auto = true)');
-        agenteIaAtivoFinal = true;
-        // Manter o agente_ia_id que já estava configurado
       }
 
       // Atualizar conversa usando fetch direto
@@ -1226,10 +1209,6 @@ serve(async (req) => {
         updateData.etapa_ia_atual = null; // Começar do início
         updateData.memoria_limpa_em = new Date().toISOString(); // Limpar memória anterior
         console.log('Dados de reabertura:', { agente_ia_ativo: agenteIaAtivoFinal, agente_ia_id: agenteIaIdFinal });
-      } else if (iaEstaPausadaMasTemAgente && contaConfig?.reativar_ia_auto) {
-        // NOVO: Atualizar agente_ia_ativo para true quando reativando automaticamente
-        updateData.agente_ia_ativo = true;
-        console.log('IA reativada automaticamente para conversa pausada');
       }
 
       // Se mensagem veio do dispositivo externo, pausar o agente IA automaticamente
@@ -1238,17 +1217,24 @@ serve(async (req) => {
         console.log('Mensagem do dispositivo externo - pausando agente IA automaticamente');
       }
 
-      // Atualizar conversa usando cliente Supabase (mais confiável que fetch direto)
-      const { error: updateError } = await supabase
-        .from('conversas')
-        .update(updateData)
-        .eq('id', conversa!.id);
+      const updateResponse = await fetch(
+        `${supabaseUrl}/rest/v1/conversas?id=eq.${conversa!.id}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(updateData),
+        }
+      );
 
-      if (updateError) {
-        console.error('Erro ao atualizar conversa:', updateError);
-      } else {
-        console.log('Conversa atualizada - ultima_mensagem:', updateData.ultima_mensagem);
+      if (!updateResponse.ok) {
+        console.error('Erro ao atualizar conversa:', await updateResponse.text());
       }
+
+      console.log('Conversa atualizada com sucesso');
 
       // Sistema de debounce: agendar resposta com tempo_espera_segundos
       // IMPORTANTE: Nunca agendar resposta IA para grupos
@@ -1305,12 +1291,12 @@ serve(async (req) => {
                       console.log('Executando processamento agendado para conversa:', conversaId);
                       
                       await fetch(
-                        `${localSupabaseUrl}/functions/v1/processar-resposta-agora`,
+                        `${supabaseUrl}/functions/v1/processar-resposta-agora`,
                         {
                           method: 'POST',
                           headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localSupabaseKey}`,
+                            'Authorization': `Bearer ${supabaseKey}`,
                           },
                           body: JSON.stringify({ conversa_id: conversaId }),
                         }
@@ -1327,12 +1313,12 @@ serve(async (req) => {
               // Fallback: chamar imediatamente (sem delay)
               console.log('EdgeRuntime.waitUntil não disponível, chamando imediatamente');
               fetch(
-                `${localSupabaseUrl}/functions/v1/processar-resposta-agora`,
+                `${supabaseUrl}/functions/v1/processar-resposta-agora`,
                 {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localSupabaseKey}`,
+                    'Authorization': `Bearer ${supabaseKey}`,
                   },
                   body: JSON.stringify({ conversa_id: conversaId }),
                 }

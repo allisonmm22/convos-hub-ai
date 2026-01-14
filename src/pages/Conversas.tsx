@@ -45,7 +45,7 @@ import {
   Instagram,
   Megaphone,
 } from 'lucide-react';
-import { supabaseExternal as supabase, supabaseFunctions } from '@/integrations/supabase/externalClient';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -367,7 +367,7 @@ export default function Conversas() {
       // Poll em paralelo para todas as conexões
       await Promise.all(
         conexoesEvolutionConectadas.map(async (con) => {
-          const { data, error } = await supabaseFunctions.functions.invoke('evolution-fetch-messages', {
+          const { data, error } = await supabase.functions.invoke('evolution-fetch-messages', {
             body: { conexao_id: con.id },
           });
 
@@ -477,18 +477,6 @@ export default function Conversas() {
     }
   }, [conversaSelecionada]);
 
-  // Polling para buscar novas mensagens do banco externo a cada 5 segundos
-  useEffect(() => {
-    if (!conversaSelecionada) return;
-    
-    const intervalId = setInterval(() => {
-      console.log('Polling: buscando novas mensagens...');
-      fetchMensagens(conversaSelecionada.id);
-    }, 5000);
-    
-    return () => clearInterval(intervalId);
-  }, [conversaSelecionada?.id]);
-
   useEffect(() => {
     scrollToBottom();
   }, [mensagens]);
@@ -566,27 +554,22 @@ export default function Conversas() {
 
   const fetchConversas = async () => {
     try {
-      console.log('Buscando conversas do banco externo...');
-      
-      // Buscar conversas do banco EXTERNO via edge function
-      const { data: responseData, error: fetchError } = await supabaseFunctions.functions.invoke('buscar-conversas', {
-        body: { 
-          conta_id: usuario!.conta_id,
-          arquivadas: false,
-          limit: 100
-        }
-      });
+      const { data, error } = await supabase
+        .from('conversas')
+        .select(`
+          *, 
+          contatos(*), 
+          agent_ia:agente_ia_id(id, nome, ativo, tipo), 
+          etapa_ia:etapa_ia_atual(id, nome, numero)
+        `)
+        .eq('conta_id', usuario!.conta_id)
+        .eq('arquivada', false)
+        .order('ultima_mensagem_at', { ascending: false });
 
-      if (fetchError) {
-        console.error('Erro ao buscar conversas do banco externo:', fetchError);
-        throw fetchError;
-      }
+      if (error) throw error;
       
-      const data = responseData?.conversas || [];
-      console.log('Conversas encontradas no banco externo:', data.length);
-      
-      // Buscar negociações para verificar se são clientes (ainda do Lovable Cloud)
-      const contatoIds = data?.map((c: Conversa) => c.contato_id).filter(Boolean) || [];
+      // Buscar negociações para verificar se são clientes
+      const contatoIds = data?.map(c => c.contato_id).filter(Boolean) || [];
       
       if (contatoIds.length > 0) {
         const { data: negociacoes } = await supabase
@@ -604,7 +587,7 @@ export default function Conversas() {
         });
         
         // Adicionar negociações às conversas
-        const conversasComNegociacoes = data?.map((conversa: Conversa) => ({
+        const conversasComNegociacoes = data?.map(conversa => ({
           ...conversa,
           negociacoes: negociacoesPorContato.get(conversa.contato_id) || []
         })) || [];
@@ -615,24 +598,6 @@ export default function Conversas() {
       }
     } catch (error) {
       console.error('Erro ao buscar conversas:', error);
-      // Fallback: tentar buscar do Lovable Cloud
-      try {
-        console.log('Fallback: buscando do Lovable Cloud...');
-        const { data: localData } = await supabase
-          .from('conversas')
-          .select(`
-            *, 
-            contatos(*), 
-            agent_ia:agente_ia_id(id, nome, ativo, tipo), 
-            etapa_ia:etapa_ia_atual(id, nome, numero)
-          `)
-          .eq('conta_id', usuario!.conta_id)
-          .eq('arquivada', false)
-          .order('ultima_mensagem_at', { ascending: false });
-        setConversas(localData || []);
-      } catch (fallbackError) {
-        console.error('Erro no fallback:', fallbackError);
-      }
     } finally {
       setLoading(false);
     }
@@ -698,7 +663,7 @@ export default function Conversas() {
     
     setLoadingTemplates(true);
     try {
-      const { data, error } = await supabaseFunctions.functions.invoke('meta-get-templates', {
+      const { data, error } = await supabase.functions.invoke('meta-get-templates', {
         body: { conexao_id: conexaoDaConversa.id },
       });
       
@@ -746,7 +711,7 @@ export default function Conversas() {
 
     setEnviando(true);
     try {
-      const { error } = await supabaseFunctions.functions.invoke('meta-send-message', {
+      const { error } = await supabase.functions.invoke('meta-send-message', {
         body: {
           conexao_id: conversaSelecionada.conexao_id,
           telefone: conversaSelecionada.contatos.telefone,
@@ -797,33 +762,16 @@ export default function Conversas() {
 
   const fetchMensagens = async (conversaId: string) => {
     try {
-      console.log('Buscando mensagens da conversa (banco externo):', conversaId);
-      
-      // Buscar mensagens do banco EXTERNO via edge function
-      const { data, error } = await supabaseFunctions.functions.invoke('buscar-mensagens', {
-        body: { conversa_id: conversaId, limit: 500 }
-      });
+      const { data, error } = await supabase
+        .from('mensagens')
+        .select('*, usuario_deletou:deletada_por(nome)')
+        .eq('conversa_id', conversaId)
+        .order('created_at', { ascending: true });
 
-      if (error) {
-        console.error('Erro ao buscar mensagens do banco externo:', error);
-        throw error;
-      }
-      
-      console.log('Mensagens recebidas:', data?.mensagens?.length || 0);
-      setMensagens((data?.mensagens || []) as unknown as Mensagem[]);
+      if (error) throw error;
+      setMensagens((data || []) as unknown as Mensagem[]);
     } catch (error) {
       console.error('Erro ao buscar mensagens:', error);
-      // Fallback: tentar buscar do Lovable Cloud local
-      try {
-        const { data: localData } = await supabase
-          .from('mensagens')
-          .select('*, usuario_deletou:deletada_por(nome)')
-          .eq('conversa_id', conversaId)
-          .order('created_at', { ascending: true });
-        setMensagens((localData || []) as unknown as Mensagem[]);
-      } catch (fallbackError) {
-        console.error('Erro no fallback:', fallbackError);
-      }
     }
   };
 
@@ -865,38 +813,12 @@ export default function Conversas() {
     }
 
     setEnviando(true);
-    
-    // Aplicar assinatura se ativada
-    const mensagemFinal = usuario?.assinatura_ativa !== false
-      ? `${usuario?.nome}:\n${novaMensagem}`
-      : novaMensagem;
-
-    // ID temporário para atualização otimista
-    const tempId = crypto.randomUUID();
-    
-    // ATUALIZAÇÃO OTIMISTA: Adicionar mensagem ao estado local imediatamente
-    const mensagemOtimista: Mensagem = {
-      id: tempId,
-      conversa_id: conversaSelecionada.id,
-      conteudo: mensagemFinal,
-      direcao: 'saida',
-      created_at: new Date().toISOString(),
-      enviada_por_ia: false,
-      enviada_por_dispositivo: false,
-      lida: true,
-      tipo: 'texto',
-      media_url: null,
-      metadata: null,
-      deletada: false,
-    };
-    
-    setMensagens(prev => [...prev, mensagemOtimista]);
-    setNovaMensagem('');
-    
-    // Forçar scroll para a nova mensagem
-    setTimeout(() => scrollToBottom(), 50);
-    
     try {
+      // Aplicar assinatura se ativada
+      const mensagemFinal = usuario?.assinatura_ativa !== false
+        ? `${usuario?.nome}:\n${novaMensagem}`
+        : novaMensagem;
+
       // Salvar no banco e pegar o ID para passar ao enviar-mensagem
       const { data: novaMensagemData, error } = await supabase.from('mensagens').insert({
         conversa_id: conversaSelecionada.id,
@@ -909,32 +831,12 @@ export default function Conversas() {
 
       if (error) throw error;
 
-      // Atualizar o ID da mensagem otimista para o ID real do banco
-      setMensagens(prev => prev.map(m => 
-        m.id === tempId ? { ...m, id: novaMensagemData.id } : m
-      ));
-
-      // Atualizar conversa no banco EXTERNO via edge function
-      const timestampAtual = new Date().toISOString();
-      await supabaseFunctions.functions.invoke('atualizar-conversa', {
-        body: {
-          conversa_id: conversaSelecionada.id,
-          updates: {
-            ultima_mensagem: mensagemFinal,
-            ultima_mensagem_at: timestampAtual,
-            status: 'aguardando_cliente',
-            agente_ia_ativo: false,
-            atendente_id: usuario!.id,
-          }
-        }
-      });
-      
-      // Também atualizar no Lovable Cloud para manter sincronizado
+      // Atualizar conversa - desativar IA e atribuir atendente humano
       await supabase
         .from('conversas')
         .update({
           ultima_mensagem: mensagemFinal,
-          ultima_mensagem_at: timestampAtual,
+          ultima_mensagem_at: new Date().toISOString(),
           status: 'aguardando_cliente',
           agente_ia_ativo: false,
           atendente_id: usuario!.id,
@@ -953,7 +855,7 @@ export default function Conversas() {
       const conexaoIdToUse = conversaSelecionada.conexao_id || conexaoDaConversa?.id;
       
       if (conexaoIdToUse && conexaoDaConversa?.status === 'conectado') {
-        const { error: envioError } = await supabaseFunctions.functions.invoke('enviar-mensagem', {
+        const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
           body: {
             conexao_id: conexaoIdToUse,
             telefone: conversaSelecionada.contatos.telefone,
@@ -979,10 +881,10 @@ export default function Conversas() {
         toast.warning('Conexão não disponível. Mensagem salva apenas no CRM.');
       }
 
+      setNovaMensagem('');
+      fetchMensagens(conversaSelecionada.id);
       fetchConversas();
     } catch (error) {
-      // Remover mensagem otimista em caso de erro
-      setMensagens(prev => prev.filter(m => m.id !== tempId));
       toast.error('Erro ao enviar mensagem');
     } finally {
       setEnviando(false);
@@ -1064,7 +966,7 @@ export default function Conversas() {
 
     try {
       // Chamar edge function que faz rastreamento e resposta automática
-      const { data, error } = await supabaseFunctions.functions.invoke('transferir-atendimento', {
+      const { data, error } = await supabase.functions.invoke('transferir-atendimento', {
         body: {
           conversa_id: conversaSelecionada.id,
           de_usuario_id: usuario?.id,
@@ -1188,7 +1090,7 @@ export default function Conversas() {
         const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
         const conexaoIdToUse = conversaSelecionada.conexao_id || conexaoDaConversa?.id;
         if (conexaoIdToUse && conexaoDaConversa?.status === 'conectado') {
-          const { error: envioError } = await supabaseFunctions.functions.invoke('enviar-mensagem', {
+          const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
             body: {
               conexao_id: conexaoIdToUse,
               telefone: conversaSelecionada.contatos.telefone,
@@ -1295,7 +1197,7 @@ export default function Conversas() {
       const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
       const conexaoIdToUse = conversaSelecionada.conexao_id || conexaoDaConversa?.id;
       if (conexaoIdToUse && conexaoDaConversa?.status === 'conectado') {
-        const { error: envioError } = await supabaseFunctions.functions.invoke('enviar-mensagem', {
+        const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
           body: {
             conexao_id: conexaoIdToUse,
             telefone: conversaSelecionada.contatos.telefone,
@@ -1401,7 +1303,7 @@ export default function Conversas() {
     if (!mensagemParaDeletar || !usuario) return;
     
     try {
-      const { data, error } = await supabaseFunctions.functions.invoke('deletar-mensagem', {
+      const { data, error } = await supabase.functions.invoke('deletar-mensagem', {
         body: { 
           mensagem_id: mensagemParaDeletar,
           usuario_id: usuario.id,
