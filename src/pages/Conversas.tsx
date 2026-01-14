@@ -813,12 +813,38 @@ export default function Conversas() {
     }
 
     setEnviando(true);
-    try {
-      // Aplicar assinatura se ativada
-      const mensagemFinal = usuario?.assinatura_ativa !== false
-        ? `${usuario?.nome}:\n${novaMensagem}`
-        : novaMensagem;
+    
+    // Aplicar assinatura se ativada
+    const mensagemFinal = usuario?.assinatura_ativa !== false
+      ? `${usuario?.nome}:\n${novaMensagem}`
+      : novaMensagem;
 
+    // ID temporário para atualização otimista
+    const tempId = crypto.randomUUID();
+    
+    // ATUALIZAÇÃO OTIMISTA: Adicionar mensagem ao estado local imediatamente
+    const mensagemOtimista: Mensagem = {
+      id: tempId,
+      conversa_id: conversaSelecionada.id,
+      conteudo: mensagemFinal,
+      direcao: 'saida',
+      created_at: new Date().toISOString(),
+      enviada_por_ia: false,
+      enviada_por_dispositivo: false,
+      lida: true,
+      tipo: 'texto',
+      media_url: null,
+      metadata: null,
+      deletada: false,
+    };
+    
+    setMensagens(prev => [...prev, mensagemOtimista]);
+    setNovaMensagem('');
+    
+    // Forçar scroll para a nova mensagem
+    setTimeout(() => scrollToBottom(), 50);
+    
+    try {
       // Salvar no banco e pegar o ID para passar ao enviar-mensagem
       const { data: novaMensagemData, error } = await supabase.from('mensagens').insert({
         conversa_id: conversaSelecionada.id,
@@ -830,6 +856,11 @@ export default function Conversas() {
       }).select('id').single();
 
       if (error) throw error;
+
+      // Atualizar o ID da mensagem otimista para o ID real do banco
+      setMensagens(prev => prev.map(m => 
+        m.id === tempId ? { ...m, id: novaMensagemData.id } : m
+      ));
 
       // Atualizar conversa - desativar IA e atribuir atendente humano
       await supabase
@@ -881,10 +912,10 @@ export default function Conversas() {
         toast.warning('Conexão não disponível. Mensagem salva apenas no CRM.');
       }
 
-      setNovaMensagem('');
-      fetchMensagens(conversaSelecionada.id);
       fetchConversas();
     } catch (error) {
+      // Remover mensagem otimista em caso de erro
+      setMensagens(prev => prev.filter(m => m.id !== tempId));
       toast.error('Erro ao enviar mensagem');
     } finally {
       setEnviando(false);
